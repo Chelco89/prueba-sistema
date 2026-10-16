@@ -90,7 +90,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1p
 .card-items-box { background: #F8FAFC; border: 1px solid #EAECF0; border-radius: 8px; padding: 10px 14px; }
 .card-item-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #EAECF0; font-size: 14px; color: #334155; }
 .card-item-row:last-child { border-bottom: 0; }
-.badge-s-u { background: #E2E8F0; color: #475467; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px; }
+.badge-s-u { background: #E2E8F0; color: #475467; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; marginRight: 6px; }
 </style>
 </head>
 <body>
@@ -105,6 +105,7 @@ const app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
 let perfil = null, vista = null;
+let filtros = {numero:'', cliente:'', estado:'', listo:'', entrega:''};
 
 /* ---------- ENTRADA ---------- */
 function pantallaLogin(modo='entrar', aviso=null){
@@ -189,19 +190,10 @@ function armarSistema(){
   ({ventas:vistaVentas, deposito:vistaDeposito, usuarios:vistaUsuarios})[vista]();
 }
 
-/* ---------- DEPÓSITO (Paso 3) ---------- */
+/* ---------- DEPÓSITO ---------- */
 function vistaDeposito(){
   const c = document.getElementById('contenido');
   c.innerHTML = `<div class="panel">
     <div class="barra"><h2>Preparación de pedidos</h2></div>
     <div class="filtros">
-      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value=""></div>
-      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value=""></div>
-      <div><button class="btn sec chico" id="d-limpiar" style="margin-top:0">Limpiar filtros</button></div>
-    </div>
-    <div id="res-dep" class="vacio">Cargando…</div></div>`;
-  
-  let t;
-  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
-  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
-  document.getElementById('d-limpiar').onclick = () => { document.getElementById('d-numero').value = ''; document.getElementById('d-cliente').value = ''; filtros.numero = ''; filtros.cliente
+      <div><label for="d-numero">N.º de remito</label><input id="

@@ -166,8 +166,8 @@ function vistaDeposito(){
   c.innerHTML = `<div class="panel">
     <div class="barra"><h2>Preparación de pedidos</h2></div>
     <div class="filtros">
-      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value="${esc(filtros.numero || '')}"></div>
-      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value="${esc(filtros.cliente || '')}"></div>
+      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value=""></div>
+      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value=""></div>
       <div><button class="btn sec chico" id="d-limpiar" style="margin-top:0">Limpiar filtros</button></div>
     </div>
     <div id="res-dep" class="vacio">Cargando…</div></div>`;
@@ -175,17 +175,16 @@ function vistaDeposito(){
   let t;
   document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
   document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
-  document.getElementById('d-limpiar').onclick = () => { filtros.numero = ''; filtros.cliente = ''; vistaDeposito(); };
+  document.getElementById('d-limpiar').onclick = () => { document.getElementById('d-numero').value = ''; document.getElementById('d-cliente').value = ''; filtros.numero = ''; filtros.cliente = ''; cargarPedidosDeposito(); };
   cargarPedidosDeposito();
 }
 
 async function cargarPedidosDeposito(){
   const res = document.getElementById('res-dep'); if(!res) return;
-  // Depósito ve principalmente los pendientes o listos para gestión
   let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('estado', 'pendiente').order('numero_remito',{ascending:true}).limit(100);
   const n = parseInt(filtros.numero,10);
   if(filtros.numero && !isNaN(n)) q = q.eq('numero_remito', n);
-  if(filtros.cliente?.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
+  if(filtros.cliente && filtros.cliente.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
 
   const {data,error} = await q;
   if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
@@ -212,12 +211,13 @@ async function detallePedidoDeposito(id){
     <tr>
       <td>
         <b>${esc(i.producto)}</b> (Cant: ${i.cantidad})
-        ${i.lleva_serie ? `<div style="margin-top:6px">
-          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') \vert{}\vert{} 'Ninguna'}</small>${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
+        <div style="margin-top:6px">
+          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') || 'Ninguna'}</small>
+          ${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
             <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie" style="font-size:14px; padding:6px">
             <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button>
           </div>` : ''}
-        </div>` : ''}
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -236,7 +236,6 @@ async function detallePedidoDeposito(id){
 
   document.getElementById('volver-dep').onclick = vistaDeposito;
 
-  // Lógica para agregar números de serie
   c.querySelectorAll('.btn-add-serie').forEach(btn => {
     btn.onclick = async () => {
       const itemId = btn.dataset.itemId;
@@ -253,11 +252,10 @@ async function detallePedidoDeposito(id){
       });
 
       if(errSerie) return aviso.innerHTML = `<div class="msg err">Error al guardar serie: ${esc(errSerie.message)}</div>`;
-      detallePedidoDeposito(id); // Recarga el detalle actualizado
+      detallePedidoDeposito(id);
     };
   });
 
-  // Marcar pedido como listo
   document.getElementById('marcar-listo').onclick = async () => {
     const {error: errEstado} = await sb.from('pedidos').update({estado: 'listo'}).eq('id', p.id);
     if(errEstado) alert('No se pudo actualizar el estado: ' + errEstado.message);

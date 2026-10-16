@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Distribuidora SGV</title>
+<meta name="theme-color" content="#1565B8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--azul:#1565B8;--azul-osc:#0F4C8C;--rojo:#D8262F;--tinta:#14202E;--gris:#5B6B7D;--linea:#D9E0E8;--fondo:#F2F5F9;--blanco:#fff;--ok:#1E8E4E}
+*{box-sizing:border-box}
+body{margin:0;font-family:Barlow,system-ui,sans-serif;background:var(--fondo);color:var(--tinta);font-size:16px}
+button,input,select{font:inherit}
+:focus-visible{outline:3px solid var(--azul);outline-offset:2px}
+.centro{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.caja{background:var(--blanco);border-radius:10px;padding:28px;width:100%;max-width:400px;box-shadow:0 2px 14px rgba(20,32,46,.08);border-top:5px solid var(--rojo)}
+.caja img.logo{display:block;width:170px;margin:0 auto 6px}
+.caja h1{font-size:22px;text-align:center;margin:0 0 20px;font-weight:600}
+label{display:block;font-weight:500;margin:14px 0 5px;font-size:15px}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--linea);border-radius:6px;background:#fff;font-size:16px}
+.btn{background:var(--azul);color:#fff;border:0;border-radius:6px;padding:12px 16px;font-weight:600;cursor:pointer;width:100%;margin-top:20px}
+.btn:hover{background:var(--azul-osc)}
+.btn.chico{width:auto;margin:0;padding:8px 14px;font-size:14px}
+.btn.sec{background:#fff;color:var(--azul);border:1px solid var(--azul)}
+.link{background:none;border:0;color:var(--azul);cursor:pointer;text-decoration:underline;padding:0;margin-top:16px;display:block;width:100%;text-align:center}
+.msg{margin-top:14px;padding:10px 12px;border-radius:6px;font-size:15px}
+.msg.err{background:#FDECEC;color:#9B1C22}.msg.ok{background:#E7F5ED;color:#17653A}
+header{background:var(--blanco);border-bottom:4px solid var(--azul);display:flex;align-items:center;gap:12px;padding:8px 16px;flex-wrap:wrap}
+header img{height:42px}
+header .quien{margin-left:auto;text-align:right;font-size:14px;line-height:1.25}
+header .quien b{display:block;font-size:15px}
+nav{display:flex;gap:4px;padding:10px 16px 0;overflow-x:auto}
+nav button{background:transparent;border:0;border-bottom:3px solid transparent;padding:10px 14px;font-weight:600;color:var(--gris);cursor:pointer;white-space:nowrap}
+nav button.activa{color:var(--azul);border-color:var(--rojo)}
+main{padding:16px;max-width:900px;margin:0 auto}
+.panel{background:#fff;border-radius:10px;padding:18px;box-shadow:0 2px 14px rgba(20,32,46,.06)}
+.panel h2{margin:0 0 12px;font-size:19px}
+.fila{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--linea)}
+.fila:first-of-type{border-top:0}
+.fila .dato{flex:1;min-width:160px}
+.fila .dato small{display:block;color:var(--gris)}
+.fila select{width:auto;min-width:130px}
+.etiqueta{display:inline-block;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;background:#E4ECF6;color:var(--azul-osc)}
+.etiqueta.pendiente{background:#FFF1D6;color:#8A5A00}
+.vacio{color:var(--gris);padding:10px 0}
+.barra{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}.barra h2{margin:0}
+.filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 12px;align-items:end;margin-bottom:10px}
+.filtros label{margin-top:10px}
+button.item{width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0;cursor:pointer;color:inherit}
+button.item:hover{background:#F2F5F9}
+.etiqueta.listo{background:#DDF1E5;color:#17653A}.etiqueta.entregado{background:#DCE8F8;color:var(--azul-osc)}.etiqueta.anulado{background:#EEE;color:#666}
+.item-form{display:flex;gap:8px;margin-top:8px}.item-form .prod{flex:1}.item-form .cant{width:90px}
+.quitar{background:#fff;border:1px solid var(--linea);border-radius:6px;width:42px;cursor:pointer;color:var(--rojo)}
+.acciones{display:flex;gap:10px;flex-wrap:wrap}.acciones .btn{flex:1}.acciones .btn.chico{flex:none}
+.btn.peligro{background:var(--rojo)}
+.sup{margin-bottom:16px}
+.enc{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--azul);padding-bottom:10px;margin-bottom:12px}
+.logo-remito{height:54px}.num-remito{text-align:right}.num-remito b{display:block;font-size:24px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1px solid var(--linea);text-align:left;vertical-align:top}
+.num{text-align:right;white-space:nowrap}.series{display:block;color:var(--gris);font-size:13px}
+@media print{header,nav,.no-print{display:none!important}body{background:#fff}.panel{box-shadow:none;padding:0}main{padding:0}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const cfg = window.SGV_CONFIG;
+const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+const app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
+let perfil = null, vista = null;
+
+/* ---------- ENTRADA ---------- */
+function pantallaLogin(modo='entrar', aviso=null){
+  const nuevo = modo === 'crear';
+  app.innerHTML = `
+  <div class="centro"><div class="caja">
+    <img class="logo" src="logo.png" alt="SGV">
+    <h1>Bienvenido a Distribuidora SGV</h1>
+    <form id="f">
+      ${nuevo ? `<label for="nombre">Nombre</label><input id="nombre" required autocomplete="name">
+      <label for="puesto">Puesto</label>
+      <select id="puesto"><option value="ventas">Ventas</option><option value="deposito">Depósito</option></select>` : ''}
+      <label for="email">Correo electrónico</label><input id="email" type="email" required autocomplete="email">
+      <label for="pass">Contraseña</label><input id="pass" type="password" required minlength="6" autocomplete="${nuevo?'new-password':'current-password'}">
+      <button class="btn" type="submit">${nuevo ? 'Crear usuario' : 'Entrar'}</button>
+    </form>
+    <div id="aviso">${aviso ? `<div class="msg ${aviso.tipo}">${esc(aviso.texto)}</div>` : ''}</div>
+    <button class="link" id="cambiar">${nuevo ? 'Ya tengo usuario' : 'Crear usuario nuevo'}</button>
+  </div></div>`;
+  document.getElementById('cambiar').onclick = () => pantallaLogin(nuevo ? 'entrar' : 'crear');
+  document.getElementById('f').onsubmit = async e => {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('pass').value;
+    let r;
+    if(nuevo){
+      r = await sb.auth.signUp({email, password, options:{data:{
+        nombre: document.getElementById('nombre').value.trim(),
+        puesto: document.getElementById('puesto').value}}});
+      if(!r.error && !r.data.session) return pantallaLogin('entrar',{tipo:'ok',texto:'Usuario creado. Revisá tu correo para confirmar la cuenta y después entrá.'});
+    } else {
+      r = await sb.auth.signInWithPassword({email, password});
+    }
+    if(r.error) document.getElementById('aviso').innerHTML = `<div class="msg err">${esc(traducir(r.error.message))}</div>`;
+  };
+}
+function traducir(m){
+  if(/Invalid login/i.test(m)) return 'Correo o contraseña incorrectos.';
+  if(/already registered/i.test(m)) return 'Ese correo ya tiene un usuario creado.';
+  if(/Email not confirmed/i.test(m)) return 'Primero confirmá tu correo con el mensaje que te llegó.';
+  return m;
+}
+
+/* ---------- SISTEMA ---------- */
+async function cargarPerfil(){
+  const {data:{user}} = await sb.auth.getUser();
+  const {data,error} = await sb.from('profiles').select('*').eq('id', user.id).single();
+  if(error || !data){ await sb.auth.signOut(); return; }
+  perfil = data;
+  if(!perfil.activo || perfil.rol === 'pendiente') return pantallaEspera();
+  armarSistema();
+}
+function cabecera(){
+  return `<header>
+    <img src="logo.png" alt="SGV">
+    <div class="quien"><b>${esc(perfil.nombre)}</b>${ROLES[perfil.rol]}</div>
+    <button class="btn sec chico" id="salir">Salir</button>
+  </header>`;
+}
+function conectarSalir(){ document.getElementById('salir').onclick = () => sb.auth.signOut(); }
+
+function pantallaEspera(){
+  app.innerHTML = cabecera() + `<main><div class="panel">
+    <h2>Tu usuario está esperando aprobación</h2>
+    <p>Pedile al administrador que te asigne el puesto${perfil.activo ? '' : ' y active tu usuario'}. Cuando lo haga, volvé a entrar.</p>
+    <button class="btn chico" id="reintentar">Ya me aprobaron, actualizar</button></div></main>`;
+  conectarSalir();
+  document.getElementById('reintentar').onclick = cargarPerfil;
+}
+
+function armarSistema(){
+  const tabs = [];
+  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas']);
+  if(['deposito','admin'].includes(perfil.rol)) tabs.push(['deposito','Depósito']);
+  if(perfil.rol === 'admin') tabs.push(['usuarios','Usuarios']);
+  vista = vista && tabs.some(t=>t[0]===vista) ? vista : tabs[0][0];
+  app.innerHTML = cabecera() +
+    `<nav>${tabs.map(([k,n])=>`<button data-v="${k}" class="${k===vista?'activa':''}">${n}</button>`).join('')}</nav>
+     <main id="contenido"></main>`;
+  conectarSalir();
+  app.querySelectorAll('nav button').forEach(b => b.onclick = () => { vista = b.dataset.v; armarSistema(); });
+  ({ventas:vistaVentas, deposito:vistaDeposito, usuarios:vistaUsuarios})[vista]();
+}
+
+/* Pantalla que se construye en el próximo paso */
+/* ---------- DEPÓSITO (Paso 3) ---------- */
+function vistaDeposito(){
+  const c = document.getElementById('contenido');
+  c.innerHTML = `<div class="panel">
+    <div class="barra"><h2>Preparación de pedidos</h2></div>
+    <div class="filtros">
+      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value=""></div>
+      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value=""></div>
+      <div><button class="btn sec chico" id="d-limpiar" style="margin-top:0">Limpiar filtros</button></div>
+    </div>
+    <div id="res-dep" class="vacio">Cargando…</div></div>`;
+  
+  let t;
+  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-limpiar').onclick = () => { document.getElementById('d-numero').value = ''; document.getElementById('d-cliente').value = ''; filtros.numero = ''; filtros.cliente = ''; cargarPedidosDeposito(); };
+  cargarPedidosDeposito();
+}
+
+async function cargarPedidosDeposito(){
+  const res = document.getElementById('res-dep'); if(!res) return;
+  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('estado', 'pendiente').order('numero_remito',{ascending:true}).limit(100);
+  const n = parseInt(filtros.numero,10);
+  if(filtros.numero && !isNaN(n)) q = q.eq('numero_remito', n);
+  if(filtros.cliente && filtros.cliente.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
+
+  const {data,error} = await q;
+  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  res.className = '';
+  res.innerHTML = data.length ? data.map(p => `
+    <button class="fila item item-deposito" data-id="${p.id}">
+      <div class="dato"><b>Remito ${fmtRemito(p.numero_remito)}</b><small>${esc(p.cliente)}</small></div>
+      <div class="dato"><span class="etiqueta pendiente">Pendiente</span>
+        <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
+    </button>`).join('') : '<p class="vacio">No hay pedidos pendientes para preparar en este momento.</p>';
+  res.querySelectorAll('.item-deposito').forEach(b => b.onclick = () => detallePedidoDeposito(b.dataset.id));
+}
+
+async function detallePedidoDeposito(id){
+  const c = document.getElementById('contenido');
+  c.innerHTML = '<div class="panel vacio">Cargando…</div>';
+  const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
+  if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
+  
+  const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => {
+    const seriesCargadas = i.series || [];
+    const faltaCargar = i.cantidad - seriesCargadas.length;
+    return `
+    <tr>
+      <td>
+        <b>${esc(i.producto)}</b> (Cant: ${i.cantidad})
+        <div style="margin-top:6px">
+          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') || 'Ninguna'}</small>
+          ${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
+            <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie" style="font-size:14px; padding:6px">
+            <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button>
+          </div>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  c.innerHTML = `<div class="panel remito">
+    <div class="acciones sup"><button class="btn sec chico" id="volver-dep">← Volver a pedidos</button>
+      <button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button></div>
+    <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
+      <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
+    <p><b>Cliente:</b> ${esc(p.cliente)}<br>
+       <b>Modalidad:</b> ${MODAL[p.modalidad]}<br>
+       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}</p>
+    <table><thead><tr><th>Productos y Números de Serie</th></tr></thead><tbody>${filas}</tbody></table>
+    <div id="aviso-dep"></div>
+  </div>`;
+
+  document.getElementById('volver-dep').onclick = vistaDeposito;
+
+  c.querySelectorAll('.btn-add-serie').forEach(btn => {
+    btn.onclick = async () => {
+      const itemId = btn.dataset.itemId;
+      const input = c.querySelector(`.input-serie[data-item-id="${itemId}"]`);
+      const numero_serie = input.value.trim();
+      const aviso = document.getElementById('aviso-dep');
+      if(!numero_serie) return aviso.innerHTML = '<div class="msg err">Ingresa un número de serie válido.</div>';
+
+      const {error: errSerie} = await sb.from('series').insert({
+        pedido_id: p.id,
+        item_id: itemId,
+        numero_serie: numero_serie,
+        cargado_por: perfil.id
+      });
+
+      if(errSerie) return aviso.innerHTML = `<div class="msg err">Error al guardar serie: ${esc(errSerie.message)}</div>`;
+      detallePedidoDeposito(id);
+    };
+  });
+
+  document.getElementById('marcar-listo').onclick = async () => {
+    const {error: errEstado} = await sb.from('pedidos').update({estado: 'listo'}).eq('id', p.id);
+    if(errEstado) alert('No se pudo actualizar el estado: ' + errEstado.message);
+    else vistaDeposito();
+  };
+}
+
+/* ---------- VENTAS (Paso 2) ---------- */
+const ESTADOS = {pendiente:'Pendiente', listo:'Listo', entregado:'Entregado', anulado:'Anulado'};
+const MODAL = {retira:'Retira el cliente', despacho:'Se despacha'};
+const fmtRemito = n => String(n).padStart(8,'0');
+const fmtFecha = d => d ? new Date(d.length===10 ? d+'T00:00:00' : d).toLocaleDateString('es-AR') : '—';
+const fmtFechaHora = d => d ? new Date(d).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}) : '—';
+let filtros = {numero:'', cliente:'', estado:'', listo:'', entrega:''};
+
+function vistaVentas(){ listaPedidos(); }
+
+function listaPedidos(){
+  const c = document.getElementById('contenido');
+  c.innerHTML = `<div class="panel">
+    <div class="barra"><h2>Pedidos</h2><button class="btn chico" id="nuevo">+ Nuevo pedido</button></div>
+    <div class="filtros">
+      <div><label for="f-numero">N.º de remito</label><input id="f-numero" type="number" min="1" value="${esc(filtros.numero)}"></div>
+      <div><label for="f-cliente">Cliente</label><input id="f-cliente" value="${esc(filtros.cliente)}"></div>
+      <div><label for="f-estado">Estado</label><select id="f-estado"><option value="">Todos</option>
+        ${Object.entries(ESTADOS).map(([k,n])=>`<option value="${k}" ${filtros.estado===k?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div><label for="f-listo">Fecha de listo</label><input id="f-listo" type="date" value="${filtros.listo}"></div>
+      <div><label for="f-entrega">Fecha de entrega</label><input id="f-entrega" type="date" value="${filtros.entrega}"></div>
+      <div><button class="btn sec chico" id="limpiar" style="margin-top:0">Limpiar filtros</button></div>
+    </div>
+    <div id="res" class="vacio">Cargando…</div></div>`;
+  document.getElementById('nuevo').onclick = formPedido;
+  let t;
+  [['numero','f-numero'],['cliente','f-cliente'],['estado','f-estado'],['listo','f-listo'],['entrega','f-entrega']].forEach(([k,id])=>{
+    document.getElementById(id).oninput = e => { filtros[k] = e.target.value; clearTimeout(t); t = setTimeout(cargarResultados, 300); };
+  });
+  document.getElementById('limpiar').onclick = () => { filtros = {numero:'',cliente:'',estado:'',listo:'',entrega:''}; listaPedidos(); };
+  cargarResultados();
+}
+
+async function cargarResultados(){
+  const res = document.getElementById('res'); if(!res) return;
+  let q = sb.from('pedidos').select('*').order('numero_remito',{ascending:false}).limit(100);
+  const n = parseInt(filtros.numero,10);
+  if(filtros.numero && !isNaN(n)) q = q.eq('numero_remito', n);
+  if(filtros.cliente.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
+  if(filtros.estado) q = q.eq('estado', filtros.estado);
+  if(filtros.entrega) q = q.eq('fecha_entrega', filtros.entrega);
+  if(filtros.listo){
+    const d1 = new Date(filtros.listo+'T00:00:00'), d2 = new Date(d1.getTime()+86400000);
+    q = q.gte('fecha_listo', d1.toISOString()).lt('fecha_listo', d2.toISOString());
+  }
+  const {data,error} = await q;
+  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  res.className = '';
+  res.innerHTML = data.length ? data.map(p => `
+    <button class="fila item" data-id="${p.id}">
+      <div class="dato"><b>Remito ${fmtRemito(p.numero_remito)}</b><small>${esc(p.cliente)}</small></div>
+      <div class="dato"><span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span>
+        <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
+    </button>`).join('') : '<p class="vacio">No hay pedidos con esos filtros.</p>';
+  res.querySelectorAll('.item').forEach(b => b.onclick = () => detallePedido(b.dataset.id, listaPedidos));
+}
+
+/* Nuevo pedido */
+function formPedido(){
+  const c = document.getElementById('contenido');
+  c.innerHTML = `<div class="panel"><h2>Nuevo pedido</h2>
+    <form id="fp">
+      <label for="cliente">Cliente</label><input id="cliente" required>
+      <label for="modalidad">Entrega</label>
+      <select id="modalidad"><option value="retira">Retira el cliente</option><option value="despacho">Se despacha</option></select>
+      <label for="fentrega">Fecha de entrega</label><input id="fentrega" type="date">
+      <label>Productos</label><div id="items"></div>
+      <button type="button" class="btn sec chico" id="mas" style="margin-top:10px">+ Agregar producto</button>
+      <label for="coment">Comentarios</label><input id="coment">
+      <div id="aviso"></div>
+      <div class="acciones"><button class="btn" type="submit">Guardar pedido</button>
+      <button class="btn sec" type="button" id="cancelar">Cancelar</button></div>
+    </form></div>`;
+  const items = document.getElementById('items');
+  const agregar = () => {
+    const d = document.createElement('div'); d.className = 'item-form';
+    d.innerHTML = `<input class="prod" placeholder="Producto" aria-label="Producto" required>
+      <input class="cant" type="number" step="any" min="0" placeholder="Cant." aria-label="Cantidad" required>
+      <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
+    d.querySelector('.quitar').onclick = () => { if(items.children.length > 1) d.remove(); };
+    items.appendChild(d);
+  };
+  agregar();
+  document.getElementById('mas').onclick = agregar;
+  document.getElementById('cancelar').onclick = listaPedidos;
+  document.getElementById('fp').onsubmit = async e => {
+    e.preventDefault();
+    const aviso = document.getElementById('aviso');
+    const lineas = [...items.children].map(d => ({producto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)}))
+      .filter(l => l.producto);
+    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))) return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
+    const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
+    const {data:p, error} = await sb.from('pedidos').insert({
+      cliente: document.getElementById('cliente').value.trim(),
+      modalidad: document.getElementById('modalidad').value,
+      fecha_entrega: document.getElementById('fentrega').value || null,
+      comentarios: document.getElementById('coment').value.trim() || null,
+      creado_por: perfil.id }).select().single();
+    if(error){ btn.disabled = false; return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; }
+    const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
+    if(e2){ await sb.from('pedidos').delete().eq('id', p.id); btn.disabled = false;
+      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`; }
+    detallePedido(p.id, listaPedidos);
+  };
+}
+
+/* Detalle / remito (también lo va a usar Depósito) */
+async function detallePedido(id, volver){
+  const c = document.getElementById('contenido');
+  c.innerHTML = '<div class="panel vacio">Cargando…</div>';
+  const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
+  if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
+  const puedeAnular = ['ventas','admin'].includes(perfil.rol) && ['pendiente','listo'].includes(p.estado);
+  const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => `
+    <tr><td>${esc(i.producto)}${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s=>esc(s.numero_serie)).join(', ')}</small>` : ''}</td>
+    <td class="num">${i.cantidad}</td></tr>`).join('');
+  c.innerHTML = `<div class="panel remito">
+    <div class="no-print acciones sup"><button class="btn sec chico" id="volver">← Volver</button>
+      <button class="btn chico" id="imprimir">Imprimir / guardar PDF</button>
+      ${puedeAnular ? '<button class="btn chico peligro" id="anular">Anular pedido</button>' : ''}</div>
+    <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
+      <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
+    <p><b>Cliente:</b> ${esc(p.cliente)}<br>
+       <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
+       <b>Entrega:</b> ${MODAL[p.modalidad]}<br>
+       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}<br>
+       <b>Creado:</b> ${fmtFechaHora(p.creado_en)}
+       ${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
+       ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}</p>
+    <table><thead><tr><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
+    ${p.comentarios ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>` : ''}
+    ${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}</p>` : ''}
+  </div>`;
+  document.getElementById('volver').onclick = volver;
+  document.getElementById('imprimir').onclick = () => window.print();
+  const a = document.getElementById('anular');
+  if(a) a.onclick = async () => {
+    if(!confirm(`¿Anular el remito ${fmtRemito(p.numero_remito)}? No se puede deshacer.`)) return;
+    const {error} = await sb.from('pedidos').update({estado:'anulado'}).eq('id', p.id);
+    if(error) alert('No se pudo anular: ' + error.message); else detallePedido(p.id, volver);
+  };
+}
+
+/* ---------- ADMIN: USUARIOS (funcional) ---------- */
+async function vistaUsuarios(){
+  const cont = document.getElementById('contenido');
+  cont.innerHTML = `<div class="panel"><h2>Usuarios</h2><div id="lista" class="vacio">Cargando…</div></div>`;
+  const {data,error} = await sb.from('profiles').select('*').order('creado_en',{ascending:false});
+  const lista = document.getElementById('lista');
+  if(error) return lista.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  lista.className = '';
+  lista.innerHTML = data.map(u => `
+    <div class="fila">
+      <div class="dato"><b>${esc(u.nombre)}</b>
+        <small>${u.rol==='pendiente' ? `<span class="etiqueta pendiente">Pidió: ${esc(ROLES[u.puesto_solicitado]||'—')}</span>` : ''}</small></div>
+      <select data-id="${u.id}" data-campo="rol" aria-label="Puesto de ${esc(u.nombre)}" ${u.id===perfil.id?'disabled':''}>
+        ${Object.entries(ROLES).map(([k,n])=>`<option value="${k}" ${u.rol===k?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <select data-id="${u.id}" data-campo="activo" aria-label="Estado de ${esc(u.nombre)}" ${u.id===perfil.id?'disabled':''}>
+        <option value="true" ${u.activo?'selected':''}>Activo</option>
+        <option value="false" ${!u.activo?'selected':''}>Desactivado</option>
+      </select>
+    </div>`).join('') || '<p class="vacio">Todavía no hay usuarios.</p>';
+  lista.querySelectorAll('select').forEach(s => s.onchange = async () => {
+    const valor = s.dataset.campo === 'activo' ? s.value === 'true' : s.value;
+    const {error} = await sb.from('profiles').update({[s.dataset.campo]: valor}).eq('id', s.dataset.id);
+    if(error) alert('No se pudo guardar: ' + error.message);
+    vistaUsuarios();
+  });
+}
+
+/* ---------- ARRANQUE ---------- */
+sb.auth.onAuthStateChange((evento, sesion) => {
+  if(sesion) setTimeout(cargarPerfil, 0); else { perfil = null; pantallaLogin(); }
+});
+sb.auth.getSession().then(({data:{session}}) => { if(!session) pantallaLogin(); });
+</script>
+</body>
+</html>

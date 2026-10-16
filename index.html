@@ -105,3 +105,103 @@ const app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
 let perfil = null, vista = null;
+
+/* ---------- ENTRADA ---------- */
+function pantallaLogin(modo='entrar', aviso=null){
+  const nuevo = modo === 'crear';
+  app.innerHTML = `
+  <div class="centro"><div class="caja">
+    <img class="logo" src="logo.png" alt="SGV">
+    <h1>Bienvenido a Distribuidora SGV</h1>
+    <form id="f">
+      ${nuevo ? `<label for="nombre">Nombre</label><input id="nombre" required autocomplete="name">
+      <label for="puesto">Puesto</label>
+      <select id="puesto"><option value="ventas">Ventas</option><option value="deposito">Depósito</option></select>` : ''}
+      <label for="email">Correo electrónico</label><input id="email" type="email" required autocomplete="email">
+      <label for="pass">Contraseña</label><input id="pass" type="password" required minlength="6" autocomplete="${nuevo?'new-password':'current-password'}">
+      <button class="btn" type="submit">${nuevo ? 'Crear usuario' : 'Entrar'}</button>
+    </form>
+    <div id="aviso">${aviso ? `<div class="msg ${aviso.tipo}">${esc(aviso.texto)}</div>` : ''}</div>
+    <button class="link" id="cambiar">${nuevo ? 'Ya tengo usuario' : 'Crear usuario nuevo'}</button>
+  </div></div>`;
+  document.getElementById('cambiar').onclick = () => pantallaLogin(nuevo ? 'entrar' : 'crear');
+  document.getElementById('f').onsubmit = async e => {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('pass').value;
+    let r;
+    if(nuevo){
+      r = await sb.auth.signUp({email, password, options:{data:{
+        nombre: document.getElementById('nombre').value.trim(),
+        puesto: document.getElementById('puesto').value}}});
+      if(!r.error && !r.data.session) return pantallaLogin('entrar',{tipo:'ok',texto:'Usuario creado. Revisá tu correo para confirmar la cuenta y después entrá.'});
+    } else {
+      r = await sb.auth.signInWithPassword({email, password});
+    }
+    if(r.error) document.getElementById('aviso').innerHTML = `<div class="msg err">${esc(traducir(r.error.message))}</div>`;
+  };
+}
+function traducir(m){
+  if(/Invalid login/i.test(m)) return 'Correo o contraseña incorrectos.';
+  if(/already registered/i.test(m)) return 'Ese correo ya tiene un usuario creado.';
+  if(/Email not confirmed/i.test(m)) return 'Primero confirmá tu correo con el mensaje que te llegó.';
+  return m;
+}
+
+/* ---------- SISTEMA ---------- */
+async function cargarPerfil(){
+  const {data:{user}} = await sb.auth.getUser();
+  const {data,error} = await sb.from('profiles').select('*').eq('id', user.id).single();
+  if(error || !data){ await sb.auth.signOut(); return; }
+  perfil = data;
+  if(!perfil.activo || perfil.rol === 'pendiente') return pantallaEspera();
+  armarSistema();
+}
+function cabecera(){
+  return `<header>
+    <img src="logo.png" alt="SGV">
+    <div class="quien"><b>${esc(perfil.nombre)}</b>${ROLES[perfil.rol]}</div>
+    <button class="btn sec chico" id="salir">Salir</button>
+  </header>`;
+}
+function conectarSalir(){ document.getElementById('salir').onclick = () => sb.auth.signOut(); }
+
+function pantallaEspera(){
+  app.innerHTML = cabecera() + `<main><div class="panel">
+    <h2>Tu usuario está esperando aprobación</h2>
+    <p>Pedile al administrador que te asigne el puesto${perfil.activo ? '' : ' y active tu usuario'}. Cuando lo haga, volvé a entrar.</p>
+    <button class="btn chico" id="reintentar">Ya me aprobaron, actualizar</button></div></main>`;
+  conectarSalir();
+  document.getElementById('reintentar').onclick = cargarPerfil;
+}
+
+function armarSistema(){
+  const tabs = [];
+  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas']);
+  if(['deposito','admin'].includes(perfil.rol)) tabs.push(['deposito','Depósito']);
+  if(perfil.rol === 'admin') tabs.push(['usuarios','Usuarios']);
+  vista = vista && tabs.some(t=>t[0]===vista) ? vista : tabs[0][0];
+  app.innerHTML = cabecera() +
+    `<nav>${tabs.map(([k,n])=>`<button data-v="${k}" class="${k===vista?'activa':''}">${n}</button>`).join('')}</nav>
+     <main id="contenido"></main>`;
+  conectarSalir();
+  app.querySelectorAll('nav button').forEach(b => b.onclick = () => { vista = b.dataset.v; armarSistema(); });
+  ({ventas:vistaVentas, deposito:vistaDeposito, usuarios:vistaUsuarios})[vista]();
+}
+
+/* ---------- DEPÓSITO (Paso 3) ---------- */
+function vistaDeposito(){
+  const c = document.getElementById('contenido');
+  c.innerHTML = `<div class="panel">
+    <div class="barra"><h2>Preparación de pedidos</h2></div>
+    <div class="filtros">
+      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value=""></div>
+      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value=""></div>
+      <div><button class="btn sec chico" id="d-limpiar" style="margin-top:0">Limpiar filtros</button></div>
+    </div>
+    <div id="res-dep" class="vacio">Cargando…</div></div>`;
+  
+  let t;
+  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-limpiar').onclick = () => { document.getElementById('d-numero').value = ''; document.getElementById('d-cliente').value = ''; filtros.numero = ''; filtros.cliente

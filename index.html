@@ -245,33 +245,59 @@ async function cargarPedidosDeposito(){
   res.querySelectorAll('.item-deposito').forEach(b => b.onclick = () => detallePedidoDeposito(b.dataset.id));
 }
 
-async function detallePedidoDeposito(id){
+async function detallePedidoDeposito(id, editando=false){
   const c = document.getElementById('contenido');
   c.innerHTML = '<div class="panel vacio">Cargando…</div>';
+  await cargarProductos();
   const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
   if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
 
   const items = p.pedido_items.sort((a,b)=>a.id-b.id);
-  const editable = p.estado === 'pendiente';
-  const filas = items.map(i => {
-    const ser = i.series || [];
-    const falta = Math.ceil(i.cantidad) - ser.length;
-    const lista = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}</span>`).join('') : '<small class="series">Sin números de serie</small>';
-    return `<tr><td>
-      <b>${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
-      ${editable ? `<label class="check-serie"><input type="checkbox" class="chk-lleva" data-item-id="${i.id}" ${i.lleva_serie ? 'checked' : ''}> Lleva n.º de serie</label>` : (i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : '')}
-      <div class="lista-series">${lista}</div>
-      ${editable && i.lleva_serie && falta > 0 ? `<div class="item-form" style="margin-top:6px">
-        <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie (faltan ${falta})" style="font-size:14px;padding:8px">
-        <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button></div>` : ''}
-    </td></tr>`;
-  }).join('');
+  const abierto = ['pendiente','listo'].includes(p.estado);   // se puede tocar hasta que pasa a ENTREGADO
+  editando = editando && abierto;
+  const prep = i => Math.min(Number(i.cantidad_preparada || 0), Number(i.cantidad));
+  const completo = i => prep(i) >= Number(i.cantidad);
+  const req = i => i.series_requeridas ?? Math.ceil(i.cantidad);
+  const faltaSerie = i => i.lleva_serie ? Math.max(0, req(i) - (i.series || []).length) : 0;
+
+  const filas = editando
+    ? `<tr><td><div style="display:grid;grid-template-columns:1fr 80px 36px;gap:8px;font-size:12px;font-weight:600;color:var(--gris)"><span>PRODUCTO</span><span>CANT.</span><span></span></div>
+        <datalist id="lista-productos">${productosLista.map(x => `<option value="${esc(x.nombre)}">`).join('')}</datalist>
+        <div id="ed-items">${items.map(i => `<div class="item-form-grid ed-row" data-item-id="${i.id}">
+          <input class="prod" list="lista-productos" value="${esc(i.producto)}" aria-label="Producto" autocomplete="off">
+          <input class="cant" type="number" step="any" min="0" value="${i.cantidad}" aria-label="Cantidad">
+          <button type="button" class="quitar" aria-label="Quitar">✕</button></div>`).join('')}</div>
+        <button type="button" class="btn sec chico" id="ed-mas" style="margin-top:10px;width:100%;border-style:dashed">+ Agregar producto</button></td></tr>`
+    : items.map(i => {
+      const ser = i.series || [], falta = faltaSerie(i);
+      const chips = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}${abierto ? `<button type="button" class="del-serie" data-id="${s.id}" title="Quitar" style="background:none;border:0;color:var(--rojo);cursor:pointer;padding:0 0 0 6px">✕</button>` : ''}</span>`).join('') : '<small class="series">Sin números de serie</small>';
+      return `<tr><td>
+        <b>${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
+        ${abierto ? `<label class="check-serie"><input type="checkbox" class="chk-lleva" data-item-id="${i.id}" ${i.lleva_serie ? 'checked' : ''}> Lleva n.º de serie</label>` : (i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : '')}
+        ${abierto ? `<div class="item-form" style="align-items:center;margin-top:6px">
+          <label class="check-serie" style="margin:0"><input type="checkbox" class="chk-prep" data-item-id="${i.id}" ${completo(i) ? 'checked' : ''}> Preparado</label>
+          <input type="number" class="inp-prep" data-item-id="${i.id}" step="any" min="0" max="${i.cantidad}" value="${prep(i)}" style="width:90px;padding:6px" aria-label="Cantidad preparada"> <small>de ${i.cantidad}</small></div>`
+          : `<div><small class="series">Preparado: ${prep(i)} de ${i.cantidad}</small></div>`}
+        ${abierto && i.lleva_serie ? `<div class="item-form" style="align-items:center;margin-top:6px">
+          <label style="margin:0;font-size:14px">¿Cuántos n.º de serie cargar?</label>
+          <input type="number" class="inp-req" data-item-id="${i.id}" min="0" step="1" value="${req(i)}" style="width:80px;padding:6px"></div>` : ''}
+        <div class="lista-series">${chips}</div>
+        ${abierto && falta > 0 ? `<div class="casillas" data-item-id="${i.id}">
+          ${Array.from({length: falta}, (_,k) => `<input class="input-serie" data-item-id="${i.id}" placeholder="N.º de serie ${ser.length + k + 1} de ${req(i)}" style="font-size:14px;padding:8px;margin-top:6px">`).join('')}
+          <button type="button" class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:8px">Guardar números de serie</button></div>` : ''}
+      </td></tr>`;
+    }).join('');
 
   const haySeries = items.some(i => i.series && i.series.length);
   let acciones = '<button class="btn sec chico" id="volver-dep">← Volver</button>';
-  if(p.estado === 'pendiente') acciones += '<button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button>';
-  if(p.estado === 'listo') acciones += `<button class="btn chico" id="marcar-entregado" style="background:var(--ok)">${p.modalidad==='despacho' ? 'Marcar como DESPACHADO' : 'Marcar como ENTREGADO'}</button>`;
-  if(p.estado === 'entregado' && haySeries && p.enargas_transferido !== true) acciones += '<button class="btn chico" id="marcar-enargas">Marcar series transferidas en ENARGAS</button>';
+  if(editando){
+    acciones += '<button class="btn chico" id="ed-guardar" style="background:var(--ok)">Guardar cambios</button><button class="btn sec chico" id="ed-cancelar">Cancelar edición</button>';
+  } else {
+    if(abierto) acciones += '<button class="btn sec chico" id="editar">✏️ Editar pedido</button>';
+    if(p.estado === 'pendiente') acciones += '<button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button>';
+    if(p.estado === 'listo') acciones += `<button class="btn chico" id="marcar-entregado" style="background:var(--ok)">${p.modalidad==='despacho' ? 'Marcar como DESPACHADO' : 'Marcar como ENTREGADO'}</button>`;
+    if(p.estado === 'entregado' && haySeries && p.enargas_transferido !== true) acciones += '<button class="btn chico" id="marcar-enargas">Marcar series transferidas en ENARGAS</button>';
+  }
 
   c.innerHTML = `<div class="panel remito">
     <div class="acciones sup">${acciones}</div>
@@ -285,39 +311,122 @@ async function detallePedidoDeposito(id){
        ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}
        ${p.comentarios ? `<br><b>Nota:</b> ${esc(p.comentarios)}` : ''}
        ${p.enargas_transferido !== null ? `<br><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}` : ''}</p>
-    <table><thead><tr><th>Productos y números de serie</th></tr></thead><tbody>${filas}</tbody></table>
+    <table><thead><tr><th>${editando ? 'Editando productos del pedido' : 'Productos, preparación y números de serie'}</th></tr></thead><tbody>${filas}</tbody></table>
     <div id="aviso-dep"></div>
   </div>`;
   const aviso = document.getElementById('aviso-dep');
+  const err = m => aviso.innerHTML = `<div class="msg err">${m}</div>`;
   document.getElementById('volver-dep').onclick = vistaDeposito;
+  const itemPorId = x => items.find(i => String(i.id) === String(x));
+  const actualizarItem = async (itemId, campos) => {
+    const {error: e} = await sb.from('pedido_items').update(campos).eq('id', itemId);
+    if(e) err(esc(e.message)); else detallePedidoDeposito(id);
+  };
 
-  c.querySelectorAll('.chk-lleva').forEach(chk => chk.onchange = async () => {
-    const {error} = await sb.from('pedido_items').update({lleva_serie: chk.checked}).eq('id', chk.dataset.itemId);
-    if(error) aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; else detallePedidoDeposito(id);
+  /* ---- MODO EDICIÓN (hasta ENTREGADO) ---- */
+  if(editando){
+    const cont = document.getElementById('ed-items'), quitados = [];
+    const nuevaFila = () => {
+      const d = document.createElement('div'); d.className = 'item-form-grid ed-row';
+      d.innerHTML = `<input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" autocomplete="off">
+        <input class="cant" type="number" step="any" min="0" value="1"><button type="button" class="quitar" aria-label="Quitar">✕</button>`;
+      cont.appendChild(d); bindQuitar(d);
+    };
+    const bindQuitar = d => d.querySelector('.quitar').onclick = () => {
+      if(cont.children.length <= 1) return;
+      if(d.dataset.itemId) quitados.push(d.dataset.itemId);
+      d.remove();
+    };
+    cont.querySelectorAll('.ed-row').forEach(bindQuitar);
+    document.getElementById('ed-mas').onclick = nuevaFila;
+    document.getElementById('ed-cancelar').onclick = () => detallePedidoDeposito(id);
+    document.getElementById('ed-guardar').onclick = async () => {
+      const buscar = t => productosLista.find(x => x.nombre.toUpperCase() === t.trim().toUpperCase());
+      const rows = [...cont.children].map(d => ({id: d.dataset.itemId, texto: d.querySelector('.prod').value.trim(), cant: parseFloat(d.querySelector('.cant').value)}));
+      const malos = rows.filter(r => !r.texto || !(r.cant > 0) || (!buscar(r.texto) && !(r.id && itemPorId(r.id).producto === r.texto)));
+      if(malos.length) return err('Revisá los productos: cada uno tiene que estar en la lista y con cantidad mayor a 0.');
+      const conSeries = quitados.map(itemPorId).filter(i => i.series && i.series.length);
+      if(conSeries.length && !confirm('Vas a quitar productos que ya tienen números de serie cargados (' + conSeries.map(i => i.producto).join(', ') + '). Esas series se borran también. ¿Seguir?')) return;
+      document.getElementById('ed-guardar').disabled = true;
+      let fallo = null;
+      for(const qid of quitados){
+        let r = await sb.from('series').delete().eq('item_id', qid); fallo = fallo || r.error;
+        r = await sb.from('pedido_items').delete().eq('id', qid); fallo = fallo || r.error;
+      }
+      for(const r of rows){
+        const pr = buscar(r.texto);
+        if(r.id){
+          const o = itemPorId(r.id); const cambioProd = o.producto !== r.texto, cambioCant = Number(o.cantidad) !== r.cant;
+          if(!cambioProd && !cambioCant) continue;
+          const campos = {producto: pr ? pr.nombre : o.producto, cantidad: r.cant, cantidad_preparada: Math.min(prep(o), r.cant)};
+          if(cambioProd && pr) campos.lleva_serie = pr.lleva_serie;
+          if(cambioCant) campos.series_requeridas = null;
+          const x = await sb.from('pedido_items').update(campos).eq('id', r.id); fallo = fallo || x.error;
+        } else {
+          const x = await sb.from('pedido_items').insert({pedido_id: p.id, producto: pr.nombre, cantidad: r.cant, lleva_serie: pr.lleva_serie}); fallo = fallo || x.error;
+        }
+      }
+      await detallePedidoDeposito(id);
+      if(fallo) document.getElementById('aviso-dep').innerHTML = `<div class="msg err">Algo no se pudo guardar: ${esc(fallo.message)}</div>`;
+    };
+    return;
+  }
+
+  /* ---- MODO PREPARACIÓN ---- */
+  const bEditar = document.getElementById('editar'); if(bEditar) bEditar.onclick = () => detallePedidoDeposito(id, true);
+
+  c.querySelectorAll('.chk-lleva').forEach(chk => chk.onchange = () => actualizarItem(chk.dataset.itemId, {lleva_serie: chk.checked}));
+  c.querySelectorAll('.chk-prep').forEach(chk => chk.onchange = () =>
+    actualizarItem(chk.dataset.itemId, {cantidad_preparada: chk.checked ? itemPorId(chk.dataset.itemId).cantidad : 0}));
+  c.querySelectorAll('.inp-prep').forEach(inp => inp.onchange = () => {
+    const max = Number(itemPorId(inp.dataset.itemId).cantidad);
+    const v = Math.max(0, Math.min(max, parseFloat(inp.value) || 0));
+    actualizarItem(inp.dataset.itemId, {cantidad_preparada: v});
+  });
+  c.querySelectorAll('.inp-req').forEach(inp => inp.onchange = () =>
+    actualizarItem(inp.dataset.itemId, {series_requeridas: Math.max(0, parseInt(inp.value, 10) || 0)}));
+
+  c.querySelectorAll('.del-serie').forEach(b => b.onclick = async () => {
+    if(!confirm('¿Quitar este número de serie?')) return;
+    const {error: e} = await sb.from('series').delete().eq('id', b.dataset.id);
+    if(e) err(esc(e.message)); else detallePedidoDeposito(id);
   });
 
-  const agregarSerie = async itemId => {
-    const input = c.querySelector(`.input-serie[data-item-id="${itemId}"]`);
-    const numero_serie = input.value.trim();
-    if(!numero_serie) return aviso.innerHTML = '<div class="msg err">Ingresá un número de serie.</div>';
-    const {error: e} = await sb.from('series').insert({pedido_id: p.id, item_id: itemId, numero_serie, cargado_por: perfil.id});
-    if(e) return aviso.innerHTML = `<div class="msg err">${e.code === '23505' ? 'Ese número de serie ya fue cargado en otro pedido o producto.' : 'Error al guardar: ' + esc(e.message)}</div>`;
-    detallePedidoDeposito(id);
-  };
-  c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = () => agregarSerie(btn.dataset.itemId));
-  c.querySelectorAll('.input-serie').forEach(inp => inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); agregarSerie(inp.dataset.itemId); } });
+  c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
+    const itemId = btn.dataset.itemId;
+    const vals = [...c.querySelectorAll(`.input-serie[data-item-id="${itemId}"]`)].map(x => x.value.trim()).filter(Boolean);
+    if(!vals.length) return err('Ingresá al menos un número de serie.');
+    if(new Set(vals).size !== vals.length) return err('Hay números de serie repetidos en las casillas.');
+    btn.disabled = true;
+    let msg = '';
+    for(const numero_serie of vals){
+      const {error: e} = await sb.from('series').insert({pedido_id: p.id, item_id: itemId, numero_serie, cargado_por: perfil.id});
+      if(e){ msg = e.code === '23505' ? `El n.º de serie ${esc(numero_serie)} ya fue cargado en otro pedido o producto.` : 'Error al guardar: ' + esc(e.message); break; }
+    }
+    await detallePedidoDeposito(id);
+    if(msg) document.getElementById('aviso-dep').innerHTML = `<div class="msg err">${msg}</div>`;
+  });
+  c.querySelectorAll('.casillas').forEach(box => {
+    const ins = [...box.querySelectorAll('.input-serie')];
+    ins.forEach((inp, k) => inp.onkeydown = e => {
+      if(e.key !== 'Enter') return; e.preventDefault();
+      if(ins[k+1]) ins[k+1].focus(); else box.querySelector('.btn-add-serie').click();
+    });
+  });
   setTimeout(() => { const f = c.querySelector('.input-serie'); if(f) f.focus(); }, 0);
 
   const cambiar = async campos => {
     const {error: e} = await sb.from('pedidos').update(campos).eq('id', p.id);
-    if(e) aviso.innerHTML = `<div class="msg err">No se pudo actualizar: ${esc(e.message)}</div>`;
-    else vistaDeposito();
+    if(e) err('No se pudo actualizar: ' + esc(e.message)); else vistaDeposito();
   };
 
   const listo = document.getElementById('marcar-listo');
   if(listo) listo.onclick = () => {
-    const faltan = items.filter(i => i.lleva_serie && Math.ceil(i.cantidad) > (i.series||[]).length);
-    if(faltan.length && !confirm('Faltan cargar números de serie de: ' + faltan.map(i=>i.producto).join(', ') + '.\n¿Marcar como listo igual?')) return;
+    const sinPrep = items.filter(i => !completo(i)), faltan = items.filter(i => faltaSerie(i) > 0);
+    let m = '';
+    if(sinPrep.length) m += 'Sin preparar completo: ' + sinPrep.map(i => i.producto).join(', ') + '.\n';
+    if(faltan.length) m += 'Faltan números de serie de: ' + faltan.map(i => i.producto).join(', ') + '.\n';
+    if(m && !confirm(m + '¿Marcar como listo igual?')) return;
     cambiar({estado:'listo'});
   };
 
@@ -340,7 +449,7 @@ async function detallePedidoDeposito(id){
   const eng = document.getElementById('marcar-enargas');
   if(eng) eng.onclick = async () => {
     const {error: e} = await sb.from('pedidos').update({enargas_transferido:true}).eq('id', p.id);
-    if(e) aviso.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; else detallePedidoDeposito(id);
+    if(e) err(esc(e.message)); else detallePedidoDeposito(id);
   };
 }
 

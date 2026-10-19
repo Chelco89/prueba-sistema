@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#1565B8">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./logo.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="SGV Pedidos">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -226,7 +226,7 @@ async function cargarPedidosDeposito(){
   res.className = '';
   res.innerHTML = data.length ? data.map(p => `
     <button class="fila item item-deposito" data-id="${p.id}">
-      <div class="dato"><b style="font-size: 16px">${esc(p.cliente)}</b><small>Remito ${fmtRemito(p.numero_remito)}</small></div>
+      <div class="dato"><b style="font-size: 16px">${esc(p.cliente)}</b><small>Remito${fmtRemito(p.numero_remito)}</small></div>
       <div class="dato"><span class="etiqueta pendiente">Pendiente</span>
         <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
     </button>`).join('') : '<p class="vacio">No hay pedidos pendientes para preparar en este momento.</p>';
@@ -245,10 +245,9 @@ async function detallePedidoDeposito(id){
     return `
     <tr>
       <td>
-        <b>${esc(i.producto)}</b> (Cant: ${i.cantidad})
+        <b>${esc(i.producto)}</b> (Cant:${i.cantidad})
         <div style="margin-top:6px">
-          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') || 'Ninguna'}</small>
-          ${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
+          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') \vert{}\vert{} 'Ninguna'}</small>${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
             <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie" style="font-size:14px; padding:6px">
             <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button>
           </div>` : ''}
@@ -368,239 +367,4 @@ async function vistaVentas(){
           <button class="pill-btn ${filtroEstadoPill==='todos'?'activa':''}" data-f="todos">Todos</button>
           <button class="pill-btn ${filtroEstadoPill==='pendiente'?'activa':''}" data-f="pendiente">Pendientes</button>
           <button class="pill-btn ${filtroEstadoPill==='listo'?'activa':''}" data-f="listo">Listos</button>
-          <button class="pill-btn ${filtroEstadoPill==='anulado'?'activa':''}" data-f="anulado">Anulados</button>
-        </div>
-
-        <div id="res-ventas">Cargando pedidos…</div>
-      </div>
-    </div>`;
-
-  const items = document.getElementById('items');
-  const agregarItem = () => {
-    if(!items) return;
-    const d = document.createElement('div'); 
-    d.className = 'item-form-grid';
-    d.innerHTML = `
-      <input class="prod" placeholder="Producto" aria-label="Producto" required>
-      <input class="cant" type="number" step="any" min="0" value="1" placeholder="Cant." aria-label="Cantidad" required>
-      <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
-    d.querySelector('.quitar').onclick = () => { if(items.children.length > 1) d.remove(); };
-    items.appendChild(d);
-  };
-  
-  agregarItem();
-  document.getElementById('mas').onclick = agregarItem;
-
-  document.getElementById('fp').onsubmit = async e => {
-    e.preventDefault();
-    const aviso = document.getElementById('aviso');
-    const lineas = [...items.children].map(d => ({
-      producto: d.querySelector('.prod').value.trim(), 
-      cantidad: parseFloat(d.querySelector('.cant').value)
-    })).filter(l => l.producto);
-
-    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))) {
-      return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
-    }
-
-    const btn = e.target.querySelector('[type=submit]'); 
-    btn.disabled = true;
-
-    const {data:p, error} = await sb.from('pedidos').insert({
-      cliente: document.getElementById('cliente').value.trim(),
-      modalidad: document.getElementById('modalidad').value,
-      fecha_entrega: document.getElementById('fentrega').value || null,
-      comentarios: document.getElementById('coment').value.trim() || null,
-      creado_por: perfil.id 
-    }).select().single();
-
-    if(error){ 
-      btn.disabled = false; 
-      return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; 
-    }
-
-    const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
-    if(e2){ 
-      await sb.from('pedidos').delete().eq('id', p.id); 
-      btn.disabled = false;
-      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`; 
-    }
-
-    vistaVentas();
-  };
-
-  document.querySelectorAll('.pill-btn').forEach(b => {
-    b.onclick = () => {
-      filtroEstadoPill = b.dataset.f;
-      vistaVentas();
-    };
-  });
-
-  cargarResultadosVentas();
-}
-
-async function cargarResultadosVentas(){
-  const res = document.getElementById('res-ventas'); 
-  if(!res) return;
-
-  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').order('numero_remito',{ascending:false}).limit(50);
-  if(filtroEstadoPill !== 'todos') {
-    q = q.eq('estado', filtroEstadoPill);
-  }
-
-  const {data, error} = await q;
-  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-
-  if(!data || !data.length) {
-    return res.innerHTML = `
-      <div style="text-align:center; padding:40px 20px; color:var(--gris); background:#fff; border-radius:12px; border:1px dashed #EAECF0">
-        <div style="font-size:32px; margin-bottom:8px">📦</div>
-        <b>No hay pedidos en esta sección actualmente.</b>
-      </div>`;
-  }
-
-  res.innerHTML = data.map(p => {
-    const itemsHtml = p.pedido_items && p.pedido_items.length ? p.pedido_items.map(i => `
-      <div class="card-item-row">
-        <div>
-          ${i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}
-          <span style="font-weight:500">${esc(i.producto)}</span>
-        </div>
-        <div style="background:#F1F5F9; padding:2px 8px; border-radius:6px; font-weight:600; font-size:13px">x${i.cantidad}</div>
-      </div>
-    `).join('') : '<div style="color:var(--gris); font-size:13px">Sin productos registrados</div>';
-
-    return `
-      <div class="card-pedido">
-        <div class="card-pedido-header">
-          <div>
-            <h3>${esc(p.cliente)}</h3>
-            <span style="font-size:13px; color:var(--gris); font-weight:600">Remito ${fmtRemito(p.numero_remito)}</span>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center">
-            <select class="cambio-estado-select" data-id="${p.id}" style="padding:6px 10px; font-size:13px; border-radius:6px; font-weight:600">
-              <option value="pendiente" ${p.estado==='pendiente'?'selected':''}>Pendiente</option>
-              <option value="listo" ${p.estado==='listo'?'selected':''}>Listo</option>
-              <option value="entregado" ${p.estado==='entregado'?'selected':''}>Entregado</option>
-              <option value="anulado" ${p.estado==='anulado'?'selected':''}>Anulado</option>
-            </select>
-            <button class="btn chico sec ver-remito-btn" data-id="${p.id}" style="padding:6px 12px; font-weight:600">Ver</button>
-          </div>
-        </div>
-        <div class="card-pedido-meta">
-          <span>📅 Entrega: ${fmtFecha(p.fecha_entrega)}</span>
-          <span>🚚 ${MODAL[p.modalidad]}</span>
-        </div>
-        <div class="card-items-box">
-          <div style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px">Productos a sacar</div>
-          ${itemsHtml}
-        </div>
-        ${p.comentarios ? `<div style="margin-top:10px; font-size:13px; color:#475467"><b>Nota:</b> ${esc(p.comentarios)}</div>` : ''}
-      </div>`;
-  }).join('');
-
-  res.querySelectorAll('.cambio-estado-select').forEach(sel => {
-    sel.onchange = async () => {
-      const id = sel.dataset.id;
-      const nuevoEstado = sel.value;
-      const {error} = await sb.from('pedidos').update({estado: nuevoEstado}).eq('id', id);
-      if(error) {
-        alert('No se pudo actualizar el estado: ' + error.message);
-      } else {
-        vistaVentas();
-      }
-    };
-  });
-
-  res.querySelectorAll('.ver-remito-btn').forEach(btn => {
-    btn.onclick = () => {
-      detallePedido(btn.dataset.id, vistaVentas);
-    };
-  });
-}
-
-/* ---------- DETALLE / REMITO ---------- */
-async function detallePedido(id, volver){
-  const c = document.getElementById('contenido');
-  c.innerHTML = '<div class="panel vacio">Cargando…</div>';
-  const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
-  if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
-  const puedeAnular = ['ventas','admin'].includes(perfil.rol) && ['pendiente','listo'].includes(p.estado);
-  const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => `
-    <tr><td>${esc(i.producto)}${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s=>esc(s.numero_serie)).join(', ')}</small>` : ''}</td>
-    <td class="num">${i.cantidad}</td></tr>`).join('');
-  c.innerHTML = `<div class="panel remito">
-    <div class="no-print acciones sup"><button class="btn sec chico" id="volver">← Volver</button>
-      <button class="btn chico" id="imprimir">Imprimir / guardar PDF</button>
-      ${puedeAnular ? '<button class="btn chico peligro" id="anular">Anular pedido</button>' : ''}</div>
-    <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
-      <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
-    <p><b>Cliente:</b> ${esc(p.cliente)}<br>
-       <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
-       <b>Entrega:</b> ${MODAL[p.modalidad]}<br>
-       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}<br>
-       <b>Creado:</b> ${fmtFechaHora(p.creado_en)}
-       ${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
-       ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}</p>
-    <table><thead><tr><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
-    ${p.comentarios ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>` : ''}
-    ${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}</p>` : ''}
-  </div>`;
-  document.getElementById('volver').onclick = volver;
-  document.getElementById('imprimir').onclick = () => window.print();
-  const a = document.getElementById('anular');
-  if(a) a.onclick = async () => {
-    if(!confirm(`¿Anular el remito ${fmtRemito(p.numero_remito)}? No se puede deshacer.`)) return;
-    const {error} = await sb.from('pedidos').update({estado:'anulado'}).eq('id', p.id);
-    if(error) alert('No se pudo anular: ' + error.message); else detallePedido(p.id, volver);
-  };
-}
-
-/* ---------- ADMIN: USUARIOS ---------- */
-async function vistaUsuarios(){
-  const cont = document.getElementById('contenido');
-  cont.innerHTML = `<div class="panel"><h2>Usuarios</h2><div id="lista" class="vacio">Cargando…</div></div>`;
-  const {data,error} = await sb.from('profiles').select('*').order('creado_en',{ascending:false});
-  const lista = document.getElementById('lista');
-  if(error) return lista.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-  lista.className = '';
-  lista.innerHTML = data.map(u => `
-    <div class="fila">
-      <div class="dato"><b>${esc(u.nombre)}</b>
-        <small>${u.rol==='pendiente' ? `<span class="etiqueta pendiente">Pidió: ${esc(ROLES[u.puesto_solicitado]||'—')}</span>` : ''}</small></div>
-      <select data-id="${u.id}" data-campo="rol" aria-label="Puesto de ${esc(u.nombre)}" ${u.id===perfil.id?'disabled':''}>
-        ${Object.entries(ROLES).map(([k,n])=>`<option value="${k}" ${u.rol===k?'selected':''}>${n}</option>`).join('')}
-      </select>
-      <select data-id="${u.id}" data-campo="activo" aria-label="Estado de ${esc(u.nombre)}" ${u.id===perfil.id?'disabled':''}>
-        <option value="true" ${u.activo?'selected':''}>Activo</option>
-        <option value="false" ${!u.activo?'selected':''}>Desactivado</option>
-      </select>
-    </div>`).join('') || '<p class="vacio">Todavía no hay usuarios.</p>';
-  lista.querySelectorAll('select').forEach(s => s.onchange = async () => {
-    const valor = s.dataset.campo === 'activo' ? s.value === 'true' : s.value;
-    const {error} = await sb.from('profiles').update({[s.dataset.campo]: valor}).eq('id', s.dataset.id);
-    if(error) alert('No se pudo guardar: ' + error.message);
-    vistaUsuarios();
-  });
-}
-
-/* ---------- ARRANQUE ---------- */
-sb.auth.onAuthStateChange((evento, sesion) => {
-  if(sesion) setTimeout(cargarPerfil, 0); else { perfil = null; pantallaLogin(); }
-});
-sb.auth.getSession().then(({data:{session}}) => { if(!session) pantallaLogin(); });
-</script>
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try {
-      await navigator.serviceWorker.register("./sw.js");
-      console.log("SGV: service worker registrado");
-    } catch (error) {
-      console.error("SGV: error al registrar service worker", error);
-    }
-  });
-}
-</script>
-</body>
-</html>
+          <button class="pill-btn ${filtro

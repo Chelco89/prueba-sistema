@@ -3,10 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="apple-touch-icon" href="./logo.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="SGV Pedidos">
 <title>Distribuidora SGV</title>
 <meta name="theme-color" content="#1565B8">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -68,6 +64,7 @@ button.item:hover{background:#F2F5F9}
 table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1px solid var(--linea);text-align:left;vertical-align:top}
 .num{text-align:right;white-space:nowrap}.series{display:block;color:var(--gris);font-size:13px}
 @media print{header,nav,.no-print{display:none!important}body{background:#fff}.panel{box-shadow:none;padding:0}main{padding:0}}
+
 /* --- ESTILOS DASHBOARD DOS COLUMNAS VENTAS --- */
 .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
 .dash-title h2 { margin: 0; font-size: 24px; color: #101828; }
@@ -78,13 +75,18 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1p
 .stat-num.p { background: #FEF3F2; color: #B42318; }
 .stat-num.l { background: #ECFDF3; color: #027A48; }
 .stat-label { font-size: 12px; font-weight: 600; color: #344054; text-transform: uppercase; }
+
 .sync-banner { background: #ECFDF3; border: 1px solid #A6F4C5; color: #027A48; padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+
 .grid-dash { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
 @media (max-width: 950px) { .grid-dash { grid-template-columns: 1fr; } }
+
 .pills { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .pill-btn { background: #fff; border: 1px solid #EAECF0; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; color: #344054; cursor: pointer; }
 .pill-btn.activa { background: #0F172A; color: #fff; border-color: #0F172A; }
+
 .item-form-grid { display: grid; grid-template-columns: 1fr 80px 36px; gap: 8px; margin-top: 8px; align-items: center; }
+
 .card-pedido { background: #fff; border: 1px solid #EAECF0; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); }
 .card-pedido-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .card-pedido-header h3 { margin: 0; font-size: 20px; color: #101828; display: flex; align-items: center; gap: 8px; font-weight: 700; }
@@ -93,28 +95,11 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1p
 .card-item-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #EAECF0; font-size: 14px; color: #334155; }
 .card-item-row:last-child { border-bottom: 0; }
 .badge-s-u { background: #E2E8F0; color: #475467; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px; }
-/* --- Ajustes dashboard: cliente protagonista, remito discreto --- */
-.card-pedido-header{flex-wrap:wrap;gap:10px}
-.card-pedido-header h3{font-size:22px;text-transform:uppercase;letter-spacing:.2px;flex-wrap:wrap;line-height:1.2}
-.card-pedido-header h3 .etiqueta{text-transform:none;letter-spacing:0;font-size:12px}
-.card-pedido-meta{margin-bottom:14px;margin-top:6px}
-.remito-chico{color:#98A2B3;font-weight:500}
-.acciones-card{display:flex;gap:8px;align-items:center}
-.stat-num.e{background:#EFF4FF;color:#1849A9}
-.nuevo-movil{display:none;margin:0 0 14px}
-@media (max-width:950px){.col-form{display:none}.col-form.abierto{display:block}.nuevo-movil{display:block}}
-.chip-serie{display:inline-block;background:#EEF2F6;border:1px solid #D9E0E8;border-radius:6px;padding:2px 8px;margin:4px 6px 0 0;font-family:ui-monospace,Menlo,monospace;font-size:13px}
-.lista-series{margin-top:4px}
-.check-serie{display:inline-flex;align-items:center;gap:6px;margin:0 0 0 12px;font-weight:500;font-size:14px}
-.check-serie input{width:auto}
-.badge-cant{background:#F1F5F9;padding:2px 8px;border-radius:6px;font-weight:600;font-size:13px}
-.enargas-box{margin-top:16px;padding:14px;border:2px solid var(--azul);border-radius:10px;background:#F2F7FD}
-.serie-num{font-family:ui-monospace,Menlo,monospace;font-size:17px}
-.fila.inactivo{opacity:.55}
 </style>
 </head>
 <body>
 <div id="app"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script>
@@ -125,6 +110,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
 let perfil = null, vista = null;
 let filtros = {numero:'', cliente:'', estado:'', listo:'', entrega:''};
+let filtroEstadoPill = 'todos';
+
 /* ---------- ENTRADA ---------- */
 function pantallaLogin(modo='entrar', aviso=null){
   const nuevo = modo === 'crear';
@@ -166,6 +153,7 @@ function traducir(m){
   if(/Email not confirmed/i.test(m)) return 'Primero confirmá tu correo con el mensaje que te llegó.';
   return m;
 }
+
 /* ---------- SISTEMA ---------- */
 async function cargarPerfil(){
   const {data:{user}} = await sb.auth.getUser();
@@ -183,6 +171,7 @@ function cabecera(){
   </header>`;
 }
 function conectarSalir(){ document.getElementById('salir').onclick = () => sb.auth.signOut(); }
+
 function pantallaEspera(){
   app.innerHTML = cabecera() + `<main><div class="panel">
     <h2>Tu usuario está esperando aprobación</h2>
@@ -191,11 +180,11 @@ function pantallaEspera(){
   conectarSalir();
   document.getElementById('reintentar').onclick = cargarPerfil;
 }
+
 function armarSistema(){
   const tabs = [];
-  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas'], ['productos','Productos']);
+  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas']);
   if(['deposito','admin'].includes(perfil.rol)) tabs.push(['deposito','Depósito']);
-  tabs.push(['series','N.º de serie']);
   if(perfil.rol === 'admin') tabs.push(['usuarios','Usuarios']);
   vista = vista && tabs.some(t=>t[0]===vista) ? vista : tabs[0][0];
   app.innerHTML = cabecera() +
@@ -203,361 +192,110 @@ function armarSistema(){
      <main id="contenido"></main>`;
   conectarSalir();
   app.querySelectorAll('nav button').forEach(b => b.onclick = () => { vista = b.dataset.v; armarSistema(); });
-  ({ventas:vistaVentas, deposito:vistaDeposito, series:vistaSeries, productos:vistaProductos, usuarios:vistaUsuarios})[vista]();
+  ({ventas:vistaVentas, deposito:vistaDeposito, usuarios:vistaUsuarios})[vista]();
 }
-/* ---------- DEPÓSITO ---------- */
-let depTab = 'pendiente';
-const DEP_TABS = [['pendiente','Para preparar'],['listo','Listos para entregar'],['entregado','Entregados']];
 
+/* ---------- DEPÓSITO ---------- */
 function vistaDeposito(){
   const c = document.getElementById('contenido');
   c.innerHTML = `<div class="panel">
-    <div class="barra"><h2>Depósito</h2></div>
-    <div class="pills">${DEP_TABS.map(([k,n])=>`<button class="pill-btn ${depTab===k?'activa':''}" data-t="${k}">${n}</button>`).join('')}</div>
+    <div class="barra"><h2>Preparación de pedidos</h2></div>
     <div class="filtros">
-      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value="${esc(filtros.numero)}"></div>
-      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value="${esc(filtros.cliente)}"></div>
+      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value=""></div>
+      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value=""></div>
       <div><button class="btn sec chico" id="d-limpiar" style="margin-top:0">Limpiar filtros</button></div>
     </div>
     <div id="res-dep" class="vacio">Cargando…</div></div>`;
+  
   let t;
-  const buscar = () => { clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
-  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; buscar(); };
-  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; buscar(); };
-  document.getElementById('d-limpiar').onclick = () => { filtros.numero = ''; filtros.cliente = ''; vistaDeposito(); };
-  c.querySelectorAll('.pill-btn').forEach(b => b.onclick = () => { depTab = b.dataset.t; vistaDeposito(); });
-  suscribirPedidos();
+  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-limpiar').onclick = () => { document.getElementById('d-numero').value = ''; document.getElementById('d-cliente').value = ''; filtros.numero = ''; filtros.cliente = ''; cargarPedidosDeposito(); };
   cargarPedidosDeposito();
 }
 
 async function cargarPedidosDeposito(){
   const res = document.getElementById('res-dep'); if(!res) return;
-  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('estado', depTab)
-    .order('numero_remito',{ascending: depTab === 'pendiente'}).limit(100);
+  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('estado', 'pendiente').order('numero_remito',{ascending:true}).limit(100);
   const n = parseInt(filtros.numero,10);
   if(filtros.numero && !isNaN(n)) q = q.eq('numero_remito', n);
   if(filtros.cliente && filtros.cliente.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
+
   const {data,error} = await q;
   if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
   res.className = '';
-  const vacio = {pendiente:'No hay pedidos para preparar en este momento.', listo:'No hay pedidos listos esperando entrega.', entregado:'Todavía no hay pedidos entregados.'}[depTab];
-  res.innerHTML = data.length ? data.map(p => {
-    const nSeries = p.pedido_items.reduce((a,i) => a + (i.series ? i.series.length : 0), 0);
-    return `
+  res.innerHTML = data.length ? data.map(p => `
     <button class="fila item item-deposito" data-id="${p.id}">
-      <div class="dato"><b style="font-size:18px;text-transform:uppercase">${esc(p.cliente)}</b>
-        <small>Remito ${fmtRemito(p.numero_remito)}${nSeries ? ` · ${nSeries} n.º de serie cargados` : ''}</small></div>
-      <div class="dato"><span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span>
+      <div class="dato"><b style="font-size: 16px">${esc(p.cliente)}</b><small>Remito ${fmtRemito(p.numero_remito)}</small></div>
+      <div class="dato"><span class="etiqueta pendiente">Pendiente</span>
         <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
-    </button>`; }).join('') : `<p class="vacio">${vacio}</p>`;
+    </button>`).join('') : '<p class="vacio">No hay pedidos pendientes para preparar en este momento.</p>';
   res.querySelectorAll('.item-deposito').forEach(b => b.onclick = () => detallePedidoDeposito(b.dataset.id));
 }
 
-async function detallePedidoDeposito(id, editando=false){
+async function detallePedidoDeposito(id){
   const c = document.getElementById('contenido');
   c.innerHTML = '<div class="panel vacio">Cargando…</div>';
-  await cargarProductos();
   const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
   if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
-
-  const items = p.pedido_items.sort((a,b)=>a.id-b.id);
-  const abierto = ['pendiente','listo'].includes(p.estado);   // se puede tocar hasta que pasa a ENTREGADO
-  editando = editando && abierto;
-  const prep = i => Math.min(Number(i.cantidad_preparada || 0), Number(i.cantidad));
-  const completo = i => prep(i) >= Number(i.cantidad);
-  const req = i => i.series_requeridas ?? Math.ceil(i.cantidad);
-  const faltaSerie = i => i.lleva_serie ? Math.max(0, req(i) - (i.series || []).length) : 0;
-
-  const filas = editando
-    ? `<tr><td><div style="display:grid;grid-template-columns:1fr 80px 36px;gap:8px;font-size:12px;font-weight:600;color:var(--gris)"><span>PRODUCTO</span><span>CANT.</span><span></span></div>
-        <datalist id="lista-productos">${productosLista.map(x => `<option value="${esc(x.nombre)}">`).join('')}</datalist>
-        <div id="ed-items">${items.map(i => `<div class="item-form-grid ed-row" data-item-id="${i.id}">
-          <input class="prod" list="lista-productos" value="${esc(i.producto)}" aria-label="Producto" autocomplete="off">
-          <input class="cant" type="number" step="any" min="0" value="${i.cantidad}" aria-label="Cantidad">
-          <button type="button" class="quitar" aria-label="Quitar">✕</button></div>`).join('')}</div>
-        <button type="button" class="btn sec chico" id="ed-mas" style="margin-top:10px;width:100%;border-style:dashed">+ Agregar producto</button></td></tr>`
-    : items.map(i => {
-      const ser = i.series || [], falta = faltaSerie(i);
-      const chips = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}${abierto ? `<button type="button" class="del-serie" data-id="${s.id}" title="Quitar" style="background:none;border:0;color:var(--rojo);cursor:pointer;padding:0 0 0 6px">✕</button>` : ''}</span>`).join('') : '<small class="series">Sin números de serie</small>';
-      return `<tr><td>
-        <b>${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
-        ${abierto ? `<label class="check-serie"><input type="checkbox" class="chk-lleva" data-item-id="${i.id}" ${i.lleva_serie ? 'checked' : ''}> Lleva n.º de serie</label>` : (i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : '')}
-        ${abierto ? `<div class="item-form" style="align-items:center;margin-top:6px">
-          <label class="check-serie" style="margin:0"><input type="checkbox" class="chk-prep" data-item-id="${i.id}" ${completo(i) ? 'checked' : ''}> Preparado</label>
-          <input type="number" class="inp-prep" data-item-id="${i.id}" step="any" min="0" max="${i.cantidad}" value="${prep(i)}" style="width:90px;padding:6px" aria-label="Cantidad preparada"> <small>de ${i.cantidad}</small></div>`
-          : `<div><small class="series">Preparado: ${prep(i)} de ${i.cantidad}</small></div>`}
-        ${abierto && i.lleva_serie ? `<div class="item-form" style="align-items:center;margin-top:6px">
-          <label style="margin:0;font-size:14px">¿Cuántos n.º de serie cargar?</label>
-          <input type="number" class="inp-req" data-item-id="${i.id}" min="0" step="1" value="${req(i)}" style="width:80px;padding:6px"></div>` : ''}
-        <div class="lista-series">${chips}</div>
-        ${abierto && falta > 0 ? `<div class="casillas" data-item-id="${i.id}">
-          ${Array.from({length: falta}, (_,k) => `<input class="input-serie" data-item-id="${i.id}" placeholder="N.º de serie ${ser.length + k + 1} de ${req(i)}" style="font-size:14px;padding:8px;margin-top:6px">`).join('')}
-          <button type="button" class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:8px">Guardar números de serie</button></div>` : ''}
-      </td></tr>`;
-    }).join('');
-
-  const haySeries = items.some(i => i.series && i.series.length);
-  let acciones = '<button class="btn sec chico" id="volver-dep">← Volver</button>';
-  if(editando){
-    acciones += '<button class="btn chico" id="ed-guardar" style="background:var(--ok)">Guardar cambios</button><button class="btn sec chico" id="ed-cancelar">Cancelar edición</button>';
-  } else {
-    if(abierto) acciones += '<button class="btn sec chico" id="editar">✏️ Editar pedido</button>';
-    if(p.estado === 'pendiente') acciones += '<button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button>';
-    if(p.estado === 'listo') acciones += `<button class="btn chico" id="marcar-entregado" style="background:var(--ok)">${p.modalidad==='despacho' ? 'Marcar como DESPACHADO' : 'Marcar como ENTREGADO'}</button>`;
-    if(p.estado === 'entregado' && haySeries && p.enargas_transferido !== true) acciones += '<button class="btn chico" id="marcar-enargas">Marcar series transferidas en ENARGAS</button>';
-  }
+  
+  const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => {
+    const seriesCargadas = i.series || [];
+    const faltaCargar = i.cantidad - seriesCargadas.length;
+    return `
+    <tr>
+      <td>
+        <b>${esc(i.producto)}</b> (Cant: ${i.cantidad})
+        <div style="margin-top:6px">
+          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') || 'Ninguna'}</small>
+          ${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
+            <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie" style="font-size:14px; padding:6px">
+            <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button>
+          </div>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
 
   c.innerHTML = `<div class="panel remito">
-    <div class="acciones sup">${acciones}</div>
+    <div class="acciones sup"><button class="btn sec chico" id="volver-dep">← Volver a pedidos</button>
+      <button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button></div>
     <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
       <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
-    <p><b>Cliente:</b> <span style="font-size:18px;text-transform:uppercase;font-weight:700">${esc(p.cliente)}</span><br>
-       <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
+    <p><b>Cliente:</b> ${esc(p.cliente)}<br>
        <b>Modalidad:</b> ${MODAL[p.modalidad]}<br>
-       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}
-       ${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
-       ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}
-       ${p.comentarios ? `<br><b>Nota:</b> ${esc(p.comentarios)}` : ''}
-       ${p.enargas_transferido !== null ? `<br><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}` : ''}</p>
-    <table><thead><tr><th>${editando ? 'Editando productos del pedido' : 'Productos, preparación y números de serie'}</th></tr></thead><tbody>${filas}</tbody></table>
+       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}</p>
+    <table><thead><tr><th>Productos y Números de Serie</th></tr></thead><tbody>${filas}</tbody></table>
     <div id="aviso-dep"></div>
   </div>`;
-  const aviso = document.getElementById('aviso-dep');
-  const err = m => aviso.innerHTML = `<div class="msg err">${m}</div>`;
+
   document.getElementById('volver-dep').onclick = vistaDeposito;
-  const itemPorId = x => items.find(i => String(i.id) === String(x));
-  const actualizarItem = async (itemId, campos) => {
-    const {error: e} = await sb.from('pedido_items').update(campos).eq('id', itemId);
-    if(e) err(esc(e.message)); else detallePedidoDeposito(id);
-  };
 
-  /* ---- MODO EDICIÓN (hasta ENTREGADO) ---- */
-  if(editando){
-    const cont = document.getElementById('ed-items'), quitados = [];
-    const nuevaFila = () => {
-      const d = document.createElement('div'); d.className = 'item-form-grid ed-row';
-      d.innerHTML = `<input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" autocomplete="off">
-        <input class="cant" type="number" step="any" min="0" value="1"><button type="button" class="quitar" aria-label="Quitar">✕</button>`;
-      cont.appendChild(d); bindQuitar(d);
+  c.querySelectorAll('.btn-add-serie').forEach(btn => {
+    btn.onclick = async () => {
+      const itemId = btn.dataset.itemId;
+      const input = c.querySelector(`.input-serie[data-item-id="${itemId}"]`);
+      const numero_serie = input.value.trim();
+      const aviso = document.getElementById('aviso-dep');
+      if(!numero_serie) return aviso.innerHTML = '<div class="msg err">Ingresa un número de serie válido.</div>';
+
+      const {error: errSerie} = await sb.from('series').insert({
+        pedido_id: p.id,
+        item_id: itemId,
+        numero_serie: numero_serie,
+        cargado_por: perfil.id
+      });
+
+      if(errSerie) return aviso.innerHTML = `<div class="msg err">Error al guardar serie: ${esc(errSerie.message)}</div>`;
+      detallePedidoDeposito(id);
     };
-    const bindQuitar = d => d.querySelector('.quitar').onclick = () => {
-      if(cont.children.length <= 1) return;
-      if(d.dataset.itemId) quitados.push(d.dataset.itemId);
-      d.remove();
-    };
-    cont.querySelectorAll('.ed-row').forEach(bindQuitar);
-    document.getElementById('ed-mas').onclick = nuevaFila;
-    document.getElementById('ed-cancelar').onclick = () => detallePedidoDeposito(id);
-    document.getElementById('ed-guardar').onclick = async () => {
-      const buscar = t => productosLista.find(x => x.nombre.toUpperCase() === t.trim().toUpperCase());
-      const rows = [...cont.children].map(d => ({id: d.dataset.itemId, texto: d.querySelector('.prod').value.trim(), cant: parseFloat(d.querySelector('.cant').value)}));
-      const malos = rows.filter(r => !r.texto || !(r.cant > 0) || (!buscar(r.texto) && !(r.id && itemPorId(r.id).producto === r.texto)));
-      if(malos.length) return err('Revisá los productos: cada uno tiene que estar en la lista y con cantidad mayor a 0.');
-      const conSeries = quitados.map(itemPorId).filter(i => i.series && i.series.length);
-      if(conSeries.length && !confirm('Vas a quitar productos que ya tienen números de serie cargados (' + conSeries.map(i => i.producto).join(', ') + '). Esas series se borran también. ¿Seguir?')) return;
-      document.getElementById('ed-guardar').disabled = true;
-      let fallo = null;
-      for(const qid of quitados){
-        let r = await sb.from('series').delete().eq('item_id', qid); fallo = fallo || r.error;
-        r = await sb.from('pedido_items').delete().eq('id', qid); fallo = fallo || r.error;
-      }
-      for(const r of rows){
-        const pr = buscar(r.texto);
-        if(r.id){
-          const o = itemPorId(r.id); const cambioProd = o.producto !== r.texto, cambioCant = Number(o.cantidad) !== r.cant;
-          if(!cambioProd && !cambioCant) continue;
-          const campos = {producto: pr ? pr.nombre : o.producto, cantidad: r.cant, cantidad_preparada: Math.min(prep(o), r.cant)};
-          if(cambioProd && pr) campos.lleva_serie = pr.lleva_serie;
-          if(cambioCant) campos.series_requeridas = null;
-          const x = await sb.from('pedido_items').update(campos).eq('id', r.id); fallo = fallo || x.error;
-        } else {
-          const x = await sb.from('pedido_items').insert({pedido_id: p.id, producto: pr.nombre, cantidad: r.cant, lleva_serie: pr.lleva_serie}); fallo = fallo || x.error;
-        }
-      }
-      await detallePedidoDeposito(id);
-      if(fallo) document.getElementById('aviso-dep').innerHTML = `<div class="msg err">Algo no se pudo guardar: ${esc(fallo.message)}</div>`;
-    };
-    return;
-  }
-
-  /* ---- MODO PREPARACIÓN ---- */
-  const bEditar = document.getElementById('editar'); if(bEditar) bEditar.onclick = () => detallePedidoDeposito(id, true);
-
-  c.querySelectorAll('.chk-lleva').forEach(chk => chk.onchange = () => actualizarItem(chk.dataset.itemId, {lleva_serie: chk.checked}));
-  c.querySelectorAll('.chk-prep').forEach(chk => chk.onchange = () =>
-    actualizarItem(chk.dataset.itemId, {cantidad_preparada: chk.checked ? itemPorId(chk.dataset.itemId).cantidad : 0}));
-  c.querySelectorAll('.inp-prep').forEach(inp => inp.onchange = () => {
-    const max = Number(itemPorId(inp.dataset.itemId).cantidad);
-    const v = Math.max(0, Math.min(max, parseFloat(inp.value) || 0));
-    actualizarItem(inp.dataset.itemId, {cantidad_preparada: v});
-  });
-  c.querySelectorAll('.inp-req').forEach(inp => inp.onchange = () =>
-    actualizarItem(inp.dataset.itemId, {series_requeridas: Math.max(0, parseInt(inp.value, 10) || 0)}));
-
-  c.querySelectorAll('.del-serie').forEach(b => b.onclick = async () => {
-    if(!confirm('¿Quitar este número de serie?')) return;
-    const {error: e} = await sb.from('series').delete().eq('id', b.dataset.id);
-    if(e) err(esc(e.message)); else detallePedidoDeposito(id);
   });
 
-  c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
-    const itemId = btn.dataset.itemId;
-    const vals = [...c.querySelectorAll(`.input-serie[data-item-id="${itemId}"]`)].map(x => x.value.trim()).filter(Boolean);
-    if(!vals.length) return err('Ingresá al menos un número de serie.');
-    if(new Set(vals).size !== vals.length) return err('Hay números de serie repetidos en las casillas.');
-    btn.disabled = true;
-    let msg = '';
-    for(const numero_serie of vals){
-      const {error: e} = await sb.from('series').insert({pedido_id: p.id, item_id: itemId, numero_serie, cargado_por: perfil.id});
-      if(e){ msg = e.code === '23505' ? `El n.º de serie ${esc(numero_serie)} ya fue cargado en otro pedido o producto.` : 'Error al guardar: ' + esc(e.message); break; }
-    }
-    await detallePedidoDeposito(id);
-    if(msg) document.getElementById('aviso-dep').innerHTML = `<div class="msg err">${msg}</div>`;
-  });
-  c.querySelectorAll('.casillas').forEach(box => {
-    const ins = [...box.querySelectorAll('.input-serie')];
-    ins.forEach((inp, k) => inp.onkeydown = e => {
-      if(e.key !== 'Enter') return; e.preventDefault();
-      if(ins[k+1]) ins[k+1].focus(); else box.querySelector('.btn-add-serie').click();
-    });
-  });
-  setTimeout(() => { const f = c.querySelector('.input-serie'); if(f) f.focus(); }, 0);
-
-  const cambiar = async campos => {
-    const {error: e} = await sb.from('pedidos').update(campos).eq('id', p.id);
-    if(e) err('No se pudo actualizar: ' + esc(e.message)); else vistaDeposito();
+  document.getElementById('marcar-listo').onclick = async () => {
+    const {error: errEstado} = await sb.from('pedidos').update({estado: 'listo'}).eq('id', p.id);
+    if(errEstado) alert('No se pudo actualizar el estado: ' + errEstado.message);
+    else vistaDeposito();
   };
-
-  const listo = document.getElementById('marcar-listo');
-  if(listo) listo.onclick = () => {
-    const sinPrep = items.filter(i => !completo(i)), faltan = items.filter(i => faltaSerie(i) > 0);
-    let m = '';
-    if(sinPrep.length) m += 'Sin preparar completo: ' + sinPrep.map(i => i.producto).join(', ') + '.\n';
-    if(faltan.length) m += 'Faltan números de serie de: ' + faltan.map(i => i.producto).join(', ') + '.\n';
-    if(m && !confirm(m + '¿Marcar como listo igual?')) return;
-    cambiar({estado:'listo'});
-  };
-
-  const entregar = document.getElementById('marcar-entregado');
-  if(entregar) entregar.onclick = () => {
-    if(!haySeries){
-      if(confirm('¿Confirmás que el pedido fue ' + (p.modalidad==='despacho' ? 'despachado' : 'entregado') + '?')) cambiar({estado:'entregado'});
-      return;
-    }
-    aviso.innerHTML = `<div class="enargas-box"><b>Este remito tiene números de serie.</b><br>¿Se transfirieron en el ENARGAS?
-      <div class="acciones" style="margin-top:10px">
-        <button class="btn chico" id="eng-si" style="background:var(--ok)">Sí, se transfirieron</button>
-        <button class="btn chico sec" id="eng-no">No, todavía no</button>
-        <button class="btn chico sec" id="eng-cancel">Cancelar</button></div></div>`;
-    document.getElementById('eng-si').onclick = () => cambiar({estado:'entregado', enargas_transferido:true});
-    document.getElementById('eng-no').onclick = () => cambiar({estado:'entregado', enargas_transferido:false});
-    document.getElementById('eng-cancel').onclick = () => aviso.innerHTML = '';
-  };
-
-  const eng = document.getElementById('marcar-enargas');
-  if(eng) eng.onclick = async () => {
-    const {error: e} = await sb.from('pedidos').update({enargas_transferido:true}).eq('id', p.id);
-    if(e) err(esc(e.message)); else detallePedidoDeposito(id);
-  };
-}
-
-/* ---------- NÚMEROS DE SERIE (Ventas, Depósito y Admin) ---------- */
-let busquedaSerie = '';
-function vistaSeries(){
-  const c = document.getElementById('contenido');
-  c.innerHTML = `<div class="panel">
-    <div class="barra"><h2>Números de serie</h2></div>
-    <p class="vacio" style="padding-top:0">Todos los números de serie cargados, con el cliente y el remito al que salió cada uno.</p>
-    <label for="b-serie">Buscar n.º de serie</label>
-    <input id="b-serie" value="${esc(busquedaSerie)}" placeholder="Escribí o escaneá el número" autocomplete="off">
-    <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div></div>`;
-  let t;
-  document.getElementById('b-serie').oninput = e => { busquedaSerie = e.target.value; clearTimeout(t); t = setTimeout(cargarSeries, 300); };
-  cargarSeries();
-}
-async function cargarSeries(){
-  const res = document.getElementById('res-series'); if(!res) return;
-  let q = sb.from('series').select('id, numero_serie, creado_en, pedido_items(producto), pedidos(id, numero_remito, cliente, estado, fecha_entregado, enargas_transferido)')
-    .order('creado_en',{ascending:false}).limit(200);
-  if(busquedaSerie.trim()) q = q.ilike('numero_serie', `%${busquedaSerie.trim()}%`);
-  const {data,error} = await q;
-  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-  res.className = '';
-  res.innerHTML = data.length ? data.map(s => `
-    <button class="fila item item-serie" data-id="${s.pedidos.id}">
-      <div class="dato"><b class="serie-num">${esc(s.numero_serie)}</b><small>${esc(s.pedido_items ? s.pedido_items.producto : '')}</small></div>
-      <div class="dato"><b style="text-transform:uppercase">${esc(s.pedidos.cliente)}</b>
-        <small>Remito ${fmtRemito(s.pedidos.numero_remito)} · ${s.pedidos.fecha_entregado ? 'Entregado ' + fmtFecha(s.pedidos.fecha_entregado) : ESTADOS[s.pedidos.estado]}</small></div>
-    </button>`).join('') : '<p class="vacio">No se encontraron números de serie.</p>';
-  res.querySelectorAll('.item-serie').forEach(b => b.onclick = () => detallePedido(b.dataset.id, vistaSeries));
-}
-
-/* ---------- PRODUCTOS (lista maestra) ---------- */
-let productosLista = [], errorProductos = null;
-async function cargarProductos(){
-  const {data,error} = await sb.from('productos').select('*').eq('activo', true).order('nombre');
-  errorProductos = error ? error.message : null;
-  productosLista = data || [];
-}
-
-async function vistaProductos(){
-  const c = document.getElementById('contenido');
-  c.innerHTML = `<div class="panel">
-    <div class="barra"><h2>Productos</h2></div>
-    <p class="vacio" style="padding-top:0">Esta lista es la que se usa al crear pedidos, así el producto siempre sale escrito igual en el remito.</p>
-    <form id="fprod" class="fila" style="border:0;padding-top:0;align-items:flex-end">
-      <div class="dato"><label for="p-nombre" style="margin-top:0">Nuevo producto</label>
-        <input id="p-nombre" placeholder="Ej: CNDUAL" required autocomplete="off"></div>
-      <label class="check-serie" style="margin:0 0 10px"><input type="checkbox" id="p-serie"> Lleva n.º de serie</label>
-      <button class="btn chico" type="submit" style="margin-bottom:6px">Agregar a la lista</button>
-    </form>
-    <div id="aviso-prod"></div>
-    <label for="p-buscar">Buscar en la lista</label>
-    <input id="p-buscar" placeholder="Escribí para filtrar" autocomplete="off">
-    <div id="res-prod" class="vacio" style="margin-top:10px">Cargando…</div></div>`;
-  document.getElementById('fprod').onsubmit = async e => {
-    e.preventDefault();
-    const aviso = document.getElementById('aviso-prod');
-    const nombre = document.getElementById('p-nombre').value.trim().replace(/\s+/g,' ').toUpperCase();
-    if(!nombre) return;
-    const {error} = await sb.from('productos').insert({nombre, lleva_serie: document.getElementById('p-serie').checked});
-    if(error) return aviso.innerHTML = `<div class="msg err">${error.code==='23505' ? 'Ese producto ya existe en la lista.' : esc(error.message)}</div>`;
-    vistaProductos();
-  };
-  document.getElementById('p-buscar').oninput = () => listarProductos();
-  listarProductos(true);
-}
-
-let todosProductos = [];
-async function listarProductos(recargar){
-  const res = document.getElementById('res-prod'); if(!res) return;
-  if(recargar){
-    const {data,error} = await sb.from('productos').select('*').order('activo',{ascending:false}).order('nombre');
-    if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}<br>Si dice que la tabla no existe, falta correr el SQL de productos en Supabase.</div>`;
-    todosProductos = data;
-  }
-  const f = (document.getElementById('p-buscar').value || '').trim().toUpperCase();
-  const lista = todosProductos.filter(p => p.nombre.toUpperCase().includes(f));
-  res.className = '';
-  res.innerHTML = lista.length ? lista.map(p => `
-    <div class="fila ${p.activo ? '' : 'inactivo'}">
-      <div class="dato"><b>${esc(p.nombre)}</b> ${p.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}${p.activo ? '' : ' <small>(desactivado)</small>'}</div>
-      <label class="check-serie"><input type="checkbox" class="p-chk" data-id="${p.id}" ${p.lleva_serie ? 'checked' : ''}> Lleva serie</label>
-      <button class="btn chico sec p-ren" data-id="${p.id}">Renombrar</button>
-      <button class="btn chico sec p-act" data-id="${p.id}" data-activo="${p.activo}">${p.activo ? 'Desactivar' : 'Reactivar'}</button>
-    </div>`).join('') : '<p class="vacio">No hay productos en la lista todavía.</p>';
-  const actualizar = async (id, campos) => {
-    const {error} = await sb.from('productos').update(campos).eq('id', id);
-    if(error) alert(error.code==='23505' ? 'Ya existe un producto con ese nombre.' : 'No se pudo guardar: ' + error.message);
-    listarProductos(true);
-  };
-  res.querySelectorAll('.p-chk').forEach(x => x.onchange = () => actualizar(x.dataset.id, {lleva_serie: x.checked}));
-  res.querySelectorAll('.p-act').forEach(x => x.onclick = () => actualizar(x.dataset.id, {activo: x.dataset.activo !== 'true'}));
-  res.querySelectorAll('.p-ren').forEach(x => x.onclick = () => {
-    const actual = todosProductos.find(p => String(p.id) === x.dataset.id);
-    const nuevo = prompt('Nuevo nombre del producto.\n(Los remitos ya hechos no cambian.)', actual.nombre);
-    if(nuevo && nuevo.trim()) actualizar(x.dataset.id, {nombre: nuevo.trim().replace(/\s+/g,' ').toUpperCase()});
-  });
 }
 
 /* ---------- VENTAS ---------- */
@@ -566,175 +304,192 @@ const MODAL = {retira:'Retira el cliente', despacho:'Se despacha'};
 const fmtRemito = n => String(n).padStart(8,'0');
 const fmtFecha = d => d ? new Date(d.length===10 ? d+'T00:00:00' : d).toLocaleDateString('es-AR') : '—';
 const fmtFechaHora = d => d ? new Date(d).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}) : '—';
-let filtroEstadoPill = 'todos';
+
 async function vistaVentas(){
   const c = document.getElementById('contenido');
-  await cargarProductos();
+  
+  const { data: todos } = await sb.from('pedidos').select('estado');
+  const cantPend = todos ? todos.filter(p => p.estado === 'pendiente').length : 0;
+  const cantListos = todos ? todos.filter(p => p.estado === 'listo').length : 0;
+
   c.innerHTML = `
     <div class="dash-header">
       <div class="dash-title">
         <h2>Gestión de Pedidos</h2>
         <p>Cargá el pedido, seguilo por el depósito y coordiná la entrega.</p>
       </div>
-      <div class="stats-bar" id="stats"></div>
+      <div class="stats-bar">
+        <div class="stat-card"><span class="stat-num p">${cantPend}</span><span class="stat-label">Pendientes</span></div>
+        <div class="stat-card"><span class="stat-num l">${cantListos}</span><span class="stat-label">Listos</span></div>
+      </div>
     </div>
-    <div class="sync-banner">☁️ Sincronizado con la nube en tiempo real (todos los usuarios ven los mismos pedidos).</div>
-    <button class="btn nuevo-movil" id="toggle-form" type="button">+ Nuevo pedido</button>
+
+    <div class="sync-banner">
+      ☁️ Sincronizado con la nube en tiempo real (todos los usuarios ven los mismos pedidos).
+    </div>
+
     <div class="grid-dash">
-      <div class="panel col-form" id="col-form">
+      <!-- COLUMNA IZQUIERDA: NUEVO PEDIDO -->
+      <div class="panel">
         <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">Nuevo Pedido</h3>
         <form id="fp">
           <label for="cliente">CLIENTE</label>
           <input id="cliente" placeholder="Ej: Ferretería Los Andes" required>
+
           <label for="fentrega">FECHA DE ENTREGA</label>
           <input id="fentrega" type="date">
+
           <label for="modalidad">MODALIDAD</label>
           <select id="modalidad">
             <option value="retira">Retira el cliente</option>
             <option value="despacho">Se despacha</option>
           </select>
+
           <label style="margin-bottom:2px">PRODUCTOS</label>
           <div style="display:grid; grid-template-columns:1fr 80px 36px; gap:8px; font-size:12px; font-weight:600; color:var(--gris); margin-bottom:4px">
             <span>PRODUCTO</span><span>CANT.</span><span></span>
           </div>
           <div id="items"></div>
-          <datalist id="lista-productos">${productosLista.map(x => `<option value="${esc(x.nombre)}">`).join('')}</datalist>
-          ${errorProductos ? `<div class="msg err">No se pudo cargar la lista de productos: ${esc(errorProductos)}</div>` : (!productosLista.length ? '<div class="msg err">La lista de productos está vacía. Cargalos en la solapa Productos.</div>' : '')}
+          
           <button type="button" class="btn sec chico" id="mas" style="margin-top:10px; width:100%; border-style:dashed">+ Agregar producto</button>
+
           <label for="coment">NOTA PARA DEPÓSITO</label>
           <input id="coment" placeholder="Ej: Entregar antes de las 10, frágil">
+
           <div id="aviso" style="margin-top:10px"></div>
+
           <button class="btn" type="submit" style="margin-top:16px">Guardar pedido</button>
         </form>
       </div>
+
+      <!-- COLUMNA DERECHA: FILTROS & TARJETAS -->
       <div>
         <div class="pills">
-          ${[['todos','Todos'],['pendiente','Pendientes'],['listo','Listos'],['entregado','Entregados'],['anulado','Anulados']]
-            .map(([k,n])=>`<button class="pill-btn ${filtroEstadoPill===k?'activa':''}" data-f="${k}">${n}</button>`).join('')}
+          <button class="pill-btn ${filtroEstadoPill==='todos'?'activa':''}" data-f="todos">Todos</button>
+          <button class="pill-btn ${filtroEstadoPill==='pendiente'?'activa':''}" data-f="pendiente">Pendientes</button>
+          <button class="pill-btn ${filtroEstadoPill==='listo'?'activa':''}" data-f="listo">Listos</button>
+          <button class="pill-btn ${filtroEstadoPill==='anulado'?'activa':''}" data-f="anulado">Anulados</button>
         </div>
+
         <div id="res-ventas">Cargando pedidos…</div>
       </div>
     </div>`;
 
-  document.getElementById('toggle-form').onclick = () => document.getElementById('col-form').classList.toggle('abierto');
-
   const items = document.getElementById('items');
   const agregarItem = () => {
-    const d = document.createElement('div');
+    if(!items) return;
+    const d = document.createElement('div'); 
     d.className = 'item-form-grid';
     d.innerHTML = `
-      <input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" aria-label="Producto" autocomplete="off" required>
+      <input class="prod" placeholder="Producto" aria-label="Producto" required>
       <input class="cant" type="number" step="any" min="0" value="1" placeholder="Cant." aria-label="Cantidad" required>
       <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
     d.querySelector('.quitar').onclick = () => { if(items.children.length > 1) d.remove(); };
     items.appendChild(d);
   };
+  
   agregarItem();
   document.getElementById('mas').onclick = agregarItem;
 
   document.getElementById('fp').onsubmit = async e => {
     e.preventDefault();
     const aviso = document.getElementById('aviso');
-    const buscarProd = txt => productosLista.find(x => x.nombre.toUpperCase() === txt.trim().toUpperCase());
-    const crudas = [...items.children].map(d => ({texto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)})).filter(l => l.texto);
-    const noExiste = crudas.filter(l => !buscarProd(l.texto));
-    if(noExiste.length) return aviso.innerHTML = `<div class="msg err">No está en la lista de productos: ${noExiste.map(l => esc(l.texto)).join(', ')}. Elegí uno de la lista o crealo en la solapa Productos.</div>`;
-    const lineas = crudas.map(l => { const pr = buscarProd(l.texto); return {producto: pr.nombre, cantidad: l.cantidad, lleva_serie: pr.lleva_serie}; });
-    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))){
+    const lineas = [...items.children].map(d => ({
+      producto: d.querySelector('.prod').value.trim(), 
+      cantidad: parseFloat(d.querySelector('.cant').value)
+    })).filter(l => l.producto);
+
+    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))) {
       return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
     }
-    const btn = e.target.querySelector('[type=submit]');
+
+    const btn = e.target.querySelector('[type=submit]'); 
     btn.disabled = true;
+
     const {data:p, error} = await sb.from('pedidos').insert({
       cliente: document.getElementById('cliente').value.trim(),
       modalidad: document.getElementById('modalidad').value,
       fecha_entrega: document.getElementById('fentrega').value || null,
       comentarios: document.getElementById('coment').value.trim() || null,
-      creado_por: perfil.id
+      creado_por: perfil.id 
     }).select().single();
-    if(error){ btn.disabled = false; return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; }
-    const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
-    if(e2){
-      await sb.from('pedidos').delete().eq('id', p.id);
-      btn.disabled = false;
-      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`;
+
+    if(error){ 
+      btn.disabled = false; 
+      return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; 
     }
+
+    const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
+    if(e2){ 
+      await sb.from('pedidos').delete().eq('id', p.id); 
+      btn.disabled = false;
+      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`; 
+    }
+
     vistaVentas();
   };
 
-  // Los filtros solo recargan la lista (no borran lo que estás escribiendo en el formulario)
   document.querySelectorAll('.pill-btn').forEach(b => {
     b.onclick = () => {
       filtroEstadoPill = b.dataset.f;
-      document.querySelectorAll('.pill-btn').forEach(x => x.classList.toggle('activa', x === b));
-      cargarResultadosVentas();
+      vistaVentas();
     };
   });
 
-  suscribirPedidos();
-  refrescarVentas();
-}
-
-/* Tiempo real: cuando alguien crea o cambia un pedido, se actualiza la lista sola */
-let canalPedidos = null, tRefresco;
-function suscribirPedidos(){
-  if(canalPedidos) sb.removeChannel(canalPedidos);
-  canalPedidos = sb.channel('pedidos-ventas')
-    .on('postgres_changes', {event:'*', schema:'public', table:'pedidos'}, () => {
-      clearTimeout(tRefresco); tRefresco = setTimeout(() => { if(document.getElementById('res-ventas')) refrescarVentas(); if(document.getElementById('res-dep')) cargarPedidosDeposito(); }, 700);
-    }).subscribe();
-}
-function refrescarVentas(){ cargarEstadisticas(); cargarResultadosVentas(); }
-
-async function cargarEstadisticas(){
-  const box = document.getElementById('stats'); if(!box) return;
-  const {data} = await sb.from('pedidos').select('estado');
-  const n = e => (data || []).filter(p => p.estado === e).length;
-  box.innerHTML = `
-    <div class="stat-card"><span class="stat-num p">${n('pendiente')}</span><span class="stat-label">Pendientes</span></div>
-    <div class="stat-card"><span class="stat-num l">${n('listo')}</span><span class="stat-label">Listos</span></div>
-    <div class="stat-card"><span class="stat-num e">${n('entregado')}</span><span class="stat-label">Entregados</span></div>`;
+  cargarResultadosVentas();
 }
 
 async function cargarResultadosVentas(){
-  const res = document.getElementById('res-ventas');
+  const res = document.getElementById('res-ventas'); 
   if(!res) return;
+
   let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').order('numero_remito',{ascending:false}).limit(50);
-  if(filtroEstadoPill !== 'todos') q = q.eq('estado', filtroEstadoPill);
+  if(filtroEstadoPill !== 'todos') {
+    q = q.eq('estado', filtroEstadoPill);
+  }
+
   const {data, error} = await q;
   if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-  if(!data || !data.length){
+
+  if(!data || !data.length) {
     return res.innerHTML = `
       <div style="text-align:center; padding:40px 20px; color:var(--gris); background:#fff; border-radius:12px; border:1px dashed #EAECF0">
         <div style="font-size:32px; margin-bottom:8px">📦</div>
         <b>No hay pedidos en esta sección actualmente.</b>
       </div>`;
   }
+
   res.innerHTML = data.map(p => {
-    const itemsHtml = p.pedido_items && p.pedido_items.length ? p.pedido_items.sort((a,b)=>a.id-b.id).map(i => `
+    const itemsHtml = p.pedido_items && p.pedido_items.length ? p.pedido_items.map(i => `
       <div class="card-item-row">
         <div>
           ${i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}
           <span style="font-weight:500">${esc(i.producto)}</span>
-          ${i.series && i.series.length ? `<small class="series">N.º de serie: ${i.series.map(s=>esc(s.numero_serie)).join(', ')}</small>` : ''}
         </div>
         <div style="background:#F1F5F9; padding:2px 8px; border-radius:6px; font-weight:600; font-size:13px">x${i.cantidad}</div>
-      </div>`).join('') : '<div style="color:var(--gris); font-size:13px">Sin productos registrados</div>';
+      </div>
+    `).join('') : '<div style="color:var(--gris); font-size:13px">Sin productos registrados</div>';
+
     return `
       <div class="card-pedido">
         <div class="card-pedido-header">
           <div>
-            <h3>${esc(p.cliente)} <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span></h3>
-            <div class="card-pedido-meta">
-              <span>📅 Entrega: ${fmtFecha(p.fecha_entrega)}</span>
-              <span>🚚 ${MODAL[p.modalidad]}</span>
-              <span class="remito-chico">Remito ${fmtRemito(p.numero_remito)}</span>
-            </div>
+            <h3>${esc(p.cliente)}</h3>
+            <span style="font-size:13px; color:var(--gris); font-weight:600">Remito ${fmtRemito(p.numero_remito)}</span>
           </div>
-          <div class="acciones-card">
-            
+          <div style="display:flex; gap:8px; align-items:center">
+            <select class="cambio-estado-select" data-id="${p.id}" style="padding:6px 10px; font-size:13px; border-radius:6px; font-weight:600">
+              <option value="pendiente" ${p.estado==='pendiente'?'selected':''}>Pendiente</option>
+              <option value="listo" ${p.estado==='listo'?'selected':''}>Listo</option>
+              <option value="entregado" ${p.estado==='entregado'?'selected':''}>Entregado</option>
+              <option value="anulado" ${p.estado==='anulado'?'selected':''}>Anulado</option>
+            </select>
             <button class="btn chico sec ver-remito-btn" data-id="${p.id}" style="padding:6px 12px; font-weight:600">Ver</button>
           </div>
+        </div>
+        <div class="card-pedido-meta">
+          <span>📅 Entrega: ${fmtFecha(p.fecha_entrega)}</span>
+          <span>🚚 ${MODAL[p.modalidad]}</span>
         </div>
         <div class="card-items-box">
           <div style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px">Productos a sacar</div>
@@ -743,8 +498,24 @@ async function cargarResultadosVentas(){
         ${p.comentarios ? `<div style="margin-top:10px; font-size:13px; color:#475467"><b>Nota:</b> ${esc(p.comentarios)}</div>` : ''}
       </div>`;
   }).join('');
+
+  res.querySelectorAll('.cambio-estado-select').forEach(sel => {
+    sel.onchange = async () => {
+      const id = sel.dataset.id;
+      const nuevoEstado = sel.value;
+      const {error} = await sb.from('pedidos').update({estado: nuevoEstado}).eq('id', id);
+      if(error) {
+        alert('No se pudo actualizar el estado: ' + error.message);
+      } else {
+        vistaVentas();
+      }
+    };
+  });
+
   res.querySelectorAll('.ver-remito-btn').forEach(btn => {
-    btn.onclick = () => detallePedido(btn.dataset.id, vistaVentas);
+    btn.onclick = () => {
+      detallePedido(btn.dataset.id, vistaVentas);
+    };
   });
 }
 
@@ -768,7 +539,8 @@ async function detallePedido(id, volver){
        <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
        <b>Entrega:</b> ${MODAL[p.modalidad]}<br>
        <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}<br>
-       <b>Creado:</b> ${fmtFechaHora(p.creado_en)}${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
+       <b>Creado:</b> ${fmtFechaHora(p.creado_en)}
+       ${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
        ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}</p>
     <table><thead><tr><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
     ${p.comentarios ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>` : ''}
@@ -784,7 +556,7 @@ async function detallePedido(id, volver){
   };
 }
 
-/* ---------- ADMIN: USUARIOS (funcional) ---------- */
+/* ---------- ADMIN: USUARIOS ---------- */
 async function vistaUsuarios(){
   const cont = document.getElementById('contenido');
   cont.innerHTML = `<div class="panel"><h2>Usuarios</h2><div id="lista" class="vacio">Cargando…</div></div>`;
@@ -817,18 +589,6 @@ sb.auth.onAuthStateChange((evento, sesion) => {
   if(sesion) setTimeout(cargarPerfil, 0); else { perfil = null; pantallaLogin(); }
 });
 sb.auth.getSession().then(({data:{session}}) => { if(!session) pantallaLogin(); });
-</script>
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try {
-      await navigator.serviceWorker.register("./sw.js");
-      console.log("SGV: service worker registrado");
-    } catch (error) {
-      console.error("SGV: error al registrar service worker", error);
-    }
-  });
-}
 </script>
 <script>
 if ("serviceWorker" in navigator) {

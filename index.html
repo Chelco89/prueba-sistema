@@ -565,140 +565,99 @@ const fmtFechaHora = d => d ? new Date(d).toLocaleString('es-AR',{dateStyle:'sho
 let filtroEstadoPill = 'todos';
 async function vistaVentas(){
   const c = document.getElementById('contenido');
-  
-  const { data: todos } = await sb.from('pedidos').select('estado');
-  const cantPend = todos ? todos.filter(p => p.estado === 'pendiente').length : 0;
-  const cantListos = todos ? todos.filter(p => p.estado === 'listo').length : 0;
-
-  // 1. Inyectar el HTML en el contenedor principal
+  await cargarProductos();
   c.innerHTML = `
     <div class="dash-header">
       <div class="dash-title">
         <h2>Gestión de Pedidos</h2>
         <p>Cargá el pedido, seguilo por el depósito y coordiná la entrega.</p>
       </div>
-      <div class="stats-bar">
-        <div class="stat-card"><span class="stat-num p">${cantPend}</span><span class="stat-label">Pendientes</span></div>
-        <div class="stat-card"><span class="stat-num l">${cantListos}</span><span class="stat-label">Listos</span></div>
-      </div>
+      <div class="stats-bar" id="stats"></div>
     </div>
-
-    <div class="sync-banner">
-      ☁️ Sincronizado con la nube en tiempo real (todos los usuarios ven los mismos pedidos).
-    </div>
-
+    <div class="sync-banner">☁️ Sincronizado con la nube en tiempo real (todos los usuarios ven los mismos pedidos).</div>
+    <button class="btn nuevo-movil" id="toggle-form" type="button">+ Nuevo pedido</button>
     <div class="grid-dash">
-      <div class="panel">
+      <div class="panel col-form" id="col-form">
         <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">Nuevo Pedido</h3>
         <form id="fp">
           <label for="cliente">CLIENTE</label>
           <input id="cliente" placeholder="Ej: Ferretería Los Andes" required>
-
           <label for="fentrega">FECHA DE ENTREGA</label>
           <input id="fentrega" type="date">
-
           <label for="modalidad">MODALIDAD</label>
           <select id="modalidad">
             <option value="retira">Retira el cliente</option>
             <option value="despacho">Se despacha</option>
           </select>
-
           <label style="margin-bottom:2px">PRODUCTOS</label>
           <div style="display:grid; grid-template-columns:1fr 80px 36px; gap:8px; font-size:12px; font-weight:600; color:var(--gris); margin-bottom:4px">
             <span>PRODUCTO</span><span>CANT.</span><span></span>
           </div>
           <div id="items"></div>
-          
+          <datalist id="lista-productos">${productosLista.map(x => `<option value="${esc(x.nombre)}">`).join('')}</datalist>
+          ${errorProductos ? `<div class="msg err">No se pudo cargar la lista de productos: ${esc(errorProductos)}</div>` : (!productosLista.length ? '<div class="msg err">La lista de productos está vacía. Cargalos en la solapa Productos.</div>' : '')}
           <button type="button" class="btn sec chico" id="mas" style="margin-top:10px; width:100%; border-style:dashed">+ Agregar producto</button>
-
           <label for="coment">NOTA PARA DEPÓSITO</label>
           <input id="coment" placeholder="Ej: Entregar antes de las 10, frágil">
-
           <div id="aviso" style="margin-top:10px"></div>
-
           <button class="btn" type="submit" style="margin-top:16px">Guardar pedido</button>
         </form>
       </div>
-
       <div>
         <div class="pills">
-          <button class="pill-btn ${filtroEstadoPill==='todos'?'activa':''}" data-f="todos">Todos</button>
-          <button class="pill-btn ${filtroEstadoPill==='pendiente'?'activa':''}" data-f="pendiente">Pendientes</button>
-          <button class="pill-btn ${filtroEstadoPill==='listo'?'activa':''}" data-f="listo">Listos</button>
-          <button class="pill-btn ${filtroEstadoPill==='anulado'?'activa':''}" data-f="anulado">Anulados</button>
+          ${[['todos','Todos'],['pendiente','Pendientes'],['listo','Listos'],['entregado','Entregados'],['anulado','Anulados']]
+            .map(([k,n])=>`<button class="pill-btn ${filtroEstadoPill===k?'activa':''}" data-f="${k}">${n}</button>`).join('')}
         </div>
-
         <div id="res-ventas">Cargando pedidos…</div>
       </div>
     </div>`;
 
-  // 2. Obtener el contenedor 'items' YA CREADO
-  const items = document.getElementById('items');
+  document.getElementById('toggle-form').onclick = () => document.getElementById('col-form').classList.toggle('abierto');
 
-  // 3. Función para agregar ítem
+  const items = document.getElementById('items');
   const agregarItem = () => {
-    if(!items) return;
-    const d = document.createElement('div'); 
+    const d = document.createElement('div');
     d.className = 'item-form-grid';
     d.innerHTML = `
-      <input class="prod" placeholder="Producto" aria-label="Producto" required>
+      <input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" aria-label="Producto" autocomplete="off" required>
       <input class="cant" type="number" step="any" min="0" value="1" placeholder="Cant." aria-label="Cantidad" required>
       <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
     d.querySelector('.quitar').onclick = () => { if(items.children.length > 1) d.remove(); };
     items.appendChild(d);
   };
-  
-  // 4. Agregar el primer renglón
   agregarItem();
   document.getElementById('mas').onclick = agregarItem;
 
   document.getElementById('fp').onsubmit = async e => {
     e.preventDefault();
     const aviso = document.getElementById('aviso');
-    const lineas = [...items.children].map(d => ({
-      producto: d.querySelector('.prod').value.trim(), 
-      cantidad: parseFloat(d.querySelector('.cant').value)
-    })).filter(l => l.producto);
-
-    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))) {
+    const buscarProd = txt => productosLista.find(x => x.nombre.toUpperCase() === txt.trim().toUpperCase());
+    const crudas = [...items.children].map(d => ({texto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)})).filter(l => l.texto);
+    const noExiste = crudas.filter(l => !buscarProd(l.texto));
+    if(noExiste.length) return aviso.innerHTML = `<div class="msg err">No está en la lista de productos: ${noExiste.map(l => esc(l.texto)).join(', ')}. Elegí uno de la lista o crealo en la solapa Productos.</div>`;
+    const lineas = crudas.map(l => { const pr = buscarProd(l.texto); return {producto: pr.nombre, cantidad: l.cantidad, lleva_serie: pr.lleva_serie}; });
+    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))){
       return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
     }
-
-    const btn = e.target.querySelector('[type=submit]'); 
+    const btn = e.target.querySelector('[type=submit]');
     btn.disabled = true;
-
     const {data:p, error} = await sb.from('pedidos').insert({
       cliente: document.getElementById('cliente').value.trim(),
       modalidad: document.getElementById('modalidad').value,
       fecha_entrega: document.getElementById('fentrega').value || null,
       comentarios: document.getElementById('coment').value.trim() || null,
-      creado_por: perfil.id 
+      creado_por: perfil.id
     }).select().single();
-
-    if(error){ 
-      btn.disabled = false; 
-      return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; 
-    }
-
+    if(error){ btn.disabled = false; return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; }
     const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
-    if(e2){ 
-      await sb.from('pedidos').delete().eq('id', p.id); 
+    if(e2){
+      await sb.from('pedidos').delete().eq('id', p.id);
       btn.disabled = false;
-      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`; 
+      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`;
     }
-
     vistaVentas();
   };
 
-  document.querySelectorAll('.pill-btn').forEach(b => {
-    b.onclick = () => {
-      filtroEstadoPill = b.dataset.f;
-      vistaVentas();
-    };
-  });
-
-  cargarResultadosVentas();
-}
   // Los filtros solo recargan la lista (no borran lo que estás escribiendo en el formulario)
   document.querySelectorAll('.pill-btn').forEach(b => {
     b.onclick = () => {

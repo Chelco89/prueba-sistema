@@ -121,6 +121,71 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1p
 const cfg = window.SGV_CONFIG;
 const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
 const app = document.getElementById('app');
+const SGV_VAPID_PUBLIC_KEY = "BGNwTqirxP8YUBhtUuAva4U3FcQdteuzhVE-QUAFtkB2mrmfQ-9y3CqZGkxtjbo3ax8fiXiBU8UNouNlA_dMovc";
+
+function sgvBase64UrlToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from(rawData, c => c.charCodeAt(0));
+}
+
+async function activarNotificaciones() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      alert("Este navegador no admite notificaciones push.");
+      return;
+    }
+
+    if (!("Notification" in window)) {
+      alert("Este navegador no admite notificaciones.");
+      return;
+    }
+
+    if (!perfil || !perfil.id) {
+      alert("Primero tenés que iniciar sesión.");
+      return;
+    }
+
+    const permiso = await Notification.requestPermission();
+
+    if (permiso !== "granted") {
+      alert("No se concedió permiso para las notificaciones.");
+      return;
+    }
+
+    const registro = await navigator.serviceWorker.ready;
+    let suscripcion = await registro.pushManager.getSubscription();
+
+    if (!suscripcion) {
+      suscripcion = await registro.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: sgvBase64UrlToUint8Array(
+          SGV_VAPID_PUBLIC_KEY
+        )
+      });
+    }
+
+    const { error } = await sb
+      .from("push_subscriptions")
+      .upsert(
+        {
+          user_id: perfil.id,
+          subscription: suscripcion.toJSON()
+        },
+        { onConflict: "user_id,subscription" }
+      );
+
+    if (error) throw error;
+
+    alert("¡Notificaciones activadas en este dispositivo!");
+  } catch (error) {
+    console.error("Error al activar notificaciones:", error);
+    alert("No se pudieron activar las notificaciones. Revisá la consola para ver el error.");
+  }
+}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
 let perfil = null, vista = null;
@@ -176,20 +241,35 @@ async function cargarPerfil(){
   armarSistema();
 }
 function cabecera(){
-  return `<header>
-    <img src="logo.png" alt="SGV">
-    <div class="quien"><b>${esc(perfil.nombre)}</b>${ROLES[perfil.rol]}</div>
-    <button class="btn sec chico" id="salir">Salir</button>
-  </header>`;
+  return `
+    <header>
+      <img src="logo.png" alt="SGV">
+      <div class="quien">
+        <b>${esc(perfil.nombre || '')}</b>
+        ${esc(ROLES[perfil.rol] || perfil.rol || '')}
+      </div>
+      <button class="btn sec chico" id="activar-notificaciones" type="button">
+        Activar notificaciones
+      </button>
+      <button class="btn sec chico" id="salir" type="button">
+        Salir
+      </button>
+    </header>
+  `;
 }
-function conectarSalir(){ document.getElementById('salir').onclick = () => sb.auth.signOut(); }
-function pantallaEspera(){
-  app.innerHTML = cabecera() + `<main><div class="panel">
-    <h2>Tu usuario está esperando aprobación</h2>
-    <p>Pedile al administrador que te asigne el puesto${perfil.activo ? '' : ' y active tu usuario'}. Cuando lo haga, volvé a entrar.</p>
-    <button class="btn chico" id="reintentar">Ya me aprobaron, actualizar</button></div></main>`;
-  conectarSalir();
-  document.getElementById('reintentar').onclick = cargarPerfil;
+
+function conectarSalir(){
+  const salir = document.getElementById('salir');
+  if (salir) {
+    salir.onclick = async () => {
+      await sb.auth.signOut();
+    };
+  }
+
+  const activar = document.getElementById('activar-notificaciones');
+  if (activar) {
+    activar.onclick = activarNotificaciones;
+  }
 }
 function armarSistema(){
   const tabs = [];
@@ -817,18 +897,6 @@ sb.auth.onAuthStateChange((evento, sesion) => {
   if(sesion) setTimeout(cargarPerfil, 0); else { perfil = null; pantallaLogin(); }
 });
 sb.auth.getSession().then(({data:{session}}) => { if(!session) pantallaLogin(); });
-</script>
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try {
-      await navigator.serviceWorker.register("./sw.js");
-      console.log("SGV: service worker registrado");
-    } catch (error) {
-      console.error("SGV: error al registrar service worker", error);
-    }
-  });
-}
 </script>
 <script>
 if ("serviceWorker" in navigator) {

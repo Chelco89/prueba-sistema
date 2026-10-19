@@ -34,7 +34,7 @@ header .quien b{display:block;font-size:15px}
 nav{display:flex;gap:4px;padding:10px 16px 0;overflow-x:auto}
 nav button{background:transparent;border:0;border-bottom:3px solid transparent;padding:10px 14px;font-weight:600;color:var(--gris);cursor:pointer;white-space:nowrap}
 nav button.activa{color:var(--azul);border-color:var(--rojo)}
-main{padding:16px;max-width:900px;margin:0 auto}
+main{padding:20px;max-width:1300px;margin:0 auto}
 .panel{background:#fff;border-radius:10px;padding:18px;box-shadow:0 2px 14px rgba(20,32,46,.06)}
 .panel h2{margin:0 0 12px;font-size:19px}
 .fila{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--linea)}
@@ -52,7 +52,6 @@ button.item{width:100%;text-align:left;background:none;border-left:0;border-righ
 button.item:hover{background:#F2F5F9}
 .etiqueta.listo{background:#DDF1E5;color:#17653A}.etiqueta.entregado{background:#DCE8F8;color:var(--azul-osc)}.etiqueta.anulado{background:#EEE;color:#666}
 .item-form{display:flex;gap:8px;margin-top:8px}.item-form .prod{flex:1}.item-form .cant{width:90px}
-.quitar{background:#fff;border:1px solid var(--linea);border-radius:6px;width:42px;cursor:pointer;color:var(--rojo)}
 .acciones{display:flex;gap:10px;flex-wrap:wrap}.acciones .btn{flex:1}.acciones .btn.chico{flex:none}
 .btn.peligro{background:var(--rojo)}
 .sup{margin-bottom:16px}
@@ -61,11 +60,53 @@ button.item:hover{background:#F2F5F9}
 table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1px solid var(--linea);text-align:left;vertical-align:top}
 .num{text-align:right;white-space:nowrap}.series{display:block;color:var(--gris);font-size:13px}
 @media print{header,nav,.no-print{display:none!important}body{background:#fff}.panel{box-shadow:none;padding:0}main{padding:0}}
+/* --- ESTILOS DASHBOARD DOS COLUMNAS VENTAS --- */
+.dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.dash-title h2 { margin: 0; font-size: 24px; color: #101828; }
+.dash-title p { margin: 4px 0 0; color: #667085; font-size: 14px; }
+.stats-bar { display: flex; gap: 12px; flex-wrap: wrap; }
+.stat-card { background: #fff; border: 1px solid #EAECF0; border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; min-width: 120px; }
+.stat-num { font-size: 18px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+.stat-num.p { background: #FEF3F2; color: #B42318; }
+.stat-num.l { background: #ECFDF3; color: #027A48; }
+.stat-label { font-size: 12px; font-weight: 600; color: #344054; text-transform: uppercase; }
+.sync-banner { background: #ECFDF3; border: 1px solid #A6F4C5; color: #027A48; padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+.grid-dash { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
+@media (max-width: 950px) { .grid-dash { grid-template-columns: 1fr; } }
+.pills { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.pill-btn { background: #fff; border: 1px solid #EAECF0; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; color: #344054; cursor: pointer; }
+.pill-btn.activa { background: #0F172A; color: #fff; border-color: #0F172A; }
+.item-form-grid { display: grid; grid-template-columns: 1fr 80px 36px; gap: 8px; margin-top: 8px; align-items: center; }
+.card-pedido { background: #fff; border: 1px solid #EAECF0; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); }
+.card-pedido-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.card-pedido-header h3 { margin: 0; font-size: 20px; color: #101828; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.card-pedido-meta { display: flex; gap: 16px; font-size: 13px; color: #475467; margin-bottom: 14px; flex-wrap: wrap; }
+.card-items-box { background: #F8FAFC; border: 1px solid #EAECF0; border-radius: 8px; padding: 10px 14px; }
+.card-item-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #EAECF0; font-size: 14px; color: #334155; }
+.card-item-row:last-child { border-bottom: 0; }
+.badge-s-u { background: #E2E8F0; color: #475467; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px; }
+/* --- Ajustes dashboard: cliente protagonista, remito discreto --- */
+.card-pedido-header{flex-wrap:wrap;gap:10px}
+.card-pedido-header h3{font-size:22px;text-transform:uppercase;letter-spacing:.2px;flex-wrap:wrap;line-height:1.2}
+.card-pedido-header h3 .etiqueta{text-transform:none;letter-spacing:0;font-size:12px}
+.card-pedido-meta{margin-bottom:14px;margin-top:6px}
+.remito-chico{color:#98A2B3;font-weight:500}
+.acciones-card{display:flex;gap:8px;align-items:center}
+.stat-num.e{background:#EFF4FF;color:#1849A9}
+.nuevo-movil{display:none;margin:0 0 14px}
+@media (max-width:950px){.col-form{display:none}.col-form.abierto{display:block}.nuevo-movil{display:block}}
+.chip-serie{display:inline-block;background:#EEF2F6;border:1px solid #D9E0E8;border-radius:6px;padding:2px 8px;margin:4px 6px 0 0;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.lista-series{margin-top:4px}
+.check-serie{display:inline-flex;align-items:center;gap:6px;margin:0 0 0 12px;font-weight:500;font-size:14px}
+.check-serie input{width:auto}
+.badge-cant{background:#F1F5F9;padding:2px 8px;border-radius:6px;font-weight:600;font-size:13px}
+.enargas-box{margin-top:16px;padding:14px;border:2px solid var(--azul);border-radius:10px;background:#F2F7FD}
+.serie-num{font-family:ui-monospace,Menlo,monospace;font-size:17px}
+.fila.inactivo{opacity:.55}
 </style>
 </head>
 <body>
 <div id="app"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script>
@@ -75,7 +116,7 @@ const app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
 let perfil = null, vista = null;
-
+let filtros = {numero:'', cliente:'', estado:'', listo:'', entrega:''};
 /* ---------- ENTRADA ---------- */
 function pantallaLogin(modo='entrar', aviso=null){
   const nuevo = modo === 'crear';
@@ -117,7 +158,6 @@ function traducir(m){
   if(/Email not confirmed/i.test(m)) return 'Primero confirmá tu correo con el mensaje que te llegó.';
   return m;
 }
-
 /* ---------- SISTEMA ---------- */
 async function cargarPerfil(){
   const {data:{user}} = await sb.auth.getUser();
@@ -135,7 +175,6 @@ function cabecera(){
   </header>`;
 }
 function conectarSalir(){ document.getElementById('salir').onclick = () => sb.auth.signOut(); }
-
 function pantallaEspera(){
   app.innerHTML = cabecera() + `<main><div class="panel">
     <h2>Tu usuario está esperando aprobación</h2>
@@ -144,11 +183,11 @@ function pantallaEspera(){
   conectarSalir();
   document.getElementById('reintentar').onclick = cargarPerfil;
 }
-
 function armarSistema(){
   const tabs = [];
-  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas']);
+  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas'], ['productos','Productos']);
   if(['deposito','admin'].includes(perfil.rol)) tabs.push(['deposito','Depósito']);
+  tabs.push(['series','N.º de serie']);
   if(perfil.rol === 'admin') tabs.push(['usuarios','Usuarios']);
   vista = vista && tabs.some(t=>t[0]===vista) ? vista : tabs[0][0];
   app.innerHTML = cabecera() +
@@ -156,45 +195,53 @@ function armarSistema(){
      <main id="contenido"></main>`;
   conectarSalir();
   app.querySelectorAll('nav button').forEach(b => b.onclick = () => { vista = b.dataset.v; armarSistema(); });
-  ({ventas:vistaVentas, deposito:vistaDeposito, usuarios:vistaUsuarios})[vista]();
+  ({ventas:vistaVentas, deposito:vistaDeposito, series:vistaSeries, productos:vistaProductos, usuarios:vistaUsuarios})[vista]();
 }
+/* ---------- DEPÓSITO ---------- */
+let depTab = 'pendiente';
+const DEP_TABS = [['pendiente','Para preparar'],['listo','Listos para entregar'],['entregado','Entregados']];
 
-/* Pantalla que se construye en el próximo paso */
-/* ---------- DEPÓSITO (Paso 3) ---------- */
 function vistaDeposito(){
   const c = document.getElementById('contenido');
   c.innerHTML = `<div class="panel">
-    <div class="barra"><h2>Preparación de pedidos</h2></div>
+    <div class="barra"><h2>Depósito</h2></div>
+    <div class="pills">${DEP_TABS.map(([k,n])=>`<button class="pill-btn ${depTab===k?'activa':''}" data-t="${k}">${n}</button>`).join('')}</div>
     <div class="filtros">
-      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value=""></div>
-      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value=""></div>
+      <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value="${esc(filtros.numero)}"></div>
+      <div><label for="d-cliente">Cliente</label><input id="d-cliente" value="${esc(filtros.cliente)}"></div>
       <div><button class="btn sec chico" id="d-limpiar" style="margin-top:0">Limpiar filtros</button></div>
     </div>
     <div id="res-dep" class="vacio">Cargando…</div></div>`;
-  
   let t;
-  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
-  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
-  document.getElementById('d-limpiar').onclick = () => { document.getElementById('d-numero').value = ''; document.getElementById('d-cliente').value = ''; filtros.numero = ''; filtros.cliente = ''; cargarPedidosDeposito(); };
+  const buscar = () => { clearTimeout(t); t = setTimeout(cargarPedidosDeposito, 300); };
+  document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; buscar(); };
+  document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; buscar(); };
+  document.getElementById('d-limpiar').onclick = () => { filtros.numero = ''; filtros.cliente = ''; vistaDeposito(); };
+  c.querySelectorAll('.pill-btn').forEach(b => b.onclick = () => { depTab = b.dataset.t; vistaDeposito(); });
+  suscribirPedidos();
   cargarPedidosDeposito();
 }
 
 async function cargarPedidosDeposito(){
   const res = document.getElementById('res-dep'); if(!res) return;
-  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('estado', 'pendiente').order('numero_remito',{ascending:true}).limit(100);
+  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('estado', depTab)
+    .order('numero_remito',{ascending: depTab === 'pendiente'}).limit(100);
   const n = parseInt(filtros.numero,10);
   if(filtros.numero && !isNaN(n)) q = q.eq('numero_remito', n);
   if(filtros.cliente && filtros.cliente.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
-
   const {data,error} = await q;
   if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
   res.className = '';
-  res.innerHTML = data.length ? data.map(p => `
+  const vacio = {pendiente:'No hay pedidos para preparar en este momento.', listo:'No hay pedidos listos esperando entrega.', entregado:'Todavía no hay pedidos entregados.'}[depTab];
+  res.innerHTML = data.length ? data.map(p => {
+    const nSeries = p.pedido_items.reduce((a,i) => a + (i.series ? i.series.length : 0), 0);
+    return `
     <button class="fila item item-deposito" data-id="${p.id}">
-      <div class="dato"><b>Remito ${fmtRemito(p.numero_remito)}</b><small>${esc(p.cliente)}</small></div>
-      <div class="dato"><span class="etiqueta pendiente">Pendiente</span>
+      <div class="dato"><b style="font-size:18px;text-transform:uppercase">${esc(p.cliente)}</b>
+        <small>Remito ${fmtRemito(p.numero_remito)}${nSeries ? ` · ${nSeries} n.º de serie cargados` : ''}</small></div>
+      <div class="dato"><span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span>
         <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
-    </button>`).join('') : '<p class="vacio">No hay pedidos pendientes para preparar en este momento.</p>';
+    </button>`; }).join('') : `<p class="vacio">${vacio}</p>`;
   res.querySelectorAll('.item-deposito').forEach(b => b.onclick = () => detallePedidoDeposito(b.dataset.id));
 }
 
@@ -203,173 +250,388 @@ async function detallePedidoDeposito(id){
   c.innerHTML = '<div class="panel vacio">Cargando…</div>';
   const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
   if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
-  
-  const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => {
-    const seriesCargadas = i.series || [];
-    const faltaCargar = i.cantidad - seriesCargadas.length;
-    return `
-    <tr>
-      <td>
-        <b>${esc(i.producto)}</b> (Cant: ${i.cantidad})
-        <div style="margin-top:6px">
-          <small class="series">Series cargadas: ${seriesCargadas.map(s=>esc(s.numero_serie)).join(', ') || 'Ninguna'}</small>
-          ${faltaCargar > 0 ? `<div class="item-form" style="margin-top:4px">
-            <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie" style="font-size:14px; padding:6px">
-            <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button>
-          </div>` : ''}
-        </div>
-      </td>
-    </tr>`;
+
+  const items = p.pedido_items.sort((a,b)=>a.id-b.id);
+  const editable = p.estado === 'pendiente';
+  const filas = items.map(i => {
+    const ser = i.series || [];
+    const falta = Math.ceil(i.cantidad) - ser.length;
+    const lista = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}</span>`).join('') : '<small class="series">Sin números de serie</small>';
+    return `<tr><td>
+      <b>${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
+      ${editable ? `<label class="check-serie"><input type="checkbox" class="chk-lleva" data-item-id="${i.id}" ${i.lleva_serie ? 'checked' : ''}> Lleva n.º de serie</label>` : (i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : '')}
+      <div class="lista-series">${lista}</div>
+      ${editable && i.lleva_serie && falta > 0 ? `<div class="item-form" style="margin-top:6px">
+        <input class="input-serie" data-item-id="${i.id}" placeholder="Escanear o ingresar N.º de serie (faltan ${falta})" style="font-size:14px;padding:8px">
+        <button class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:0">Agregar</button></div>` : ''}
+    </td></tr>`;
   }).join('');
 
+  const haySeries = items.some(i => i.series && i.series.length);
+  let acciones = '<button class="btn sec chico" id="volver-dep">← Volver</button>';
+  if(p.estado === 'pendiente') acciones += '<button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button>';
+  if(p.estado === 'listo') acciones += `<button class="btn chico" id="marcar-entregado" style="background:var(--ok)">${p.modalidad==='despacho' ? 'Marcar como DESPACHADO' : 'Marcar como ENTREGADO'}</button>`;
+  if(p.estado === 'entregado' && haySeries && p.enargas_transferido !== true) acciones += '<button class="btn chico" id="marcar-enargas">Marcar series transferidas en ENARGAS</button>';
+
   c.innerHTML = `<div class="panel remito">
-    <div class="acciones sup"><button class="btn sec chico" id="volver-dep">← Volver a pedidos</button>
-      <button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button></div>
+    <div class="acciones sup">${acciones}</div>
     <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
       <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
-    <p><b>Cliente:</b> ${esc(p.cliente)}<br>
+    <p><b>Cliente:</b> <span style="font-size:18px;text-transform:uppercase;font-weight:700">${esc(p.cliente)}</span><br>
+       <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
        <b>Modalidad:</b> ${MODAL[p.modalidad]}<br>
-       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}</p>
-    <table><thead><tr><th>Productos y Números de Serie</th></tr></thead><tbody>${filas}</tbody></table>
+       <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}
+       ${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
+       ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}
+       ${p.comentarios ? `<br><b>Nota:</b> ${esc(p.comentarios)}` : ''}
+       ${p.enargas_transferido !== null ? `<br><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}` : ''}</p>
+    <table><thead><tr><th>Productos y números de serie</th></tr></thead><tbody>${filas}</tbody></table>
     <div id="aviso-dep"></div>
   </div>`;
-
+  const aviso = document.getElementById('aviso-dep');
   document.getElementById('volver-dep').onclick = vistaDeposito;
 
-  c.querySelectorAll('.btn-add-serie').forEach(btn => {
-    btn.onclick = async () => {
-      const itemId = btn.dataset.itemId;
-      const input = c.querySelector(`.input-serie[data-item-id="${itemId}"]`);
-      const numero_serie = input.value.trim();
-      const aviso = document.getElementById('aviso-dep');
-      if(!numero_serie) return aviso.innerHTML = '<div class="msg err">Ingresa un número de serie válido.</div>';
-
-      const {error: errSerie} = await sb.from('series').insert({
-        pedido_id: p.id,
-        item_id: itemId,
-        numero_serie: numero_serie,
-        cargado_por: perfil.id
-      });
-
-      if(errSerie) return aviso.innerHTML = `<div class="msg err">Error al guardar serie: ${esc(errSerie.message)}</div>`;
-      detallePedidoDeposito(id);
-    };
+  c.querySelectorAll('.chk-lleva').forEach(chk => chk.onchange = async () => {
+    const {error} = await sb.from('pedido_items').update({lleva_serie: chk.checked}).eq('id', chk.dataset.itemId);
+    if(error) aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; else detallePedidoDeposito(id);
   });
 
-  document.getElementById('marcar-listo').onclick = async () => {
-    const {error: errEstado} = await sb.from('pedidos').update({estado: 'listo'}).eq('id', p.id);
-    if(errEstado) alert('No se pudo actualizar el estado: ' + errEstado.message);
+  const agregarSerie = async itemId => {
+    const input = c.querySelector(`.input-serie[data-item-id="${itemId}"]`);
+    const numero_serie = input.value.trim();
+    if(!numero_serie) return aviso.innerHTML = '<div class="msg err">Ingresá un número de serie.</div>';
+    const {error: e} = await sb.from('series').insert({pedido_id: p.id, item_id: itemId, numero_serie, cargado_por: perfil.id});
+    if(e) return aviso.innerHTML = `<div class="msg err">${e.code === '23505' ? 'Ese número de serie ya fue cargado en otro pedido o producto.' : 'Error al guardar: ' + esc(e.message)}</div>`;
+    detallePedidoDeposito(id);
+  };
+  c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = () => agregarSerie(btn.dataset.itemId));
+  c.querySelectorAll('.input-serie').forEach(inp => inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); agregarSerie(inp.dataset.itemId); } });
+  setTimeout(() => { const f = c.querySelector('.input-serie'); if(f) f.focus(); }, 0);
+
+  const cambiar = async campos => {
+    const {error: e} = await sb.from('pedidos').update(campos).eq('id', p.id);
+    if(e) aviso.innerHTML = `<div class="msg err">No se pudo actualizar: ${esc(e.message)}</div>`;
     else vistaDeposito();
+  };
+
+  const listo = document.getElementById('marcar-listo');
+  if(listo) listo.onclick = () => {
+    const faltan = items.filter(i => i.lleva_serie && Math.ceil(i.cantidad) > (i.series||[]).length);
+    if(faltan.length && !confirm('Faltan cargar números de serie de: ' + faltan.map(i=>i.producto).join(', ') + '.\n¿Marcar como listo igual?')) return;
+    cambiar({estado:'listo'});
+  };
+
+  const entregar = document.getElementById('marcar-entregado');
+  if(entregar) entregar.onclick = () => {
+    if(!haySeries){
+      if(confirm('¿Confirmás que el pedido fue ' + (p.modalidad==='despacho' ? 'despachado' : 'entregado') + '?')) cambiar({estado:'entregado'});
+      return;
+    }
+    aviso.innerHTML = `<div class="enargas-box"><b>Este remito tiene números de serie.</b><br>¿Se transfirieron en el ENARGAS?
+      <div class="acciones" style="margin-top:10px">
+        <button class="btn chico" id="eng-si" style="background:var(--ok)">Sí, se transfirieron</button>
+        <button class="btn chico sec" id="eng-no">No, todavía no</button>
+        <button class="btn chico sec" id="eng-cancel">Cancelar</button></div></div>`;
+    document.getElementById('eng-si').onclick = () => cambiar({estado:'entregado', enargas_transferido:true});
+    document.getElementById('eng-no').onclick = () => cambiar({estado:'entregado', enargas_transferido:false});
+    document.getElementById('eng-cancel').onclick = () => aviso.innerHTML = '';
+  };
+
+  const eng = document.getElementById('marcar-enargas');
+  if(eng) eng.onclick = async () => {
+    const {error: e} = await sb.from('pedidos').update({enargas_transferido:true}).eq('id', p.id);
+    if(e) aviso.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; else detallePedidoDeposito(id);
   };
 }
 
-/* ---------- VENTAS (Paso 2) ---------- */
+/* ---------- NÚMEROS DE SERIE (Ventas, Depósito y Admin) ---------- */
+let busquedaSerie = '';
+function vistaSeries(){
+  const c = document.getElementById('contenido');
+  c.innerHTML = `<div class="panel">
+    <div class="barra"><h2>Números de serie</h2></div>
+    <p class="vacio" style="padding-top:0">Todos los números de serie cargados, con el cliente y el remito al que salió cada uno.</p>
+    <label for="b-serie">Buscar n.º de serie</label>
+    <input id="b-serie" value="${esc(busquedaSerie)}" placeholder="Escribí o escaneá el número" autocomplete="off">
+    <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div></div>`;
+  let t;
+  document.getElementById('b-serie').oninput = e => { busquedaSerie = e.target.value; clearTimeout(t); t = setTimeout(cargarSeries, 300); };
+  cargarSeries();
+}
+async function cargarSeries(){
+  const res = document.getElementById('res-series'); if(!res) return;
+  let q = sb.from('series').select('id, numero_serie, creado_en, pedido_items(producto), pedidos(id, numero_remito, cliente, estado, fecha_entregado, enargas_transferido)')
+    .order('creado_en',{ascending:false}).limit(200);
+  if(busquedaSerie.trim()) q = q.ilike('numero_serie', `%${busquedaSerie.trim()}%`);
+  const {data,error} = await q;
+  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  res.className = '';
+  res.innerHTML = data.length ? data.map(s => `
+    <button class="fila item item-serie" data-id="${s.pedidos.id}">
+      <div class="dato"><b class="serie-num">${esc(s.numero_serie)}</b><small>${esc(s.pedido_items ? s.pedido_items.producto : '')}</small></div>
+      <div class="dato"><b style="text-transform:uppercase">${esc(s.pedidos.cliente)}</b>
+        <small>Remito ${fmtRemito(s.pedidos.numero_remito)} · ${s.pedidos.fecha_entregado ? 'Entregado ' + fmtFecha(s.pedidos.fecha_entregado) : ESTADOS[s.pedidos.estado]}</small></div>
+    </button>`).join('') : '<p class="vacio">No se encontraron números de serie.</p>';
+  res.querySelectorAll('.item-serie').forEach(b => b.onclick = () => detallePedido(b.dataset.id, vistaSeries));
+}
+
+/* ---------- PRODUCTOS (lista maestra) ---------- */
+let productosLista = [], errorProductos = null;
+async function cargarProductos(){
+  const {data,error} = await sb.from('productos').select('*').eq('activo', true).order('nombre');
+  errorProductos = error ? error.message : null;
+  productosLista = data || [];
+}
+
+async function vistaProductos(){
+  const c = document.getElementById('contenido');
+  c.innerHTML = `<div class="panel">
+    <div class="barra"><h2>Productos</h2></div>
+    <p class="vacio" style="padding-top:0">Esta lista es la que se usa al crear pedidos, así el producto siempre sale escrito igual en el remito.</p>
+    <form id="fprod" class="fila" style="border:0;padding-top:0;align-items:flex-end">
+      <div class="dato"><label for="p-nombre" style="margin-top:0">Nuevo producto</label>
+        <input id="p-nombre" placeholder="Ej: CNDUAL" required autocomplete="off"></div>
+      <label class="check-serie" style="margin:0 0 10px"><input type="checkbox" id="p-serie"> Lleva n.º de serie</label>
+      <button class="btn chico" type="submit" style="margin-bottom:6px">Agregar a la lista</button>
+    </form>
+    <div id="aviso-prod"></div>
+    <label for="p-buscar">Buscar en la lista</label>
+    <input id="p-buscar" placeholder="Escribí para filtrar" autocomplete="off">
+    <div id="res-prod" class="vacio" style="margin-top:10px">Cargando…</div></div>`;
+  document.getElementById('fprod').onsubmit = async e => {
+    e.preventDefault();
+    const aviso = document.getElementById('aviso-prod');
+    const nombre = document.getElementById('p-nombre').value.trim().replace(/\s+/g,' ').toUpperCase();
+    if(!nombre) return;
+    const {error} = await sb.from('productos').insert({nombre, lleva_serie: document.getElementById('p-serie').checked});
+    if(error) return aviso.innerHTML = `<div class="msg err">${error.code==='23505' ? 'Ese producto ya existe en la lista.' : esc(error.message)}</div>`;
+    vistaProductos();
+  };
+  document.getElementById('p-buscar').oninput = () => listarProductos();
+  listarProductos(true);
+}
+
+let todosProductos = [];
+async function listarProductos(recargar){
+  const res = document.getElementById('res-prod'); if(!res) return;
+  if(recargar){
+    const {data,error} = await sb.from('productos').select('*').order('activo',{ascending:false}).order('nombre');
+    if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}<br>Si dice que la tabla no existe, falta correr el SQL de productos en Supabase.</div>`;
+    todosProductos = data;
+  }
+  const f = (document.getElementById('p-buscar').value || '').trim().toUpperCase();
+  const lista = todosProductos.filter(p => p.nombre.toUpperCase().includes(f));
+  res.className = '';
+  res.innerHTML = lista.length ? lista.map(p => `
+    <div class="fila ${p.activo ? '' : 'inactivo'}">
+      <div class="dato"><b>${esc(p.nombre)}</b> ${p.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}${p.activo ? '' : ' <small>(desactivado)</small>'}</div>
+      <label class="check-serie"><input type="checkbox" class="p-chk" data-id="${p.id}" ${p.lleva_serie ? 'checked' : ''}> Lleva serie</label>
+      <button class="btn chico sec p-ren" data-id="${p.id}">Renombrar</button>
+      <button class="btn chico sec p-act" data-id="${p.id}" data-activo="${p.activo}">${p.activo ? 'Desactivar' : 'Reactivar'}</button>
+    </div>`).join('') : '<p class="vacio">No hay productos en la lista todavía.</p>';
+  const actualizar = async (id, campos) => {
+    const {error} = await sb.from('productos').update(campos).eq('id', id);
+    if(error) alert(error.code==='23505' ? 'Ya existe un producto con ese nombre.' : 'No se pudo guardar: ' + error.message);
+    listarProductos(true);
+  };
+  res.querySelectorAll('.p-chk').forEach(x => x.onchange = () => actualizar(x.dataset.id, {lleva_serie: x.checked}));
+  res.querySelectorAll('.p-act').forEach(x => x.onclick = () => actualizar(x.dataset.id, {activo: x.dataset.activo !== 'true'}));
+  res.querySelectorAll('.p-ren').forEach(x => x.onclick = () => {
+    const actual = todosProductos.find(p => String(p.id) === x.dataset.id);
+    const nuevo = prompt('Nuevo nombre del producto.\n(Los remitos ya hechos no cambian.)', actual.nombre);
+    if(nuevo && nuevo.trim()) actualizar(x.dataset.id, {nombre: nuevo.trim().replace(/\s+/g,' ').toUpperCase()});
+  });
+}
+
+/* ---------- VENTAS ---------- */
 const ESTADOS = {pendiente:'Pendiente', listo:'Listo', entregado:'Entregado', anulado:'Anulado'};
 const MODAL = {retira:'Retira el cliente', despacho:'Se despacha'};
 const fmtRemito = n => String(n).padStart(8,'0');
 const fmtFecha = d => d ? new Date(d.length===10 ? d+'T00:00:00' : d).toLocaleDateString('es-AR') : '—';
 const fmtFechaHora = d => d ? new Date(d).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}) : '—';
-let filtros = {numero:'', cliente:'', estado:'', listo:'', entrega:''};
-
-function vistaVentas(){ listaPedidos(); }
-
-function listaPedidos(){
+let filtroEstadoPill = 'todos';
+async function vistaVentas(){
   const c = document.getElementById('contenido');
-  c.innerHTML = `<div class="panel">
-    <div class="barra"><h2>Pedidos</h2><button class="btn chico" id="nuevo">+ Nuevo pedido</button></div>
-    <div class="filtros">
-      <div><label for="f-numero">N.º de remito</label><input id="f-numero" type="number" min="1" value="${esc(filtros.numero)}"></div>
-      <div><label for="f-cliente">Cliente</label><input id="f-cliente" value="${esc(filtros.cliente)}"></div>
-      <div><label for="f-estado">Estado</label><select id="f-estado"><option value="">Todos</option>
-        ${Object.entries(ESTADOS).map(([k,n])=>`<option value="${k}" ${filtros.estado===k?'selected':''}>${n}</option>`).join('')}</select></div>
-      <div><label for="f-listo">Fecha de listo</label><input id="f-listo" type="date" value="${filtros.listo}"></div>
-      <div><label for="f-entrega">Fecha de entrega</label><input id="f-entrega" type="date" value="${filtros.entrega}"></div>
-      <div><button class="btn sec chico" id="limpiar" style="margin-top:0">Limpiar filtros</button></div>
+  await cargarProductos();
+  c.innerHTML = `
+    <div class="dash-header">
+      <div class="dash-title">
+        <h2>Gestión de Pedidos</h2>
+        <p>Cargá el pedido, seguilo por el depósito y coordiná la entrega.</p>
+      </div>
+      <div class="stats-bar" id="stats"></div>
     </div>
-    <div id="res" class="vacio">Cargando…</div></div>`;
-  document.getElementById('nuevo').onclick = formPedido;
-  let t;
-  [['numero','f-numero'],['cliente','f-cliente'],['estado','f-estado'],['listo','f-listo'],['entrega','f-entrega']].forEach(([k,id])=>{
-    document.getElementById(id).oninput = e => { filtros[k] = e.target.value; clearTimeout(t); t = setTimeout(cargarResultados, 300); };
-  });
-  document.getElementById('limpiar').onclick = () => { filtros = {numero:'',cliente:'',estado:'',listo:'',entrega:''}; listaPedidos(); };
-  cargarResultados();
-}
+    <div class="sync-banner">☁️ Sincronizado con la nube en tiempo real (todos los usuarios ven los mismos pedidos).</div>
+    <button class="btn nuevo-movil" id="toggle-form" type="button">+ Nuevo pedido</button>
+    <div class="grid-dash">
+      <div class="panel col-form" id="col-form">
+        <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">Nuevo Pedido</h3>
+        <form id="fp">
+          <label for="cliente">CLIENTE</label>
+          <input id="cliente" placeholder="Ej: Ferretería Los Andes" required>
+          <label for="fentrega">FECHA DE ENTREGA</label>
+          <input id="fentrega" type="date">
+          <label for="modalidad">MODALIDAD</label>
+          <select id="modalidad">
+            <option value="retira">Retira el cliente</option>
+            <option value="despacho">Se despacha</option>
+          </select>
+          <label style="margin-bottom:2px">PRODUCTOS</label>
+          <div style="display:grid; grid-template-columns:1fr 80px 36px; gap:8px; font-size:12px; font-weight:600; color:var(--gris); margin-bottom:4px">
+            <span>PRODUCTO</span><span>CANT.</span><span></span>
+          </div>
+          <div id="items"></div>
+          <datalist id="lista-productos">${productosLista.map(x => `<option value="${esc(x.nombre)}">`).join('')}</datalist>
+          ${errorProductos ? `<div class="msg err">No se pudo cargar la lista de productos: ${esc(errorProductos)}</div>` : (!productosLista.length ? '<div class="msg err">La lista de productos está vacía. Cargalos en la solapa Productos.</div>' : '')}
+          <button type="button" class="btn sec chico" id="mas" style="margin-top:10px; width:100%; border-style:dashed">+ Agregar producto</button>
+          <label for="coment">NOTA PARA DEPÓSITO</label>
+          <input id="coment" placeholder="Ej: Entregar antes de las 10, frágil">
+          <div id="aviso" style="margin-top:10px"></div>
+          <button class="btn" type="submit" style="margin-top:16px">Guardar pedido</button>
+        </form>
+      </div>
+      <div>
+        <div class="pills">
+          ${[['todos','Todos'],['pendiente','Pendientes'],['listo','Listos'],['entregado','Entregados'],['anulado','Anulados']]
+            .map(([k,n])=>`<button class="pill-btn ${filtroEstadoPill===k?'activa':''}" data-f="${k}">${n}</button>`).join('')}
+        </div>
+        <div id="res-ventas">Cargando pedidos…</div>
+      </div>
+    </div>`;
 
-async function cargarResultados(){
-  const res = document.getElementById('res'); if(!res) return;
-  let q = sb.from('pedidos').select('*').order('numero_remito',{ascending:false}).limit(100);
-  const n = parseInt(filtros.numero,10);
-  if(filtros.numero && !isNaN(n)) q = q.eq('numero_remito', n);
-  if(filtros.cliente.trim()) q = q.ilike('cliente', `%${filtros.cliente.trim()}%`);
-  if(filtros.estado) q = q.eq('estado', filtros.estado);
-  if(filtros.entrega) q = q.eq('fecha_entrega', filtros.entrega);
-  if(filtros.listo){
-    const d1 = new Date(filtros.listo+'T00:00:00'), d2 = new Date(d1.getTime()+86400000);
-    q = q.gte('fecha_listo', d1.toISOString()).lt('fecha_listo', d2.toISOString());
-  }
-  const {data,error} = await q;
-  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-  res.className = '';
-  res.innerHTML = data.length ? data.map(p => `
-    <button class="fila item" data-id="${p.id}">
-      <div class="dato"><b>Remito ${fmtRemito(p.numero_remito)}</b><small>${esc(p.cliente)}</small></div>
-      <div class="dato"><span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span>
-        <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
-    </button>`).join('') : '<p class="vacio">No hay pedidos con esos filtros.</p>';
-  res.querySelectorAll('.item').forEach(b => b.onclick = () => detallePedido(b.dataset.id, listaPedidos));
-}
+  document.getElementById('toggle-form').onclick = () => document.getElementById('col-form').classList.toggle('abierto');
 
-/* Nuevo pedido */
-function formPedido(){
-  const c = document.getElementById('contenido');
-  c.innerHTML = `<div class="panel"><h2>Nuevo pedido</h2>
-    <form id="fp">
-      <label for="cliente">Cliente</label><input id="cliente" required>
-      <label for="modalidad">Entrega</label>
-      <select id="modalidad"><option value="retira">Retira el cliente</option><option value="despacho">Se despacha</option></select>
-      <label for="fentrega">Fecha de entrega</label><input id="fentrega" type="date">
-      <label>Productos</label><div id="items"></div>
-      <button type="button" class="btn sec chico" id="mas" style="margin-top:10px">+ Agregar producto</button>
-      <label for="coment">Comentarios</label><input id="coment">
-      <div id="aviso"></div>
-      <div class="acciones"><button class="btn" type="submit">Guardar pedido</button>
-      <button class="btn sec" type="button" id="cancelar">Cancelar</button></div>
-    </form></div>`;
   const items = document.getElementById('items');
-  const agregar = () => {
-    const d = document.createElement('div'); d.className = 'item-form';
-    d.innerHTML = `<input class="prod" placeholder="Producto" aria-label="Producto" required>
-      <input class="cant" type="number" step="any" min="0" placeholder="Cant." aria-label="Cantidad" required>
+  const agregarItem = () => {
+    const d = document.createElement('div');
+    d.className = 'item-form-grid';
+    d.innerHTML = `
+      <input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" aria-label="Producto" autocomplete="off" required>
+      <input class="cant" type="number" step="any" min="0" value="1" placeholder="Cant." aria-label="Cantidad" required>
       <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
     d.querySelector('.quitar').onclick = () => { if(items.children.length > 1) d.remove(); };
     items.appendChild(d);
   };
-  agregar();
-  document.getElementById('mas').onclick = agregar;
-  document.getElementById('cancelar').onclick = listaPedidos;
+  agregarItem();
+  document.getElementById('mas').onclick = agregarItem;
+
   document.getElementById('fp').onsubmit = async e => {
     e.preventDefault();
     const aviso = document.getElementById('aviso');
-    const lineas = [...items.children].map(d => ({producto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)}))
-      .filter(l => l.producto);
-    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))) return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
-    const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
+    const buscarProd = txt => productosLista.find(x => x.nombre.toUpperCase() === txt.trim().toUpperCase());
+    const crudas = [...items.children].map(d => ({texto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)})).filter(l => l.texto);
+    const noExiste = crudas.filter(l => !buscarProd(l.texto));
+    if(noExiste.length) return aviso.innerHTML = `<div class="msg err">No está en la lista de productos: ${noExiste.map(l => esc(l.texto)).join(', ')}. Elegí uno de la lista o crealo en la solapa Productos.</div>`;
+    const lineas = crudas.map(l => { const pr = buscarProd(l.texto); return {producto: pr.nombre, cantidad: l.cantidad, lleva_serie: pr.lleva_serie}; });
+    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))){
+      return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
+    }
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
     const {data:p, error} = await sb.from('pedidos').insert({
       cliente: document.getElementById('cliente').value.trim(),
       modalidad: document.getElementById('modalidad').value,
       fecha_entrega: document.getElementById('fentrega').value || null,
       comentarios: document.getElementById('coment').value.trim() || null,
-      creado_por: perfil.id }).select().single();
+      creado_por: perfil.id
+    }).select().single();
     if(error){ btn.disabled = false; return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; }
     const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
-    if(e2){ await sb.from('pedidos').delete().eq('id', p.id); btn.disabled = false;
-      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`; }
-    detallePedido(p.id, listaPedidos);
+    if(e2){
+      await sb.from('pedidos').delete().eq('id', p.id);
+      btn.disabled = false;
+      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`;
+    }
+    vistaVentas();
   };
+
+  // Los filtros solo recargan la lista (no borran lo que estás escribiendo en el formulario)
+  document.querySelectorAll('.pill-btn').forEach(b => {
+    b.onclick = () => {
+      filtroEstadoPill = b.dataset.f;
+      document.querySelectorAll('.pill-btn').forEach(x => x.classList.toggle('activa', x === b));
+      cargarResultadosVentas();
+    };
+  });
+
+  suscribirPedidos();
+  refrescarVentas();
 }
 
-/* Detalle / remito (también lo va a usar Depósito) */
+/* Tiempo real: cuando alguien crea o cambia un pedido, se actualiza la lista sola */
+let canalPedidos = null, tRefresco;
+function suscribirPedidos(){
+  if(canalPedidos) sb.removeChannel(canalPedidos);
+  canalPedidos = sb.channel('pedidos-ventas')
+    .on('postgres_changes', {event:'*', schema:'public', table:'pedidos'}, () => {
+      clearTimeout(tRefresco); tRefresco = setTimeout(() => { if(document.getElementById('res-ventas')) refrescarVentas(); if(document.getElementById('res-dep')) cargarPedidosDeposito(); }, 700);
+    }).subscribe();
+}
+function refrescarVentas(){ cargarEstadisticas(); cargarResultadosVentas(); }
+
+async function cargarEstadisticas(){
+  const box = document.getElementById('stats'); if(!box) return;
+  const {data} = await sb.from('pedidos').select('estado');
+  const n = e => (data || []).filter(p => p.estado === e).length;
+  box.innerHTML = `
+    <div class="stat-card"><span class="stat-num p">${n('pendiente')}</span><span class="stat-label">Pendientes</span></div>
+    <div class="stat-card"><span class="stat-num l">${n('listo')}</span><span class="stat-label">Listos</span></div>
+    <div class="stat-card"><span class="stat-num e">${n('entregado')}</span><span class="stat-label">Entregados</span></div>`;
+}
+
+async function cargarResultadosVentas(){
+  const res = document.getElementById('res-ventas');
+  if(!res) return;
+  let q = sb.from('pedidos').select('*, pedido_items(*, series(*))').order('numero_remito',{ascending:false}).limit(50);
+  if(filtroEstadoPill !== 'todos') q = q.eq('estado', filtroEstadoPill);
+  const {data, error} = await q;
+  if(error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  if(!data || !data.length){
+    return res.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:var(--gris); background:#fff; border-radius:12px; border:1px dashed #EAECF0">
+        <div style="font-size:32px; margin-bottom:8px">📦</div>
+        <b>No hay pedidos en esta sección actualmente.</b>
+      </div>`;
+  }
+  res.innerHTML = data.map(p => {
+    const itemsHtml = p.pedido_items && p.pedido_items.length ? p.pedido_items.sort((a,b)=>a.id-b.id).map(i => `
+      <div class="card-item-row">
+        <div>
+          ${i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}
+          <span style="font-weight:500">${esc(i.producto)}</span>
+          ${i.series && i.series.length ? `<small class="series">N.º de serie: ${i.series.map(s=>esc(s.numero_serie)).join(', ')}</small>` : ''}
+        </div>
+        <div style="background:#F1F5F9; padding:2px 8px; border-radius:6px; font-weight:600; font-size:13px">x${i.cantidad}</div>
+      </div>`).join('') : '<div style="color:var(--gris); font-size:13px">Sin productos registrados</div>';
+    return `
+      <div class="card-pedido">
+        <div class="card-pedido-header">
+          <div>
+            <h3>${esc(p.cliente)} <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span></h3>
+            <div class="card-pedido-meta">
+              <span>📅 Entrega: ${fmtFecha(p.fecha_entrega)}</span>
+              <span>🚚 ${MODAL[p.modalidad]}</span>
+              <span class="remito-chico">Remito ${fmtRemito(p.numero_remito)}</span>
+            </div>
+          </div>
+          <div class="acciones-card">
+            
+            <button class="btn chico sec ver-remito-btn" data-id="${p.id}" style="padding:6px 12px; font-weight:600">Ver</button>
+          </div>
+        </div>
+        <div class="card-items-box">
+          <div style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px">Productos a sacar</div>
+          ${itemsHtml}
+        </div>
+        ${p.comentarios ? `<div style="margin-top:10px; font-size:13px; color:#475467"><b>Nota:</b> ${esc(p.comentarios)}</div>` : ''}
+      </div>`;
+  }).join('');
+  res.querySelectorAll('.ver-remito-btn').forEach(btn => {
+    btn.onclick = () => detallePedido(btn.dataset.id, vistaVentas);
+  });
+}
+
+/* ---------- DETALLE / REMITO ---------- */
 async function detallePedido(id, volver){
   const c = document.getElementById('contenido');
   c.innerHTML = '<div class="panel vacio">Cargando…</div>';
@@ -389,8 +651,7 @@ async function detallePedido(id, volver){
        <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
        <b>Entrega:</b> ${MODAL[p.modalidad]}<br>
        <b>Fecha de entrega:</b> ${fmtFecha(p.fecha_entrega)}<br>
-       <b>Creado:</b> ${fmtFechaHora(p.creado_en)}
-       ${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
+       <b>Creado:</b> ${fmtFechaHora(p.creado_en)}${p.fecha_listo ? `<br><b>Listo:</b> ${fmtFechaHora(p.fecha_listo)}` : ''}
        ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}</p>
     <table><thead><tr><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
     ${p.comentarios ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>` : ''}

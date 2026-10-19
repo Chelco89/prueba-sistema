@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "Distribuidora SGV",
+  "short_name": "SGV Pedidos",
+  "description": "Sistema de pedidos de Ventas y Depósito",
+  "lang": "es-AR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1565B8",
+  "icons": [
+    {
+      "src": "./logo.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

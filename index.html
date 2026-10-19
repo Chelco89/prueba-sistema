@@ -503,9 +503,39 @@ async function detallePedidoDeposito(id, editando=false){
   });
   setTimeout(() => { const f = c.querySelector('.input-serie'); if(f) f.focus(); }, 0);
 
-  const cambiar = async campos => {
-    const {error: e} = await sb.from('pedidos').update(campos).eq('id', p.id);
-    if(e) err('No se pudo actualizar: ' + esc(e.message)); else vistaDeposito();
+ const cambiar = async campos => {
+    const { error: e } = await sb
+      .from('pedidos')
+      .update(campos)
+      .eq('id', p.id);
+
+    if (e) {
+      err('No se pudo actualizar: ' + esc(e.message));
+      return;
+    }
+
+    if (campos.estado === 'listo' || campos.estado === 'entregado') {
+      const evento = campos.estado === 'listo'
+        ? 'estado_listo'
+        : 'estado_entregado';
+
+      const { error: errorNotificacion } = await sb.functions.invoke(
+        'enviar-notificaciones',
+        {
+          body: {
+            evento: evento,
+            pedido_id: p.id
+          }
+        }
+      );
+
+      if (errorNotificacion) {
+        console.error('Error al enviar la notificación:', errorNotificacion);
+        alert('El pedido se actualizó, pero no se pudo enviar la notificación.');
+      }
+    }
+
+    vistaDeposito();
   };
 
   const listo = document.getElementById('marcar-listo');
@@ -739,7 +769,21 @@ async function vistaVentas(){
       btn.disabled = false;
       return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`;
     }
-    vistaVentas();
+    const { error: errorNotificacion } = await sb.functions.invoke(
+  'enviar-notificaciones',
+  {
+    body: {
+      evento: 'pedido_nuevo',
+      pedido_id: p.id
+    }
+  }
+);
+
+if (errorNotificacion) {
+  console.error('Error al notificar el nuevo pedido:', errorNotificacion);
+}
+
+vistaVentas();
   };
 
   // Los filtros solo recargan la lista (no borran lo que estás escribiendo en el formulario)

@@ -612,7 +612,12 @@ async function vistaVentas(){
       </div>
     </div>`;
 
-  document.getElementById('toggle-form').onclick = () => document.getElementById('col-form').classList.toggle('abierto');
+  const toggleForm = document.getElementById('toggle-form');
+const colForm = document.getElementById('col-form');
+
+if (toggleForm && colForm) {
+  toggleForm.onclick = () => colForm.classList.toggle('abierto');
+}
 
   const items = document.getElementById('items');
   const agregarItem = () => {

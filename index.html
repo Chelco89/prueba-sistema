@@ -9,6 +9,10 @@
 <meta name="apple-mobile-web-app-title" content="SGV Pedidos">
 <title>Distribuidora SGV</title>
 <meta name="theme-color" content="#1565B8">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./logo.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SGV Pedidos">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -813,6 +817,18 @@ sb.auth.onAuthStateChange((evento, sesion) => {
   if(sesion) setTimeout(cargarPerfil, 0); else { perfil = null; pantallaLogin(); }
 });
 sb.auth.getSession().then(({data:{session}}) => { if(!session) pantallaLogin(); });
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./sw.js");
+      console.log("SGV: service worker registrado");
+    } catch (error) {
+      console.error("SGV: error al registrar service worker", error);
+    }
+  });
+}
 </script>
 <script>
 if ("serviceWorker" in navigator) {

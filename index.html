@@ -273,17 +273,46 @@ function conectarSalir(){
 }
 function armarSistema(){
   const tabs = [];
-  if(['ventas','admin'].includes(perfil.rol)) tabs.push(['ventas','Ventas'], ['productos','Productos']);
-  if(['deposito','admin'].includes(perfil.rol)) tabs.push(['deposito','Depósito']);
+
+  if(['ventas','admin'].includes(perfil.rol)) {
+    tabs.push(['ventas','Ventas'], ['productos','Productos']);
+  }
+
+  if(['deposito','admin'].includes(perfil.rol)) {
+    tabs.push(['deposito','Depósito']);
+  }
+
   tabs.push(['series','N.º de serie']);
-  if(perfil.rol === 'admin') tabs.push(['usuarios','Usuarios']);
+
+  if(['ventas','deposito','admin'].includes(perfil.rol)) {
+    tabs.push(['stock','Stock']);
+  }
+
+  if(perfil.rol === 'admin') {
+    tabs.push(['usuarios','Usuarios']);
+  }
+
   vista = vista && tabs.some(t=>t[0]===vista) ? vista : tabs[0][0];
+
   app.innerHTML = cabecera() +
     `<nav>${tabs.map(([k,n])=>`<button data-v="${k}" class="${k===vista?'activa':''}">${n}</button>`).join('')}</nav>
      <main id="contenido"></main>`;
+
   conectarSalir();
-  app.querySelectorAll('nav button').forEach(b => b.onclick = () => { vista = b.dataset.v; armarSistema(); });
-  ({ventas:vistaVentas, deposito:vistaDeposito, series:vistaSeries, productos:vistaProductos, usuarios:vistaUsuarios})[vista]();
+
+  app.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+    vista = b.dataset.v;
+    armarSistema();
+  });
+
+  ({
+    ventas:vistaVentas,
+    deposito:vistaDeposito,
+    series:vistaSeries,
+    productos:vistaProductos,
+    stock:vistaStock,
+    usuarios:vistaUsuarios
+  })[vista]();
 }
 /* ---------- DEPÓSITO ---------- */
 let depTab = 'pendiente';
@@ -504,20 +533,52 @@ async function detallePedidoDeposito(id, editando=false){
   setTimeout(() => { const f = c.querySelector('.input-serie'); if(f) f.focus(); }, 0);
 
  const cambiar = async campos => {
-    const { error: e } = await sb
-      .from('pedidos')
-      .update(campos)
-      .eq('id', p.id);
+    const esEntrega = campos.estado === 'entregado';
 
-    if (e) {
-      err('No se pudo actualizar: ' + esc(e.message));
-      return;
+    if (esEntrega) {
+      const botonEntrega = document.getElementById('marcar-entregado');
+      if (botonEntrega) botonEntrega.disabled = true;
+
+      const { data, error: errorEntrega } = await sb.rpc(
+        'confirmar_entrega_pedido',
+        {
+          p_pedido_id: p.id,
+          p_enargas_transferido:
+            typeof campos.enargas_transferido === 'boolean'
+              ? campos.enargas_transferido
+              : null
+        }
+      );
+
+      if (errorEntrega) {
+        if (botonEntrega) botonEntrega.disabled = false;
+        err('No se pudo confirmar la entrega ni descontar el stock: ' +
+            esc(errorEntrega.message));
+        return;
+      }
+
+      if (data === 'ya_entregado') {
+        aviso.innerHTML =
+          '<div class="msg">Este pedido ya estaba entregado. No se volvió a descontar el stock.</div>';
+        vistaDeposito();
+        return;
+      }
+    } else {
+      const { error: e } = await sb
+        .from('pedidos')
+        .update(campos)
+        .eq('id', p.id);
+
+      if (e) {
+        err('No se pudo actualizar: ' + esc(e.message));
+        return;
+      }
     }
 
-    if (campos.estado === 'listo' || campos.estado === 'entregado') {
-      const evento = campos.estado === 'listo'
-        ? 'estado_listo'
-        : 'estado_entregado';
+    if (campos.estado === 'listo' || esEntrega) {
+      const evento = esEntrega
+        ? 'estado_entregado'
+        : 'estado_listo';
 
       const { error: errorNotificacion } = await sb.functions.invoke(
         'enviar-notificaciones',
@@ -669,6 +730,190 @@ async function listarProductos(recargar){
     if(nuevo && nuevo.trim()) actualizar(x.dataset.id, {nombre: nuevo.trim().replace(/\s+/g,' ').toUpperCase()});
   });
 }
+/* ---------- STOCK ---------- */
+async function vistaStock(){
+  const c = document.getElementById('contenido');
+
+  c.innerHTML = `
+    <div class="panel">
+      <div class="barra">
+        <h2>Stock de productos</h2>
+        <button class="btn chico sec" id="stock-actualizar">
+          Actualizar
+        </button>
+      </div>
+
+      <p class="vacio">
+        Consultá las existencias y registrá ingresos o ajustes de mercadería.
+      </p>
+
+      <div id="stock-aviso"></div>
+
+      <form id="stock-form">
+        <label for="stock-producto">Producto</label>
+        <select id="stock-producto" required>
+          <option value="">Cargando productos...</option>
+        </select>
+
+        <label for="stock-tipo">Movimiento</label>
+        <select id="stock-tipo" required>
+          <option value="inicial">Cargar stock inicial</option>
+          <option value="entrada">Ingreso de mercadería</option>
+          <option value="ajuste">Ajustar stock actual</option>
+        </select>
+
+        <label for="stock-cantidad">Cantidad de unidades</label>
+        <input id="stock-cantidad" type="number" min="0"
+          step="1" required placeholder="Ej.: 25">
+
+        <label for="stock-observacion">Observación</label>
+        <input id="stock-observacion"
+          placeholder="Ej.: Compra recibida o recuento de depósito">
+
+        <button class="btn" type="submit">
+          Registrar movimiento
+        </button>
+      </form>
+
+      <h3 style="margin-top:28px">Existencias actuales</h3>
+      <div id="stock-lista" class="vacio">Cargando...</div>
+
+      <h3 style="margin-top:28px">Historial de movimientos</h3>
+      <div id="stock-historial" class="vacio">Cargando...</div>
+    </div>
+  `;
+
+  const aviso = document.getElementById('stock-aviso');
+  const selector = document.getElementById('stock-producto');
+  const form = document.getElementById('stock-form');
+  const tipo = document.getElementById('stock-tipo');
+  const cantidad = document.getElementById('stock-cantidad');
+
+  async function cargarPantallaStock(){
+    const {data: productos, error} = await sb
+      .from('productos')
+      .select('id,nombre,stock,activo')
+      .eq('activo', true)
+      .order('nombre');
+
+    if(error){
+      aviso.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    selector.innerHTML = productos.map(p =>
+      `<option value="${p.id}">${esc(p.nombre)} — Stock: ${p.stock}</option>`
+    ).join('');
+
+    document.getElementById('stock-lista').innerHTML =
+      productos.length ? productos.map(p => `
+        <div class="fila">
+          <div class="dato"><b>${esc(p.nombre)}</b></div>
+          <div><b>${p.stock}</b> unidades</div>
+        </div>
+      `).join('') : '<p>No hay productos activos.</p>';
+
+    const {data: movimientos, error: errorMov} = await sb
+      .from('stock_movimientos')
+      .select('*, productos(nombre)')
+      .order('creado_en', {ascending:false})
+      .limit(100);
+
+    if(errorMov){
+      document.getElementById('stock-historial').innerHTML =
+        `<div class="msg err">${esc(errorMov.message)}</div>`;
+      return;
+    }
+
+    document.getElementById('stock-historial').innerHTML =
+      movimientos.length ? movimientos.map(m => `
+        <div class="fila">
+          <div class="dato">
+            <b>${esc(m.productos?.nombre || 'Producto')}</b>
+            <small>${new Date(m.creado_en).toLocaleString('es-AR')}</small>
+            <small>${esc(m.observacion || '')}</small>
+          </div>
+          <div>
+            ${esc(m.tipo)}: ${m.cantidad}<br>
+            <small>${m.stock_anterior} → ${m.stock_nuevo}</small>
+          </div>
+        </div>
+      `).join('') : '<p>Todavía no hay movimientos registrados.</p>';
+  }
+
+  tipo.onchange = () => {
+    cantidad.value = '';
+    cantidad.min = tipo.value === 'ajuste' ? '0' : '1';
+    cantidad.placeholder = tipo.value === 'ajuste'
+      ? 'Nuevo stock total'
+      : 'Cantidad de unidades';
+  };
+
+  document.getElementById('stock-actualizar').onclick =
+    cargarPantallaStock;
+
+  form.onsubmit = async e => {
+  e.preventDefault();
+  aviso.innerHTML = '';
+
+  const productoId = selector.value;
+  const unidades = Number(cantidad.value);
+  const movimiento = tipo.value;
+  const observacion =
+    document.getElementById('stock-observacion').value.trim();
+
+  if (
+    !productoId ||
+    !Number.isInteger(unidades) ||
+    unidades < (movimiento === 'ajuste' ? 0 : 1)
+  ) {
+    aviso.innerHTML =
+      '<div class="msg err">Revisá el producto y la cantidad.</div>';
+    return;
+  }
+
+  const boton = form.querySelector('[type="submit"]');
+  boton.disabled = true;
+
+  try {
+    const {data, error} = await sb.rpc(
+      'registrar_movimiento_stock',
+      {
+        p_producto_id: Number(productoId),
+        p_tipo: movimiento,
+        p_cantidad: unidades,
+        p_observacion: observacion || null
+      }
+    );
+
+    if (error) {
+      aviso.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    if (data === 'sin_cambios') {
+      aviso.innerHTML =
+        '<div class="msg">El stock ya tenía esa cantidad. No se registraron cambios.</div>';
+    } else {
+      aviso.innerHTML =
+        '<div class="msg ok">Movimiento registrado correctamente.</div>';
+    }
+
+    form.reset();
+    await cargarPantallaStock();
+
+  } catch (error) {
+    aviso.innerHTML =
+      `<div class="msg err">${esc(error.message || 'Ocurrió un error.')}</div>`;
+  } finally {
+    boton.disabled = false;
+  }
+};
+
+  await cargarPantallaStock();
+}
 
 /* ---------- VENTAS ---------- */
 const ESTADOS = {pendiente:'Pendiente', listo:'Listo', entregado:'Entregado', anulado:'Anulado'};
@@ -729,16 +974,71 @@ async function vistaVentas(){
   document.getElementById('toggle-form').onclick = () => document.getElementById('col-form').classList.toggle('abierto');
 
   const items = document.getElementById('items');
+
+  const actualizarAvisosStock = () => {
+    const filas = [...items.querySelectorAll('.item-form-grid')];
+
+    filas.forEach(fila => {
+      const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
+      const cantidad = Number(fila.querySelector('.cant').value);
+      const producto = productosLista.find(
+        x => x.nombre.toUpperCase() === nombre
+      );
+
+      let avisoStock = fila.querySelector('.stock-info');
+
+      if (!avisoStock) {
+        avisoStock = document.createElement('div');
+        avisoStock.className = 'stock-info';
+        avisoStock.style.gridColumn = '1 / -1';
+        fila.appendChild(avisoStock);
+      }
+
+      if (!producto || !Number.isFinite(cantidad) || cantidad <= 0) {
+        avisoStock.innerHTML = '';
+        return;
+      }
+
+      const totalPedido = filas.reduce((total, otraFila) => {
+        const nombreOtra = otraFila.querySelector('.prod').value.trim().toUpperCase();
+        const cantidadOtra = Number(otraFila.querySelector('.cant').value);
+        return nombreOtra === nombre && Number.isFinite(cantidadOtra) && cantidadOtra > 0
+          ? total + cantidadOtra
+          : total;
+      }, 0);
+
+      if (totalPedido > Number(producto.stock)) {
+        avisoStock.innerHTML =
+          `<div class="msg err">⚠️ Stock insuficiente: hay ${producto.stock} unidades y el pedido requiere ${totalPedido}. Podés continuar, pero el stock quedará negativo si se entrega sin reposición.</div>`;
+      } else {
+        avisoStock.innerHTML =
+          `<small>Stock disponible: ${producto.stock} unidades</small>`;
+      }
+    });
+  };
+
   const agregarItem = () => {
     const d = document.createElement('div');
     d.className = 'item-form-grid';
     d.innerHTML = `
       <input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" aria-label="Producto" autocomplete="off" required>
-      <input class="cant" type="number" step="any" min="0" value="1" placeholder="Cant." aria-label="Cantidad" required>
+      <input class="cant" type="number" step="1" min="1" value="1" placeholder="Cant." aria-label="Cantidad" required>
       <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
-    d.querySelector('.quitar').onclick = () => { if(items.children.length > 1) d.remove(); };
+
+    d.querySelector('.quitar').onclick = () => {
+      if (items.children.length > 1) {
+        d.remove();
+        actualizarAvisosStock();
+      }
+    };
+
+    d.querySelector('.prod').addEventListener('input', actualizarAvisosStock);
+    d.querySelector('.cant').addEventListener('input', actualizarAvisosStock);
+
     items.appendChild(d);
+    actualizarAvisosStock();
   };
+
   agregarItem();
   document.getElementById('mas').onclick = agregarItem;
 
@@ -750,9 +1050,12 @@ async function vistaVentas(){
     const noExiste = crudas.filter(l => !buscarProd(l.texto));
     if(noExiste.length) return aviso.innerHTML = `<div class="msg err">No está en la lista de productos: ${noExiste.map(l => esc(l.texto)).join(', ')}. Elegí uno de la lista o crealo en la solapa Productos.</div>`;
     const lineas = crudas.map(l => { const pr = buscarProd(l.texto); return {producto: pr.nombre, cantidad: l.cantidad, lleva_serie: pr.lleva_serie}; });
-    if(!lineas.length || lineas.some(l => !(l.cantidad > 0))){
-      return aviso.innerHTML = '<div class="msg err">Cargá al menos un producto con cantidad mayor a 0.</div>';
-    }
+  if(!lineas.length || lineas.some(l =>
+  !Number.isInteger(l.cantidad) || l.cantidad <= 0
+)){
+  return aviso.innerHTML =
+    '<div class="msg err">Cargá al menos un producto con una cantidad entera mayor a 0 (sin decimales).</div>';
+}
     const btn = e.target.querySelector('[type=submit]');
     btn.disabled = true;
     const {data:p, error} = await sb.from('pedidos').insert({

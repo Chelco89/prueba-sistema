@@ -326,7 +326,7 @@ async function cargarPedidosDeposito(){
     return `
     <button class="fila item item-deposito" data-id="${p.id}">
       <div class="dato"><b style="font-size:18px;text-transform:uppercase">${esc(p.cliente)}</b>
-        <small>Remito ${fmtRemito(p.numero_remito)}${nSeries ? ` · ${nSeries} n.º de serie cargados` : ''}</small></div>
+        <small>Presupuesto ${fmtRemito(p.numero_remito)}${nSeries ? ` · ${nSeries} n.º de serie cargados` : ''}</small></div>
       <div class="dato"><span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span>
         <small>${MODAL[p.modalidad]} · Entrega: ${fmtFecha(p.fecha_entrega)}</small></div>
     </button>`; }).join('') : `<p class="vacio">${vacio}</p>`;
@@ -390,7 +390,7 @@ async function detallePedidoDeposito(id, editando=false){
   c.innerHTML = `<div class="panel remito">
     <div class="acciones sup">${acciones}</div>
     <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
-      <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
+      <div class="num-remito">Presupuesto<b>${fmtRemito(p.numero_remito)}</b></div></div>
     <p><b>Cliente:</b> <span style="font-size:18px;text-transform:uppercase;font-weight:700">${esc(p.cliente)}</span><br>
        <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
        <b>Modalidad:</b> ${MODAL[p.modalidad]}<br>
@@ -554,7 +554,7 @@ async function detallePedidoDeposito(id, editando=false){
       if(confirm('¿Confirmás que el pedido fue ' + (p.modalidad==='despacho' ? 'despachado' : 'entregado') + '?')) cambiar({estado:'entregado'});
       return;
     }
-    aviso.innerHTML = `<div class="enargas-box"><b>Este remito tiene números de serie.</b><br>¿Se transfirieron en el ENARGAS?
+    aviso.innerHTML = `<div class="enargas-box"><b>Este presupuesto tiene números de serie.</b><br>¿Se transfirieron en el ENARGAS?
       <div class="acciones" style="margin-top:10px">
         <button class="btn chico" id="eng-si" style="background:var(--ok)">Sí, se transfirieron</button>
         <button class="btn chico sec" id="eng-no">No, todavía no</button>
@@ -577,7 +577,7 @@ function vistaSeries(){
   const c = document.getElementById('contenido');
   c.innerHTML = `<div class="panel">
     <div class="barra"><h2>Números de serie</h2></div>
-    <p class="vacio" style="padding-top:0">Todos los números de serie cargados, con el cliente y el remito al que salió cada uno.</p>
+    <p class="vacio" style="padding-top:0">Todos los números de serie cargados, con el cliente y el presupuesto al que salió cada uno.</p>
     <label for="b-serie">Buscar n.º de serie</label>
     <input id="b-serie" value="${esc(busquedaSerie)}" placeholder="Escribí o escaneá el número" autocomplete="off">
     <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div></div>`;
@@ -597,7 +597,7 @@ async function cargarSeries(){
     <button class="fila item item-serie" data-id="${s.pedidos.id}">
       <div class="dato"><b class="serie-num">${esc(s.numero_serie)}</b><small>${esc(s.pedido_items ? s.pedido_items.producto : '')}</small></div>
       <div class="dato"><b style="text-transform:uppercase">${esc(s.pedidos.cliente)}</b>
-        <small>Remito ${fmtRemito(s.pedidos.numero_remito)} · ${s.pedidos.fecha_entregado ? 'Entregado ' + fmtFecha(s.pedidos.fecha_entregado) : ESTADOS[s.pedidos.estado]}</small></div>
+        <small>Presupuesto ${fmtRemito(s.pedidos.numero_remito)} · ${s.pedidos.fecha_entregado ? 'Entregado ' + fmtFecha(s.pedidos.fecha_entregado) : ESTADOS[s.pedidos.estado]}</small></div>
     </button>`).join('') : '<p class="vacio">No se encontraron números de serie.</p>';
   res.querySelectorAll('.item-serie').forEach(b => b.onclick = () => detallePedido(b.dataset.id, vistaSeries));
 }
@@ -614,7 +614,7 @@ async function vistaProductos(){
   const c = document.getElementById('contenido');
   c.innerHTML = `<div class="panel">
     <div class="barra"><h2>Productos</h2></div>
-    <p class="vacio" style="padding-top:0">Esta lista es la que se usa al crear pedidos, así el producto siempre sale escrito igual en el remito.</p>
+    <p class="vacio" style="padding-top:0">Esta lista es la que se usa al crear pedidos, así el producto siempre sale escrito igual en el presupuesto.</p>
     <form id="fprod" class="fila" style="border:0;padding-top:0;align-items:flex-end">
       <div class="dato"><label for="p-nombre" style="margin-top:0">Nuevo producto</label>
         <input id="p-nombre" placeholder="Ej: CNDUAL" required autocomplete="off"></div>
@@ -665,7 +665,7 @@ async function listarProductos(recargar){
   res.querySelectorAll('.p-act').forEach(x => x.onclick = () => actualizar(x.dataset.id, {activo: x.dataset.activo !== 'true'}));
   res.querySelectorAll('.p-ren').forEach(x => x.onclick = () => {
     const actual = todosProductos.find(p => String(p.id) === x.dataset.id);
-    const nuevo = prompt('Nuevo nombre del producto.\n(Los remitos ya hechos no cambian.)', actual.nombre);
+    const nuevo = prompt('Nuevo nombre del producto.\n(Los presupuestos ya hechos no cambian.)', actual.nombre);
     if(nuevo && nuevo.trim()) actualizar(x.dataset.id, {nombre: nuevo.trim().replace(/\s+/g,' ').toUpperCase()});
   });
 }
@@ -852,7 +852,7 @@ async function cargarResultadosVentas(){
             <div class="card-pedido-meta">
               <span>📅 Entrega: ${fmtFecha(p.fecha_entrega)}</span>
               <span>🚚 ${MODAL[p.modalidad]}</span>
-              <span class="remito-chico">Remito ${fmtRemito(p.numero_remito)}</span>
+              <span class="remito-chico">Presupuesto ${fmtRemito(p.numero_remito)}</span>
             </div>
           </div>
           <div class="acciones-card">
@@ -887,7 +887,7 @@ async function detallePedido(id, volver){
       <button class="btn chico" id="imprimir">Imprimir / guardar PDF</button>
       ${puedeAnular ? '<button class="btn chico peligro" id="anular">Anular pedido</button>' : ''}</div>
     <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
-      <div class="num-remito">Remito<b>${fmtRemito(p.numero_remito)}</b></div></div>
+      <div class="num-remito">Presupuesto<b>${fmtRemito(p.numero_remito)}</b></div></div>
     <p><b>Cliente:</b> ${esc(p.cliente)}<br>
        <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
        <b>Entrega:</b> ${MODAL[p.modalidad]}<br>
@@ -902,7 +902,7 @@ async function detallePedido(id, volver){
   document.getElementById('imprimir').onclick = () => window.print();
   const a = document.getElementById('anular');
   if(a) a.onclick = async () => {
-    if(!confirm(`¿Anular el remito ${fmtRemito(p.numero_remito)}? No se puede deshacer.`)) return;
+    if(!confirm(`¿Anular el presupuesto ${fmtRemito(p.numero_remito)}? No se puede deshacer.`)) return;
     const {error} = await sb.from('pedidos').update({estado:'anulado'}).eq('id', p.id);
     if(error) alert('No se pudo anular: ' + error.message); else detallePedido(p.id, volver);
   };

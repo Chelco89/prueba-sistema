@@ -1300,6 +1300,21 @@ async function vistaUsuarios(){
         <option value="true" ${u.activo?'selected':''}>Activo</option>
         <option value="false" ${!u.activo?'selected':''}>Desactivado</option>
       </select>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <input
+          type="email"
+          data-email-id="${u.id}"
+          placeholder="Nuevo correo electrónico"
+          aria-label="Nuevo correo de ${esc(u.nombre)}"
+        >
+        <button
+          type="button"
+          data-cambiar-email="${u.id}"
+          ${u.id===perfil.id?'disabled':''}
+        >
+          Cambiar email
+        </button>
+      </div>
     </div>`).join('') || '<p class="vacio">Todavía no hay usuarios.</p>';
 lista.querySelectorAll('select').forEach(s => s.onchange = async () => {
   const id = s.dataset.id;
@@ -1331,6 +1346,76 @@ lista.querySelectorAll('select').forEach(s => s.onchange = async () => {
   }
 
   await vistaUsuarios();
+});
+lista.querySelectorAll('[data-cambiar-email]').forEach(b => {
+  b.onclick = async () => {
+    const userId = b.dataset.cambiarEmail;
+    const input = lista.querySelector(
+      `[data-email-id="${userId}"]`
+    );
+    const newEmail = input?.value.trim().toLowerCase();
+
+    if (!newEmail) {
+      alert('Escribí el nuevo correo electrónico.');
+      return;
+    }
+
+    if (!confirm(
+      'Vas a cambiar el correo a ' + newEmail +
+      '. El cambio se aplicará sin pedir confirmación al correo nuevo. ¿Continuar?'
+    )) {
+      return;
+    }
+
+    b.disabled = true;
+
+    try {
+      const { data, error } = await sb.functions.invoke(
+        'cambiar-email-usuario',
+        {
+          body: {
+            userId: userId,
+            newEmail: newEmail
+          }
+        }
+      );
+
+      if (error) {
+        let mensaje = error.message;
+
+        if (error.context &&
+            typeof error.context.json === 'function') {
+          try {
+            const detalle = await error.context.json();
+            if (detalle && detalle.error) {
+              mensaje = detalle.error;
+            }
+          } catch (_) {}
+        }
+
+        alert('No se pudo cambiar el correo: ' + mensaje);
+        return;
+      }
+
+      if (!data || data.ok !== true) {
+        alert(
+          data?.error ||
+          'No se pudo confirmar el cambio del correo.'
+        );
+        return;
+      }
+
+      alert('Correo actualizado correctamente: ' + data.email);
+      await vistaUsuarios();
+
+    } catch (error) {
+      alert(
+        'Error al conectar con Supabase: ' + error.message
+      );
+    } finally {
+      b.disabled = false;
+    }
+  };
 });
 }
 

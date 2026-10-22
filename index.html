@@ -666,15 +666,40 @@ async function detallePedidoDeposito(id, editando=false){
     vistaDeposito();
   };
 
-  const listo = document.getElementById('marcar-listo');
-  if(listo) listo.onclick = () => {
-    const sinPrep = items.filter(i => !completo(i)), faltan = items.filter(i => faltaSerie(i) > 0);
-    let m = '';
-    if(sinPrep.length) m += 'Sin preparar completo: ' + sinPrep.map(i => i.producto).join(', ') + '.\n';
-    if(faltan.length) m += 'Faltan números de serie de: ' + faltan.map(i => i.producto).join(', ') + '.\n';
-    if(m && !confirm(m + '¿Marcar como listo igual?')) return;
-    cambiar({estado:'listo'});
-  };
+ const listo = document.getElementById('marcar-listo');
+
+if (listo) listo.onclick = () => {
+  const sinPrep = items.filter(i => !completo(i));
+  const faltan = items.filter(i => faltaSerie(i) > 0);
+
+  let m = '';
+
+  if (sinPrep.length) {
+    m += 'Sin preparar completo: ' +
+      sinPrep.map(i => i.producto).join(', ') + '.\n';
+  }
+
+  if (faltan.length) {
+    m += 'Faltan números de serie de: ' +
+      faltan.map(i => i.producto).join(', ') + '.\n';
+  }
+
+  if (m && !confirm(m + '¿Marcar como listo igual?')) {
+    return;
+  }
+
+  const nota = prompt(
+    'Nota de Depósito (por ejemplo: 3 bultos):',
+    ''
+  );
+
+  if (nota === null) return;
+
+  cambiar({
+    estado: 'listo',
+    nota_deposito: nota.trim()
+  });
+};
 
   const entregar = document.getElementById('marcar-entregado');
   if(entregar) entregar.onclick = () => {
@@ -1270,7 +1295,8 @@ async function detallePedido(id, volver){
        ${p.fecha_entregado ? `<br><b>Entregado:</b> ${fmtFechaHora(p.fecha_entregado)}` : ''}</p>
     <table><thead><tr><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
     ${p.comentarios ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>` : ''}
-    ${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}</p>` : ''}
+${p.nota_deposito ? `<p><b>Observaciones de entrega:</b> ${esc(p.nota_deposito)}</p>` : ''}
+${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}</p>` : ''}
   </div>`;
   document.getElementById('volver').onclick = volver;
   document.getElementById('imprimir').onclick = () => window.print();

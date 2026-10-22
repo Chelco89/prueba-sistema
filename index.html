@@ -187,7 +187,13 @@ async function activarNotificaciones() {
   }
 }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ROLES = {admin:'Administrador', ventas:'Ventas', deposito:'Depósito', pendiente:'Sin asignar'};
+const ROLES = {
+  admin: 'Administrador',
+  supervisor: 'Supervisor',
+  ventas: 'Ventas',
+  deposito: 'Depósito',
+  pendiente: 'Sin asignar'
+};
 let perfil = null, vista = null;
 let filtros = {numero:'', cliente:'', estado:'', listo:'', entrega:''};
 /* ---------- ENTRADA ---------- */
@@ -218,7 +224,12 @@ function pantallaLogin(modo='entrar', aviso=null){
       r = await sb.auth.signUp({email, password, options:{data:{
         nombre: document.getElementById('nombre').value.trim(),
         puesto: document.getElementById('puesto').value}}});
-      if(!r.error && !r.data.session) return pantallaLogin('entrar',{tipo:'ok',texto:'Usuario creado. Revisá tu correo para confirmar la cuenta y después entrá.'});
+      if(!r.error && !r.data.session) {
+  return pantallaLogin('entrar',{
+    tipo:'ok',
+    texto:'Registro recibido. Si te llegó el correo de confirmación, confirmalo primero. Después, tu cuenta quedará pendiente de aprobación del administrador antes de poder ingresar.'
+  });
+}
     } else {
       r = await sb.auth.signInWithPassword({email, password});
     }
@@ -226,12 +237,68 @@ function pantallaLogin(modo='entrar', aviso=null){
   };
 }
 function traducir(m){
-  if(/Invalid login/i.test(m)) return 'Correo o contraseña incorrectos.';
-  if(/already registered/i.test(m)) return 'Ese correo ya tiene un usuario creado.';
-  if(/Email not confirmed/i.test(m)) return 'Primero confirmá tu correo con el mensaje que te llegó.';
+  if(/Invalid login/i.test(m)) {
+    return 'No se pudo iniciar sesión. Revisá el correo y la contraseña. Si acabás de registrarte, confirmá primero tu correo.';
+  }
+  if(/already registered/i.test(m)) {
+    return 'Ese correo ya tiene un usuario creado. Probá iniciar sesión.';
+  }
+  if(/Email not confirmed/i.test(m)) {
+    return 'Primero confirmá tu correo con el mensaje que te llegó.';
+  }
   return m;
 }
 /* ---------- SISTEMA ---------- */
+function pantallaEspera(){
+  document.body.innerHTML = `
+    <main style="
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      box-sizing:border-box;
+      background:#f4f7fb;
+      font-family:Arial,sans-serif;
+      color:#12243a;
+    ">
+      <section style="
+        width:100%;
+        max-width:420px;
+        padding:32px 24px;
+        box-sizing:border-box;
+        background:white;
+        border-radius:16px;
+        text-align:center;
+        box-shadow:0 8px 30px rgba(0,0,0,.08);
+      ">
+        <h2 style="margin-top:0">Distribuidora SGV</h2>
+        <h3>Cuenta pendiente de aprobación</h3>
+        <p>
+          Tu registro fue recibido. El administrador debe activar
+          tu cuenta y asignarte un rol antes de que puedas ingresar.
+        </p>
+        <button id="btnCerrarSesion" style="
+          margin-top:16px;
+          padding:12px 20px;
+          border:0;
+          border-radius:8px;
+          background:#1565B8;
+          color:white;
+          cursor:pointer;
+          font-size:16px;
+        ">
+          Cerrar sesión
+        </button>
+      </section>
+    </main>
+  `;
+
+  document.getElementById('btnCerrarSesion').onclick = async () => {
+    await sb.auth.signOut();
+    location.reload();
+  };
+}
 async function cargarPerfil(){
   const {data:{user}} = await sb.auth.getUser();
   const {data,error} = await sb.from('profiles').select('*').eq('id', user.id).single();
@@ -274,17 +341,17 @@ function conectarSalir(){
 function armarSistema(){
   const tabs = [];
 
-  if(['ventas','admin'].includes(perfil.rol)) {
+  if(['ventas','admin','supervisor'].includes(perfil.rol)) {
     tabs.push(['ventas','Ventas'], ['productos','Productos']);
   }
 
-  if(['deposito','admin'].includes(perfil.rol)) {
+  if(['deposito','admin','supervisor'].includes(perfil.rol)) {
     tabs.push(['deposito','Depósito']);
   }
 
   tabs.push(['series','N.º de serie']);
 
-  if(['ventas','deposito','admin'].includes(perfil.rol)) {
+  if(['ventas','deposito','admin','supervisor'].includes(perfil.rol)) {
     tabs.push(['stock','Stock']);
   }
 
@@ -1213,6 +1280,9 @@ async function detallePedido(id, volver){
 
 /* ---------- ADMIN: USUARIOS (funcional) ---------- */
 async function vistaUsuarios(){
+  if (perfil?.rol !== 'admin') {
+    return alert('No tenés permiso para administrar usuarios.');
+  }
   const cont = document.getElementById('contenido');
   cont.innerHTML = `<div class="panel"><h2>Usuarios</h2><div id="lista" class="vacio">Cargando…</div></div>`;
   const {data,error} = await sb.from('profiles').select('*').order('creado_en',{ascending:false});
@@ -1231,12 +1301,37 @@ async function vistaUsuarios(){
         <option value="false" ${!u.activo?'selected':''}>Desactivado</option>
       </select>
     </div>`).join('') || '<p class="vacio">Todavía no hay usuarios.</p>';
-  lista.querySelectorAll('select').forEach(s => s.onchange = async () => {
-    const valor = s.dataset.campo === 'activo' ? s.value === 'true' : s.value;
-    const {error} = await sb.from('profiles').update({[s.dataset.campo]: valor}).eq('id', s.dataset.id);
-    if(error) alert('No se pudo guardar: ' + error.message);
-    vistaUsuarios();
-  });
+lista.querySelectorAll('select').forEach(s => s.onchange = async () => {
+  const id = s.dataset.id;
+  const campo = s.dataset.campo;
+  const valor = campo === 'activo' ? s.value === 'true' : s.value;
+
+  const usuario = data.find(u => u.id === id);
+  if (!usuario) return;
+
+  let cambios = { [campo]: valor };
+
+  // Al asignar un rol operativo a un usuario pendiente,
+  // activar su cuenta automáticamente.
+  if (
+    campo === 'rol' &&
+    usuario.rol === 'pendiente' &&
+    ['ventas', 'deposito', 'supervisor', 'admin'].includes(valor)
+  ) {
+    cambios.activo = true;
+  }
+
+  const { error } = await sb
+    .from('profiles')
+    .update(cambios)
+    .eq('id', id);
+
+  if (error) {
+    alert('No se pudo guardar: ' + error.message);
+  }
+
+  await vistaUsuarios();
+});
 }
 
 /* ---------- ARRANQUE ---------- */

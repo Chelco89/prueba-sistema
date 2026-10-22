@@ -1256,8 +1256,12 @@ async function detallePedido(id, volver){
     <div class="no-print acciones sup"><button class="btn sec chico" id="volver">← Volver</button>
       <button class="btn chico" id="imprimir">Imprimir / guardar PDF</button>
       ${puedeAnular ? '<button class="btn chico peligro" id="anular">Anular pedido</button>' : ''}</div>
-    <div class="enc"><img src="logo.png" alt="SGV" class="logo-remito">
-      <div class="num-remito">Presupuesto<b>${fmtRemito(p.numero_remito)}</b></div></div>
+    <div class="enc">
+  <div class="num-remito">
+    Presupuesto
+    <b>${fmtRemito(p.numero_remito)}</b>
+  </div>
+</div>
     <p><b>Cliente:</b> ${esc(p.cliente)}<br>
        <b>Estado:</b> <span class="etiqueta ${p.estado}">${ESTADOS[p.estado]}</span><br>
        <b>Entrega:</b> ${MODAL[p.modalidad]}<br>

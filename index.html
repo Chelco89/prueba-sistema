@@ -1274,12 +1274,14 @@ async function detallePedido(id, volver){
   const {data:p, error} = await sb.from('pedidos').select('*, pedido_items(*, series(*))').eq('id', id).single();
   if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
   const puedeAnular = ['ventas','admin'].includes(perfil.rol) && ['pendiente','listo'].includes(p.estado);
+  const puedeEditarNota = ['deposito','admin','supervisor'].includes(perfil.rol) && p.estado === 'listo';
   const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => `
     <tr><td>${esc(i.producto)}${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s=>esc(s.numero_serie)).join(', ')}</small>` : ''}</td>
     <td class="num">${i.cantidad}</td></tr>`).join('');
   c.innerHTML = `<div class="panel remito">
     <div class="no-print acciones sup"><button class="btn sec chico" id="volver">← Volver</button>
       <button class="btn chico" id="imprimir">Imprimir / guardar PDF</button>
+      ${puedeEditarNota ? '<button class="btn chico" id="editar-nota-deposito">Editar observaciones</button>' : ''}
       ${puedeAnular ? '<button class="btn chico peligro" id="anular">Anular pedido</button>' : ''}</div>
     <div class="enc">
   <div class="num-remito">
@@ -1300,6 +1302,34 @@ ${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${
   </div>`;
   document.getElementById('volver').onclick = volver;
   document.getElementById('imprimir').onclick = () => window.print();
+  const btnEditarNota = document.getElementById('editar-nota-deposito');
+
+  if (btnEditarNota) {
+    btnEditarNota.onclick = async () => {
+      const nota = prompt(
+        'Observaciones de entrega (por ejemplo: 3 bultos):',
+        p.nota_deposito || ''
+      );
+
+      // Si se pulsa Cancelar, no se modifica nada.
+      if (nota === null) return;
+
+      const { error } = await sb
+        .from('pedidos')
+        .update({
+          nota_deposito: nota.trim() || null
+        })
+        .eq('id', p.id);
+
+      if (error) {
+        alert('No se pudieron guardar las observaciones: ' + error.message);
+        return;
+      }
+
+      alert('Observaciones guardadas correctamente.');
+      await detallePedido(p.id, volver);
+    };
+  }
   const a = document.getElementById('anular');
   if(a) a.onclick = async () => {
     if(!confirm(`¿Anular el presupuesto ${fmtRemito(p.numero_remito)}? No se puede deshacer.`)) return;

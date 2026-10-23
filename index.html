@@ -437,10 +437,14 @@ async function detallePedidoDeposito(id, editando=false){
   if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
 
   const items = p.pedido_items.sort((a,b)=>a.id-b.id);
-  const abierto = ['pendiente','listo'].includes(p.estado);   // se puede tocar hasta que pasa a ENTREGADO
-  editando = editando && abierto;
+const abierto = ['pendiente','listo'].includes(p.estado);
+const tieneKits = items.some(i =>
+  i.es_kit === true || i.padre_item_id != null
+);
+editando = editando && abierto && !tieneKits;
   const prep = i => Math.min(Number(i.cantidad_preparada || 0), Number(i.cantidad));
-  const completo = i => prep(i) >= Number(i.cantidad);
+  const completo = i =>
+  i.es_kit === true || prep(i) >= Number(i.cantidad);
   const req = i => i.series_requeridas ?? Math.ceil(i.cantidad);
   const faltaSerie = i => i.lleva_serie ? Math.max(0, req(i) - (i.series || []).length) : 0;
 
@@ -453,9 +457,21 @@ async function detallePedidoDeposito(id, editando=false){
           <button type="button" class="quitar" aria-label="Quitar">✕</button></div>`).join('')}</div>
         <button type="button" class="btn sec chico" id="ed-mas" style="margin-top:10px;width:100%;border-style:dashed">+ Agregar producto</button></td></tr>`
     : items.map(i => {
+            if (i.es_kit === true) {
+        return `<tr>
+          <td style="background:#f4f7fb;padding:12px;border-radius:8px">
+            <b style="font-size:16px">📦 ${esc(i.producto)}</b>
+            <span class="badge-cant">x${i.cantidad}</span>
+            <small style="display:block;margin-top:5px">
+              Componentes del kit — preparalos por separado debajo.
+            </small>
+          </td>
+        </tr>`;
+      }
       const ser = i.series || [], falta = faltaSerie(i);
       const chips = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}${abierto ? `<button type="button" class="del-serie" data-id="${s.id}" title="Quitar" style="background:none;border:0;color:var(--rojo);cursor:pointer;padding:0 0 0 6px">✕</button>` : ''}</span>`).join('') : '<small class="series">Sin números de serie</small>';
-      return `<tr><td>
+      return `<tr><td style="${i.padre_item_id ? 'padding-left:28px;border-left:3px solid var(--blue);' : ''}">
+        ${i.padre_item_id ? '<small style="display:block;color:var(--gris);margin-bottom:4px">↳ COMPONENTE DEL KIT</small>' : ''}
         <b>${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
         ${abierto ? `<label class="check-serie"><input type="checkbox" class="chk-lleva" data-item-id="${i.id}" ${i.lleva_serie ? 'checked' : ''}> Lleva n.º de serie</label>` : (i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : '')}
         ${abierto ? `<div class="item-form" style="align-items:center;margin-top:6px">
@@ -477,7 +493,11 @@ async function detallePedidoDeposito(id, editando=false){
   if(editando){
     acciones += '<button class="btn chico" id="ed-guardar" style="background:var(--ok)">Guardar cambios</button><button class="btn sec chico" id="ed-cancelar">Cancelar edición</button>';
   } else {
-    if(abierto) acciones += '<button class="btn sec chico" id="editar">✏️ Editar pedido</button>';
+    if(abierto && !tieneKits) {
+  acciones += '<button class="btn sec chico" id="editar">✏️ Editar pedido</button>';
+} else if(abierto && tieneKits) {
+  acciones += '<small>Los pedidos con Kits no se pueden editar de forma general.</small>';
+}
     if(p.estado === 'pendiente') acciones += '<button class="btn chico" id="marcar-listo" style="background:var(--ok)">Marcar pedido como LISTO</button>';
     if(p.estado === 'listo') acciones += `<button class="btn chico" id="marcar-entregado" style="background:var(--ok)">${p.modalidad==='despacho' ? 'Marcar como DESPACHADO' : 'Marcar como ENTREGADO'}</button>`;
     if(p.estado === 'entregado' && haySeries && p.enargas_transferido !== true) acciones += '<button class="btn chico" id="marcar-enargas">Marcar series transferidas en ENARGAS</button>';
@@ -772,6 +792,10 @@ async function vistaProductos(){
       <div class="dato"><label for="p-nombre" style="margin-top:0">Nuevo producto</label>
         <input id="p-nombre" placeholder="Ej: CNDUAL" required autocomplete="off"></div>
       <label class="check-serie" style="margin:0 0 10px"><input type="checkbox" id="p-serie"> Lleva n.º de serie</label>
+      <label class="check-serie" style="margin:0 0 10px">
+  <input type="checkbox" id="p-kit">
+  Es Kit/Combo
+</label>
       <button class="btn chico" type="submit" style="margin-bottom:6px">Agregar a la lista</button>
     </form>
     <div id="aviso-prod"></div>
@@ -783,7 +807,13 @@ async function vistaProductos(){
     const aviso = document.getElementById('aviso-prod');
     const nombre = document.getElementById('p-nombre').value.trim().replace(/\s+/g,' ').toUpperCase();
     if(!nombre) return;
-    const {error} = await sb.from('productos').insert({nombre, lleva_serie: document.getElementById('p-serie').checked});
+    const esKit = document.getElementById('p-kit').checked;
+
+const {error} = await sb.from('productos').insert({
+  nombre,
+  lleva_serie: esKit ? false : document.getElementById('p-serie').checked,
+  es_kit: esKit
+});
     if(error) return aviso.innerHTML = `<div class="msg err">${error.code==='23505' ? 'Ese producto ya existe en la lista.' : esc(error.message)}</div>`;
     vistaProductos();
   };
@@ -807,6 +837,7 @@ async function listarProductos(recargar){
       <div class="dato"><b>${esc(p.nombre)}</b> ${p.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}${p.activo ? '' : ' <small>(desactivado)</small>'}</div>
       <label class="check-serie"><input type="checkbox" class="p-chk" data-id="${p.id}" ${p.lleva_serie ? 'checked' : ''}> Lleva serie</label>
       <button class="btn chico sec p-ren" data-id="${p.id}">Renombrar</button>
+      ${p.es_kit ? `<button class="btn chico sec p-comp" data-id="${p.id}">Componentes</button>` : ''}
       <button class="btn chico sec p-act" data-id="${p.id}" data-activo="${p.activo}">${p.activo ? 'Desactivar' : 'Reactivar'}</button>
     </div>`).join('') : '<p class="vacio">No hay productos en la lista todavía.</p>';
   const actualizar = async (id, campos) => {
@@ -820,6 +851,174 @@ async function listarProductos(recargar){
     const actual = todosProductos.find(p => String(p.id) === x.dataset.id);
     const nuevo = prompt('Nuevo nombre del producto.\n(Los presupuestos ya hechos no cambian.)', actual.nombre);
     if(nuevo && nuevo.trim()) actualizar(x.dataset.id, {nombre: nuevo.trim().replace(/\s+/g,' ').toUpperCase()});
+  });
+  res.querySelectorAll('.p-comp').forEach(b => b.onclick = async () => {
+    const kitId = Number(b.dataset.id);
+    const kit = todosProductos.find(p => Number(p.id) === kitId);
+    const fila = b.closest('.fila');
+
+    if (!kit || !fila) return;
+
+    const { data: actuales, error } = await sb
+      .from('producto_componentes')
+      .select('componente_producto_id, cantidad')
+      .eq('kit_producto_id', kitId);
+
+    if (error) {
+      alert('No se pudieron cargar los componentes: ' + error.message);
+      return;
+    }
+
+    const disponibles = todosProductos.filter(pr =>
+      !pr.es_kit &&
+      Number(pr.id) !== kitId &&
+      (
+        pr.activo ||
+        actuales.some(c =>
+          Number(c.componente_producto_id) === Number(pr.id)
+        )
+      )
+    );
+
+    if (!disponibles.length) {
+      alert('Primero cargá productos normales en la lista de Productos.');
+      return;
+    }
+
+    fila.querySelector('.editor-kit')?.remove();
+
+    const editor = document.createElement('div');
+    editor.className = 'editor-kit';
+    editor.style.cssText =
+      'flex-basis:100%;width:100%;padding:12px;background:#f4f7fb;border-radius:10px;margin-top:10px';
+
+    editor.innerHTML = `
+      <h3 style="margin-top:0">Componentes de ${esc(kit.nombre)}</h3>
+      <p>Elegí cada producto y cuántas unidades contiene un kit.</p>
+      <div class="kit-rows"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button type="button" class="btn sec chico" id="kit-agregar">+ Agregar componente</button>
+        <button type="button" class="btn chico" id="kit-guardar">Guardar composición</button>
+        <button type="button" class="btn sec chico" id="kit-cancelar">Cancelar</button>
+      </div>
+    `;
+
+    fila.appendChild(editor);
+
+    const rows = editor.querySelector('.kit-rows');
+
+    const agregarFila = (componenteId = '', cantidad = 1) => {
+      const row = document.createElement('div');
+      row.className = 'kit-row';
+      row.style.cssText =
+        'display:grid;grid-template-columns:minmax(0,1fr) 90px 36px;gap:8px;margin:8px 0';
+
+      row.innerHTML = `
+        <select class="kit-producto" aria-label="Producto componente" required>
+          <option value="">Elegir producto</option>
+          ${disponibles.map(pr => `
+            <option value="${pr.id}"
+              ${Number(pr.id) === Number(componenteId) ? 'selected' : ''}>
+              ${esc(pr.nombre)}${pr.activo ? '' : ' (desactivado)'}
+            </option>
+          `).join('')}
+        </select>
+        <input class="kit-cantidad" type="number" min="1" step="1"
+          value="${cantidad}" aria-label="Cantidad por kit" required>
+        <button type="button" class="btn sec chico kit-quitar"
+          aria-label="Quitar componente">✕</button>
+      `;
+
+      rows.appendChild(row);
+      row.querySelector('.kit-quitar').onclick = () => row.remove();
+    };
+
+    if (actuales.length) {
+      actuales.forEach(c =>
+        agregarFila(c.componente_producto_id, c.cantidad)
+      );
+    } else {
+      agregarFila();
+    }
+
+    editor.querySelector('#kit-agregar').onclick = () => agregarFila();
+
+    editor.querySelector('#kit-cancelar').onclick = () => editor.remove();
+
+    editor.querySelector('#kit-guardar').onclick = async () => {
+      const valores = [...rows.querySelectorAll('.kit-row')].map(row => ({
+        componente_producto_id: Number(
+          row.querySelector('.kit-producto').value
+        ),
+        cantidad: Number(row.querySelector('.kit-cantidad').value)
+      }));
+
+      if (
+        !valores.length ||
+        valores.some(v =>
+          !v.componente_producto_id ||
+          !Number.isInteger(v.cantidad) ||
+          v.cantidad <= 0
+        )
+      ) {
+        alert('Elegí un producto y una cantidad entera positiva en cada fila.');
+        return;
+      }
+
+      const ids = valores.map(v => v.componente_producto_id);
+
+      if (new Set(ids).size !== ids.length) {
+        alert('No repitas el mismo producto. Sumá las cantidades en una sola fila.');
+        return;
+      }
+
+      const botonGuardar = editor.querySelector('#kit-guardar');
+      botonGuardar.disabled = true;
+
+      try {
+        const composicion = valores.map(v => ({
+          kit_producto_id: kitId,
+          componente_producto_id: v.componente_producto_id,
+          cantidad: v.cantidad
+        }));
+
+        const { error: errorGuardar } = await sb
+          .from('producto_componentes')
+          .upsert(composicion, {
+            onConflict: 'kit_producto_id,componente_producto_id'
+          });
+
+        if (errorGuardar) {
+          alert('No se pudo guardar la composición: ' + errorGuardar.message);
+          return;
+        }
+
+        const conservar = new Set(ids.map(String));
+
+        for (const antiguo of actuales) {
+          if (conservar.has(String(antiguo.componente_producto_id))) {
+            continue;
+          }
+
+          const { error: errorBorrar } = await sb
+            .from('producto_componentes')
+            .delete()
+            .eq('kit_producto_id', kitId)
+            .eq('componente_producto_id', antiguo.componente_producto_id);
+
+          if (errorBorrar) {
+            alert('La composición se guardó, pero no se pudo quitar un componente anterior: ' + errorBorrar.message);
+            return;
+          }
+        }
+
+        alert('Composición del kit guardada correctamente.');
+        await listarProductos(true);
+
+      } finally {
+        botonGuardar.disabled = false;
+      }
+    };
   });
 }
 /* ---------- STOCK ---------- */
@@ -1141,7 +1340,59 @@ async function vistaVentas(){
     const crudas = [...items.children].map(d => ({texto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)})).filter(l => l.texto);
     const noExiste = crudas.filter(l => !buscarProd(l.texto));
     if(noExiste.length) return aviso.innerHTML = `<div class="msg err">No está en la lista de productos: ${noExiste.map(l => esc(l.texto)).join(', ')}. Elegí uno de la lista o crealo en la solapa Productos.</div>`;
-    const lineas = crudas.map(l => { const pr = buscarProd(l.texto); return {producto: pr.nombre, cantidad: l.cantidad, lleva_serie: pr.lleva_serie}; });
+    const lineas = [];
+
+for (const l of crudas) {
+  const pr = buscarProd(l.texto);
+  const esKit = pr.es_kit === true;
+
+  const linea = {
+    producto: pr.nombre,
+    cantidad: l.cantidad,
+    lleva_serie: esKit ? false : pr.lleva_serie,
+    es_kit: esKit,
+    componentes: []
+  };
+
+  if (esKit) {
+    const { data: componentes, error: errorComponentes } = await sb
+      .from('producto_componentes')
+      .select('componente_producto_id, cantidad')
+      .eq('kit_producto_id', pr.id);
+
+    if (errorComponentes) {
+      aviso.innerHTML =
+        `<div class="msg err">${esc(errorComponentes.message)}</div>`;
+      return;
+    }
+
+    if (!componentes || !componentes.length) {
+      aviso.innerHTML =
+        `<div class="msg err">El Kit ${esc(pr.nombre)} todavía no tiene componentes configurados.</div>`;
+      return;
+    }
+
+    for (const comp of componentes) {
+      const producto = productosLista.find(
+        x => Number(x.id) === Number(comp.componente_producto_id)
+      );
+
+      if (!producto) {
+        aviso.innerHTML =
+          `<div class="msg err">Un componente del Kit ${esc(pr.nombre)} no está disponible en la lista de productos activos.</div>`;
+        return;
+      }
+
+      linea.componentes.push({
+        producto: producto.nombre,
+        cantidad_por_kit: Number(comp.cantidad),
+        lleva_serie: producto.lleva_serie
+      });
+    }
+  }
+
+  lineas.push(linea);
+}
   if(!lineas.length || lineas.some(l =>
   !Number.isInteger(l.cantidad) || l.cantidad <= 0
 )){
@@ -1158,12 +1409,57 @@ async function vistaVentas(){
       creado_por: perfil.id
     }).select().single();
     if(error){ btn.disabled = false; return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; }
-    const {error:e2} = await sb.from('pedido_items').insert(lineas.map(l => ({...l, pedido_id: p.id})));
-    if(e2){
-      await sb.from('pedidos').delete().eq('id', p.id);
-      btn.disabled = false;
-      return aviso.innerHTML = `<div class="msg err">No se pudo guardar los productos: ${esc(e2.message)}</div>`;
+    let errorItems = null;
+
+for (const linea of lineas) {
+  // Guardar la línea principal del producto o Kit.
+  const { data: itemPadre, error: errorPadre } = await sb
+    .from('pedido_items')
+    .insert({
+      pedido_id: p.id,
+      producto: linea.producto,
+      cantidad: linea.cantidad,
+      lleva_serie: linea.lleva_serie,
+      es_kit: linea.es_kit === true
+    })
+    .select('id')
+    .single();
+
+  if (errorPadre) {
+    errorItems = errorPadre;
+    break;
+  }
+
+  // Si es un Kit, guardar sus componentes como líneas internas.
+  if (linea.es_kit && linea.componentes?.length) {
+    const componentesPedido = linea.componentes.map(comp => ({
+      pedido_id: p.id,
+      producto: comp.producto,
+      cantidad: linea.cantidad * comp.cantidad_por_kit,
+      lleva_serie: comp.lleva_serie,
+      es_kit: false,
+      padre_item_id: itemPadre.id,
+      cantidad_por_kit: comp.cantidad_por_kit
+    }));
+
+    const { error: errorComponentesPedido } = await sb
+      .from('pedido_items')
+      .insert(componentesPedido);
+
+    if (errorComponentesPedido) {
+      errorItems = errorComponentesPedido;
+      break;
     }
+  }
+}
+
+if (errorItems) {
+  await sb.from('pedidos').delete().eq('id', p.id);
+  btn.disabled = false;
+
+  return aviso.innerHTML =
+    `<div class="msg err">No se pudo guardar el pedido completo: ${esc(errorItems.message)}. No se conservó el pedido incompleto.</div>`;
+}
     const { error: errorNotificacion } = await sb.functions.invoke(
   'enviar-notificaciones',
   {
@@ -1275,7 +1571,10 @@ async function detallePedido(id, volver){
   if(error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
   const puedeAnular = ['ventas','admin'].includes(perfil.rol) && ['pendiente','listo'].includes(p.estado);
   const puedeEditarNota = ['deposito','admin','supervisor'].includes(perfil.rol) && p.estado === 'listo';
-  const filas = p.pedido_items.sort((a,b)=>a.id-b.id).map(i => `
+  const filas = p.pedido_items
+  .filter(i => !i.padre_item_id)
+  .sort((a,b) => a.id-b.id)
+  .map(i => `
     <tr><td>${esc(i.producto)}${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s=>esc(s.numero_serie)).join(', ')}</small>` : ''}</td>
     <td class="num">${i.cantidad}</td></tr>`).join('');
   c.innerHTML = `<div class="panel remito">

@@ -796,27 +796,230 @@ async function vistaProductos(){
   <input type="checkbox" id="p-kit">
   Es Kit/Combo
 </label>
+<div id="p-kit-editor" style="display:none;flex-basis:100%;width:100%;padding:12px;border:1px solid #d5deea;border-radius:10px;margin:8px 0">
+  <b>Componentes del Kit/Combo</b>
+  <p style="font-size:13px;color:var(--gris)">
+    Elegí los productos y la cantidad que contiene cada kit.
+  </p>
+
+  <div id="p-kit-rows"></div>
+
+  <button
+    type="button"
+    class="btn sec chico"
+    id="p-kit-agregar"
+    style="margin-top:8px"
+  >
+    + Agregar componente
+  </button>
+</div>
       <button class="btn chico" type="submit" style="margin-bottom:6px">Agregar a la lista</button>
     </form>
     <div id="aviso-prod"></div>
     <label for="p-buscar">Buscar en la lista</label>
     <input id="p-buscar" placeholder="Escribí para filtrar" autocomplete="off">
     <div id="res-prod" class="vacio" style="margin-top:10px">Cargando…</div></div>`;
-  document.getElementById('fprod').onsubmit = async e => {
-    e.preventDefault();
-    const aviso = document.getElementById('aviso-prod');
-    const nombre = document.getElementById('p-nombre').value.trim().replace(/\s+/g,' ').toUpperCase();
-    if(!nombre) return;
-    const esKit = document.getElementById('p-kit').checked;
+  const chkKit = document.getElementById('p-kit');
+const kitEditor = document.getElementById('p-kit-editor');
+const kitRows = document.getElementById('p-kit-rows');
+const btnAgregarKit = document.getElementById('p-kit-agregar');
+const chkSerie = document.getElementById('p-serie');
 
-const {error} = await sb.from('productos').insert({
-  nombre,
-  lleva_serie: esKit ? false : document.getElementById('p-serie').checked,
-  es_kit: esKit
-});
-    if(error) return aviso.innerHTML = `<div class="msg err">${error.code==='23505' ? 'Ese producto ya existe en la lista.' : esc(error.message)}</div>`;
-    vistaProductos();
-  };
+let productosComponentesKit = [];
+
+async function cargarProductosComponentesKit() {
+  const { data, error } = await sb
+    .from('productos')
+    .select('id, nombre, activo, es_kit')
+    .eq('activo', true)
+    .eq('es_kit', false)
+    .order('nombre');
+
+  if (error) {
+    document.getElementById('aviso-prod').innerHTML =
+      `<div class="msg err">${esc(error.message)}</div>`;
+    return false;
+  }
+
+  productosComponentesKit = data || [];
+  return true;
+}
+
+function agregarFilaComponenteKit() {
+  if (!productosComponentesKit.length) {
+    alert('Primero necesitás crear productos normales para armar el kit.');
+    return;
+  }
+
+  const fila = document.createElement('div');
+  fila.style.cssText =
+    'display:grid;grid-template-columns:minmax(0,1fr) 90px 36px;gap:8px;margin:8px 0';
+
+  fila.innerHTML = `
+    <select class="kit-nuevo-producto" required aria-label="Producto componente">
+      <option value="">Elegir producto</option>
+      ${productosComponentesKit.map(pr => `
+        <option value="${pr.id}">${esc(pr.nombre)}</option>
+      `).join('')}
+    </select>
+
+    <input class="kit-nueva-cantidad"
+      type="number" min="1" step="1" value="1"
+      required aria-label="Cantidad por kit">
+
+    <button type="button" class="btn sec chico"
+      aria-label="Quitar componente">✕</button>
+  `;
+
+  fila.querySelector('button').onclick = () => fila.remove();
+  kitRows.appendChild(fila);
+}
+
+chkKit.onchange = async () => {
+  kitEditor.style.display = chkKit.checked ? 'block' : 'none';
+  chkSerie.disabled = chkKit.checked;
+
+  if (!chkKit.checked) {
+    kitRows.innerHTML = '';
+    return;
+  }
+
+  const ok = await cargarProductosComponentesKit();
+  if (!ok) {
+    chkKit.checked = false;
+    kitEditor.style.display = 'none';
+    chkSerie.disabled = false;
+    return;
+  }
+
+  if (!productosComponentesKit.length) {
+    alert('Primero creá al menos un producto normal.');
+    chkKit.checked = false;
+    kitEditor.style.display = 'none';
+    chkSerie.disabled = false;
+    return;
+  }
+
+  if (!kitRows.children.length) {
+    agregarFilaComponenteKit();
+  }
+};
+
+btnAgregarKit.onclick = agregarFilaComponenteKit;
+    
+document.getElementById('fprod').onsubmit = async e => {
+  e.preventDefault();
+
+  const aviso = document.getElementById('aviso-prod');
+  const nombre = document.getElementById('p-nombre')
+    .value.trim().replace(/\s+/g, ' ').toUpperCase();
+
+  const esKit = chkKit.checked;
+  const boton = e.currentTarget.querySelector('[type="submit"]');
+
+  aviso.innerHTML = '';
+
+  if (!nombre) return;
+
+  let componentes = [];
+
+  if (esKit) {
+    const filas = [...kitRows.querySelectorAll('.kit-nuevo-producto')];
+
+    componentes = filas.map(select => {
+      const fila = select.closest('.kit-row') ||
+        select.parentElement;
+
+      return {
+        componente_producto_id: Number(select.value),
+        cantidad: Number(fila.querySelector('.kit-nueva-cantidad').value)
+      };
+    });
+
+    if (
+      !componentes.length ||
+      componentes.some(c =>
+        !c.componente_producto_id ||
+        !Number.isInteger(c.cantidad) ||
+        c.cantidad <= 0 ||
+        !productosComponentesKit.some(
+          p => Number(p.id) === c.componente_producto_id
+        )
+      )
+    ) {
+      aviso.innerHTML =
+        '<div class="msg err">Elegí cada componente y una cantidad entera mayor que cero.</div>';
+      return;
+    }
+
+    const ids = componentes.map(c => c.componente_producto_id);
+
+    if (new Set(ids).size !== ids.length) {
+      aviso.innerHTML =
+        '<div class="msg err">No repitas un producto en el kit. Sumá sus cantidades en una sola fila.</div>';
+      return;
+    }
+  }
+
+  boton.disabled = true;
+
+  try {
+    const { data: nuevo, error } = await sb
+      .from('productos')
+      .insert({
+        nombre,
+        lleva_serie: esKit
+          ? false
+          : document.getElementById('p-serie').checked,
+        es_kit: esKit
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      aviso.innerHTML =
+        `<div class="msg err">${
+          error.code === '23505'
+            ? 'Ese producto ya existe en la lista.'
+            : esc(error.message)
+        }</div>`;
+      return;
+    }
+
+    if (esKit) {
+      const filasComponentes = componentes.map(comp => ({
+        kit_producto_id: nuevo.id,
+        componente_producto_id: comp.componente_producto_id,
+        cantidad: comp.cantidad
+      }));
+
+      const { error: errorComponentes } = await sb
+        .from('producto_componentes')
+        .insert(filasComponentes);
+
+      if (errorComponentes) {
+        const { error: errorBorrado } = await sb
+          .from('productos')
+          .delete()
+          .eq('id', nuevo.id);
+
+        aviso.innerHTML = errorBorrado
+          ? `<div class="msg err">No se guardó la composición: ${esc(errorComponentes.message)}. Tampoco se pudo eliminar el Kit creado: ${esc(errorBorrado.message)}. Revisá Productos antes de volver a intentarlo.</div>`
+          : `<div class="msg err">No se pudo guardar la composición. Se intentó cancelar la creación del Kit. Detalle: ${esc(errorComponentes.message)}</div>`;
+
+        return;
+      }
+    }
+
+    await vistaProductos();
+
+  } catch (error) {
+    aviso.innerHTML =
+      `<div class="msg err">${esc(error.message || 'Ocurrió un error al guardar.')}</div>`;
+  } finally {
+    boton.disabled = false;
+  }
+};
   document.getElementById('p-buscar').oninput = () => listarProductos();
   listarProductos(true);
 }

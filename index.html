@@ -342,8 +342,13 @@ function armarSistema(){
   const tabs = [];
 
   if(['ventas','admin','supervisor'].includes(perfil.rol)) {
-    tabs.push(['ventas','Ventas'], ['productos','Productos']);
-  }
+  tabs.push(
+    ['ventas','Ventas'],
+    ['productos','Productos'],
+    ['listas_precios','Listas de Precios'],
+    ['clientes','Clientes']
+  );
+}
 
   if(['deposito','admin','supervisor'].includes(perfil.rol)) {
     tabs.push(['deposito','Depósito']);
@@ -372,15 +377,563 @@ function armarSistema(){
     armarSistema();
   });
 
-  ({
-    ventas:vistaVentas,
-    deposito:vistaDeposito,
-    series:vistaSeries,
-    productos:vistaProductos,
-    stock:vistaStock,
-    usuarios:vistaUsuarios
-  })[vista]();
+ ({
+  ventas: vistaVentas,
+  deposito: vistaDeposito,
+  series: vistaSeries,
+  productos: vistaProductos,
+  stock: vistaStock,
+  usuarios: vistaUsuarios,
+  listas_precios: vistaListasPrecios,
+  clientes: vistaClientes
+})[vista]();
 }
+
+/* ---------- LISTAS DE PRECIOS ---------- */
+async function vistaListasPrecios() {
+  const c = document.getElementById('contenido');
+
+  c.innerHTML = `
+    <div class="panel">
+      <div class="barra">
+        <h2>Listas de Precios</h2>
+      </div>
+
+      <p class="vacio" style="padding-top:0">
+        Creá listas para distintos clientes. La lista General se conserva
+        como predeterminada.
+      </p>
+
+      <form id="form-lista-precio" class="fila"
+        style="border:0;padding-top:0;align-items:flex-end">
+        <div class="dato">
+          <label for="nombre-lista">Nombre de la lista</label>
+          <input id="nombre-lista"
+            placeholder="Ej.: Mayorista, Distribuidores"
+            required maxlength="100">
+        </div>
+        <button class="btn chico" type="submit">
+          Crear lista
+        </button>
+      </form>
+
+      <div id="aviso-listas"></div>
+      <h3>Listas existentes</h3>
+      <div id="res-listas" class="vacio">Cargando...</div>
+    </div>
+  `;
+
+  const form = document.getElementById('form-lista-precio');
+  const aviso = document.getElementById('aviso-listas');
+  const resultado = document.getElementById('res-listas');
+
+  async function cargarListas() {
+    resultado.innerHTML = 'Cargando...';
+
+    const { data, error } = await sb
+      .from('listas_precios')
+      .select('id,nombre,es_general,activo,creado_en')
+      .order('es_general', { ascending: false })
+      .order('nombre');
+
+    if (error) {
+      resultado.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    resultado.className = '';
+
+    resultado.innerHTML = data.length
+      ? data.map(lista => `
+          <div class="fila">
+            <div class="dato">
+              <b>${esc(lista.nombre)}</b>
+              ${lista.es_general
+                ? '<span class="badge-s-u">GENERAL</span>'
+                : ''}
+              <small>${lista.activo ? 'Activa' : 'Inactiva'}</small>
+            </div>
+            <button
+  type="button"
+  class="btn chico lp-precios"
+  data-id="${lista.id}"
+  data-nombre="${esc(lista.nombre)}">
+  Editar precios
+</button>
+            <button
+              type="button"
+              class="btn chico sec lp-toggle"
+              data-id="${lista.id}"
+              data-activo="${lista.activo}"
+              ${lista.es_general ? 'disabled title="La lista General no se puede desactivar"' : ''}
+            >
+              ${lista.activo ? 'Desactivar' : 'Activar'}
+            </button>
+          </div>
+        `).join('')
+      : '<p class="vacio">Todavía no hay listas cargadas.</p>';
+
+    resultado.querySelectorAll('.lp-toggle').forEach(b => {
+  b.onclick = async () => {
+    const nuevoEstado = b.dataset.activo !== 'true';
+    b.disabled = true;
+
+    const { error: errorCambio } = await sb
+      .from('listas_precios')
+      .update({ activo: nuevoEstado })
+      .eq('id', b.dataset.id);
+
+    if (errorCambio) {
+      alert('No se pudo actualizar la lista: ' + errorCambio.message);
+      b.disabled = false;
+      return;
+    }
+
+    await cargarListas();
+  };
+});
+
+resultado.querySelectorAll('.lp-precios').forEach(b => {
+  b.onclick = () => editarPreciosLista(
+    b.dataset.id,
+    b.dataset.nombre
+  );
+});
+}
+
+  form.onsubmit = async e => {
+    e.preventDefault();
+
+    const input = document.getElementById('nombre-lista');
+    const nombre = input.value.trim().replace(/\s+/g, ' ');
+    const boton = form.querySelector('[type="submit"]');
+
+    if (!nombre) return;
+
+    boton.disabled = true;
+    aviso.innerHTML = '';
+
+    try {
+      const { error } = await sb
+        .from('listas_precios')
+        .insert({
+          nombre,
+          es_general: false,
+          activo: true,
+          creado_por: perfil.id
+        });
+
+      if (error) {
+        aviso.innerHTML = `
+          <div class="msg err">
+            ${error.code === '23505'
+              ? 'Ya existe una lista con ese nombre.'
+              : esc(error.message)}
+          </div>`;
+        return;
+      }
+
+      form.reset();
+      aviso.innerHTML =
+        '<div class="msg ok">Lista creada correctamente.</div>';
+
+      await cargarListas();
+
+    } finally {
+      boton.disabled = false;
+    }
+  };
+
+  await cargarListas();
+}
+/* ---------- EDITAR PRECIOS DE UNA LISTA ---------- */
+async function editarPreciosLista(id, nombre) {
+  const c = document.getElementById('contenido');
+
+  c.innerHTML = `
+    <div class="panel">
+      <div class="barra">
+        <h2>Precios: ${esc(nombre)}</h2>
+        <button type="button" class="btn sec chico" id="lp-volver">
+          ← Volver
+        </button>
+      </div>
+
+      <p class="vacio" style="padding-top:0">
+        Cargá el precio de cada producto para esta lista.
+        Los cambios no modificarán los precios de otras listas.
+      </p>
+
+      <div id="lp-precios-aviso"></div>
+      <div id="lp-precios-cargando" class="vacio">
+        Cargando productos...
+      </div>
+
+      <form id="lp-precios-form" hidden>
+        <div id="lp-precios-listado"></div>
+        <button class="btn" type="submit" id="lp-precios-guardar">
+          Guardar precios
+        </button>
+      </form>
+    </div>
+  `;
+
+  document.getElementById('lp-volver').onclick = vistaListasPrecios;
+
+  const aviso = document.getElementById('lp-precios-aviso');
+  const cargando = document.getElementById('lp-precios-cargando');
+  const formulario = document.getElementById('lp-precios-form');
+  const listado = document.getElementById('lp-precios-listado');
+
+  const { data: productos, error: errorProductos } = await sb
+    .from('productos')
+    .select('id,nombre,activo')
+    .eq('activo', true)
+    .order('nombre');
+
+  if (errorProductos) {
+    cargando.textContent = '';
+    aviso.innerHTML =
+      `<div class="msg err">${esc(errorProductos.message)}</div>`;
+    return;
+  }
+
+  const { data: precios, error: errorPrecios } = await sb
+    .from('lista_precios_items')
+    .select('producto_id,precio')
+    .eq('lista_precio_id', Number(id));
+
+  if (errorPrecios) {
+    cargando.textContent = '';
+    aviso.innerHTML =
+      `<div class="msg err">${esc(errorPrecios.message)}</div>`;
+    return;
+  }
+
+  const preciosPorProducto = new Map(
+    (precios || []).map(p => [
+      String(p.producto_id),
+      p.precio
+    ])
+  );
+
+  listado.innerHTML = productos.length
+    ? productos.map(p => {
+        const actual = preciosPorProducto.get(String(p.id));
+
+        return `
+          <div class="fila">
+            <div class="dato">
+              <b>${esc(p.nombre)}</b>
+            </div>
+
+            <div class="dato">
+              <label for="lp-precio-${p.id}">Precio ($)</label>
+              <input
+                id="lp-precio-${p.id}"
+                class="lp-precio-input"
+                data-producto-id="${p.id}"
+                type="number"
+                min="0"
+                step="0.01"
+                value="${actual === undefined ? '' : actual}"
+                placeholder="Sin precio cargado"
+              >
+            </div>
+          </div>
+        `;
+      }).join('')
+    : '<p class="vacio">No hay productos activos.</p>';
+
+  cargando.textContent = '';
+  formulario.hidden = false;
+
+  formulario.onsubmit = async e => {
+    e.preventDefault();
+    aviso.innerHTML = '';
+
+    const entradas = [
+      ...listado.querySelectorAll('.lp-precio-input')
+    ].filter(input => input.value.trim() !== '');
+
+    if (!entradas.length) {
+      aviso.innerHTML =
+        '<div class="msg">Ingresá al menos un precio.</div>';
+      return;
+    }
+
+    const invalidos = entradas.filter(input =>
+      !Number.isFinite(Number(input.value)) ||
+      Number(input.value) < 0
+    );
+
+    if (invalidos.length) {
+      aviso.innerHTML =
+        '<div class="msg err">Revisá los precios ingresados.</div>';
+      return;
+    }
+
+    const filas = entradas.map(input => ({
+      lista_precio_id: Number(id),
+      producto_id: Number(input.dataset.productoId),
+      precio: Number(input.value),
+      actualizado_por: perfil.id
+    }));
+
+    const boton = document.getElementById('lp-precios-guardar');
+    boton.disabled = true;
+
+    try {
+      const { error } = await sb
+        .from('lista_precios_items')
+        .upsert(filas, {
+          onConflict: 'lista_precio_id,producto_id'
+        });
+
+      if (error) {
+        aviso.innerHTML =
+          `<div class="msg err">${esc(error.message)}</div>`;
+        return;
+      }
+
+      aviso.innerHTML =
+        '<div class="msg ok">Precios guardados correctamente.</div>';
+
+    } finally {
+      boton.disabled = false;
+    }
+  };
+}
+
+/* ---------- CLIENTES ---------- */
+async function vistaClientes() {
+  const c = document.getElementById('contenido');
+
+  c.innerHTML = `
+    <div class="panel">
+      <div class="barra">
+        <h2>Clientes</h2>
+      </div>
+
+      <p class="vacio" style="padding-top:0">
+        Registrá clientes y asignales una lista de precios.
+        Si no elegís una específica, se utilizará General.
+      </p>
+
+      <h3>Nuevo cliente</h3>
+
+      <form id="form-cliente">
+        <label for="cli-nombre">Nombre del cliente</label>
+        <input id="cli-nombre"
+          required maxlength="150"
+          placeholder="Ej.: Ferretería Los Andes">
+
+        <label for="cli-email">Correo electrónico</label>
+        <input id="cli-email"
+          type="email" maxlength="254"
+          placeholder="cliente@empresa.com">
+
+        <label for="cli-telefono">Teléfono</label>
+        <input id="cli-telefono"
+          type="text" maxlength="50"
+          placeholder="Teléfono de contacto">
+
+        <label class="check-serie" style="margin-top:14px">
+          <input type="checkbox" id="cli-asignar-lista">
+          Asignar una lista de precios específica
+        </label>
+
+        <div id="cli-lista-contenedor" hidden>
+          <label for="cli-lista">¿Qué lista de precios vas a asignar?</label>
+          <select id="cli-lista"></select>
+        </div>
+
+        <div id="cli-aviso" style="margin-top:12px"></div>
+
+        <button type="submit" class="btn" id="cli-guardar">
+          Guardar cliente
+        </button>
+      </form>
+
+      <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+      <h3>Clientes existentes</h3>
+      <label for="cli-buscar">Buscar cliente</label>
+      <input id="cli-buscar"
+        placeholder="Escribí el nombre del cliente"
+        autocomplete="off">
+
+      <div id="cli-listado" class="vacio" style="margin-top:12px">
+        Cargando clientes...
+      </div>
+    </div>
+  `;
+
+  const form = document.getElementById('form-cliente');
+  const aviso = document.getElementById('cli-aviso');
+  const asignar = document.getElementById('cli-asignar-lista');
+  const contenedorLista = document.getElementById('cli-lista-contenedor');
+  const selectorLista = document.getElementById('cli-lista');
+  const listado = document.getElementById('cli-listado');
+
+  let listas = [];
+  let clientes = [];
+
+  // Cargar listas activas y localizar General.
+  const { data: datosListas, error: errorListas } = await sb
+    .from('listas_precios')
+    .select('id,nombre,es_general,activo')
+    .eq('activo', true)
+    .order('es_general', { ascending: false })
+    .order('nombre');
+
+  if (errorListas) {
+    aviso.innerHTML =
+      `<div class="msg err">${esc(errorListas.message)}</div>`;
+    form.querySelector('[type="submit"]').disabled = true;
+    return;
+  }
+
+  listas = datosListas || [];
+
+  const general = listas.find(l => l.es_general);
+
+  if (!general) {
+    aviso.innerHTML =
+      '<div class="msg err">No se encontró la lista General activa. Revisá su configuración en Supabase.</div>';
+    form.querySelector('[type="submit"]').disabled = true;
+    return;
+  }
+
+  selectorLista.innerHTML = listas.map(l => `
+    <option value="${l.id}" ${l.id === general.id ? 'selected' : ''}>
+      ${esc(l.nombre)}${l.es_general ? ' (predeterminada)' : ''}
+    </option>
+  `).join('');
+
+  asignar.onchange = () => {
+    contenedorLista.hidden = !asignar.checked;
+    selectorLista.disabled = !asignar.checked;
+  };
+
+  selectorLista.disabled = true;
+
+  async function cargarClientes() {
+    listado.innerHTML = 'Cargando clientes...';
+
+    const { data, error } = await sb
+      .from('clientes')
+      .select('id,nombre,email,telefono,activo,lista_precios_id,creado_en')
+      .order('nombre');
+
+    if (error) {
+      listado.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    clientes = data || [];
+    mostrarClientes();
+  }
+
+  function mostrarClientes() {
+    const filtro = (
+      document.getElementById('cli-buscar').value || ''
+    ).trim().toLocaleLowerCase('es-AR');
+
+    const listaPorId = new Map(
+      listas.map(l => [String(l.id), l.nombre])
+    );
+
+    const filtrados = clientes.filter(cl =>
+      cl.nombre.toLocaleLowerCase('es-AR').includes(filtro) ||
+      (cl.email || '').toLocaleLowerCase('es-AR').includes(filtro)
+    );
+
+    listado.className = '';
+
+    listado.innerHTML = filtrados.length
+      ? filtrados.map(cl => `
+          <div class="fila">
+            <div class="dato">
+              <b>${esc(cl.nombre)}</b>
+              ${cl.activo ? '' : '<small>(inactivo)</small>'}
+              ${cl.email ? `<small>${esc(cl.email)}</small>` : ''}
+              ${cl.telefono ? `<small>Tel.: ${esc(cl.telefono)}</small>` : ''}
+              <small>
+                Lista: ${esc(listaPorId.get(String(cl.lista_precios_id)) || 'Lista no encontrada')}
+              </small>
+            </div>
+          </div>
+        `).join('')
+      : '<p class="vacio">No se encontraron clientes.</p>';
+  }
+
+  document.getElementById('cli-buscar').oninput = mostrarClientes;
+
+  form.onsubmit = async e => {
+    e.preventDefault();
+    aviso.innerHTML = '';
+
+    const nombre = document.getElementById('cli-nombre')
+      .value.trim().replace(/\s+/g, ' ');
+
+    const email = document.getElementById('cli-email')
+      .value.trim();
+
+    const telefono = document.getElementById('cli-telefono')
+      .value.trim();
+
+    const listaId = asignar.checked
+      ? Number(selectorLista.value)
+      : Number(general.id);
+
+    if (!nombre || !listaId) {
+      aviso.innerHTML =
+        '<div class="msg err">Ingresá el nombre y verificá la lista asignada.</div>';
+      return;
+    }
+
+    const boton = document.getElementById('cli-guardar');
+    boton.disabled = true;
+
+    try {
+      const { error } = await sb
+        .from('clientes')
+        .insert({
+          nombre,
+          email: email || null,
+          telefono: telefono || null,
+          lista_precios_id: listaId,
+          creado_por: perfil.id
+        });
+
+      if (error) {
+        aviso.innerHTML =
+          `<div class="msg err">No se pudo guardar el cliente: ${esc(error.message)}</div>`;
+        return;
+      }
+
+      form.reset();
+      contenedorLista.hidden = true;
+      selectorLista.disabled = true;
+      selectorLista.value = String(general.id);
+
+      aviso.innerHTML =
+        '<div class="msg ok">Cliente creado correctamente.</div>';
+
+      await cargarClientes();
+
+    } finally {
+      boton.disabled = false;
+    }
+  };
+
+  await cargarClientes();
+}
+
+
 /* ---------- DEPÓSITO ---------- */
 let depTab = 'pendiente';
 const DEP_TABS = [['pendiente','Para preparar'],['listo','Listos para entregar'],['entregado','Entregados']];
@@ -1434,7 +1987,9 @@ async function vistaVentas(){
         <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">Nuevo Pedido</h3>
         <form id="fp">
           <label for="cliente">CLIENTE</label>
-          <input id="cliente" placeholder="Ej: Ferretería Los Andes" required>
+<select id="cliente" required>
+  <option value="">Cargando clientes...</option>
+</select>
           <label for="fentrega">FECHA DE ENTREGA</label>
           <input id="fentrega" type="date">
           <label for="modalidad">MODALIDAD</label>
@@ -1465,9 +2020,139 @@ async function vistaVentas(){
       </div>
     </div>`;
 
+  const selectorCliente = document.getElementById('cliente');
+  let clientesActivos = [];
+
+  const { data: datosClientes, error: errorClientes } = await sb
+    .from('clientes')
+    .select('id,nombre,lista_precios_id')
+    .eq('activo', true)
+    .order('nombre');
+
+  const avisoClientes = document.getElementById('aviso');
+
+  if (errorClientes) {
+    selectorCliente.innerHTML =
+      '<option value="">No se pudieron cargar los clientes</option>';
+
+    avisoClientes.innerHTML =
+      `<div class="msg err">${esc(errorClientes.message)}</div>`;
+  } else {
+    clientesActivos = datosClientes || [];
+
+    selectorCliente.innerHTML =
+      '<option value="">Seleccioná un cliente</option>' +
+      clientesActivos.map(cl => `
+        <option value="${cl.id}">${esc(cl.nombre)}</option>
+      `).join('');
+
+    if (!clientesActivos.length) {
+      avisoClientes.innerHTML =
+        '<div class="msg">Todavía no hay clientes activos. Cargalos en la solapa Clientes.</div>';
+    }
+  }
+
   document.getElementById('toggle-form').onclick = () => document.getElementById('col-form').classList.toggle('abierto');
 
   const items = document.getElementById('items');
+  const preciosPorProducto = new Map();
+
+const formatoDinero = valor =>
+  Number(valor).toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+function actualizarPrecioFila(fila) {
+  const resumen = fila.querySelector('.precio-resumen');
+  if (!resumen) return;
+
+  const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
+  const cantidad = Number(fila.querySelector('.cant').value);
+  const clienteId = Number(selectorCliente.value);
+
+  if (!clienteId) {
+    resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
+    return;
+  }
+
+  const producto = productosLista.find(
+    p => p.nombre.toUpperCase() === nombre
+  );
+
+  if (!producto) {
+    resumen.textContent = 'Elegí un producto de la lista.';
+    return;
+  }
+
+  if (!preciosPorProducto.has(String(producto.id))) {
+    resumen.textContent =
+      'Este producto no tiene precio cargado en la lista del cliente.';
+    return;
+  }
+
+  if (!Number.isFinite(cantidad) || cantidad <= 0) {
+    resumen.textContent = 'Ingresá una cantidad válida.';
+    return;
+  }
+
+  const precio = Number(preciosPorProducto.get(String(producto.id)));
+  const subtotal = precio * cantidad;
+
+  const tipo = fila.querySelector('.desc-tipo').value;
+  const valor = Math.max(
+    0,
+    Number(fila.querySelector('.desc-valor').value) || 0
+  );
+
+  let descuento = 0;
+
+  if (tipo === 'porcentaje') {
+    descuento = subtotal * Math.min(valor, 100) / 100;
+  } else if (tipo === 'importe') {
+    descuento = Math.min(valor, subtotal);
+  }
+
+  const total = Math.max(0, subtotal - descuento);
+
+  resumen.textContent =
+    `Precio unitario: $${formatoDinero(precio)} · ` +
+    `Subtotal: $${formatoDinero(subtotal)} · ` +
+    `Descuento: -$${formatoDinero(descuento)} · ` +
+    `Total: $${formatoDinero(total)}`;
+}
+
+async function cargarPreciosCliente() {
+  preciosPorProducto.clear();
+
+  const cliente = clientesActivos.find(
+    cl => Number(cl.id) === Number(selectorCliente.value)
+  );
+
+  if (!cliente) {
+    items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
+    return;
+  }
+
+  const { data, error } = await sb
+    .from('lista_precios_items')
+    .select('producto_id, precio')
+    .eq('lista_precio_id', cliente.lista_precios_id);
+
+  if (error) {
+    avisoClientes.innerHTML =
+      `<div class="msg err">No se pudieron consultar los precios: ${esc(error.message)}</div>`;
+    return;
+  }
+
+  (data || []).forEach(p => {
+    preciosPorProducto.set(String(p.producto_id), Number(p.precio));
+  });
+
+  items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
+}
+
+selectorCliente.addEventListener('change', cargarPreciosCliente);
 
   const actualizarAvisosStock = () => {
     const filas = [...items.querySelectorAll('.item-form-grid')];
@@ -1511,27 +2196,129 @@ async function vistaVentas(){
     });
   };
 
-  const agregarItem = () => {
-    const d = document.createElement('div');
-    d.className = 'item-form-grid';
-    d.innerHTML = `
-      <input class="prod" list="lista-productos" placeholder="Buscar producto de la lista" aria-label="Producto" autocomplete="off" required>
-      <input class="cant" type="number" step="1" min="1" value="1" placeholder="Cant." aria-label="Cantidad" required>
-      <button type="button" class="quitar" aria-label="Quitar producto">✕</button>`;
+  
 
-    d.querySelector('.quitar').onclick = () => {
-      if (items.children.length > 1) {
-        d.remove();
-        actualizarAvisosStock();
-      }
-    };
+const agregarItem = () => {
+  const d = document.createElement('div');
+  d.className = 'item-form-grid';
 
-    d.querySelector('.prod').addEventListener('input', actualizarAvisosStock);
-    d.querySelector('.cant').addEventListener('input', actualizarAvisosStock);
+  d.innerHTML = `
+    <input class="prod"
+      list="lista-productos"
+      placeholder="Buscar producto de la lista"
+      aria-label="Producto"
+      autocomplete="off"
+      required>
 
-    items.appendChild(d);
-    actualizarAvisosStock();
+    <input class="cant"
+      type="number"
+      step="1"
+      min="1"
+      value="1"
+      placeholder="Cant."
+      aria-label="Cantidad"
+      required>
+
+    <button type="button" class="quitar"
+      aria-label="Quitar producto">✕</button>
+
+    <div class="precio-descuento"
+      style="grid-column:1/-1;display:grid;gap:8px;margin:4px 0 12px">
+
+      <button type="button" class="btn sec chico desc-toggle"
+        style="justify-self:start">
+        + Agregar descuento
+      </button>
+
+      <div class="desc-controls"
+        style="display:none;grid-template-columns:minmax(0,1fr) minmax(90px,120px);gap:8px">
+
+        <div>
+          <label>Tipo de descuento</label>
+          <select class="desc-tipo">
+            <option value="porcentaje">Porcentaje (%)</option>
+            <option value="importe">Importe fijo ($ por línea)</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Valor del descuento</label>
+          <input class="desc-valor"
+            type="number"
+            min="0"
+            step="0.01"
+            value="0">
+        </div>
+      </div>
+
+      <div class="precio-resumen"
+        style="font-size:12px;color:var(--gris)">
+        Seleccioná un cliente para consultar sus precios.
+      </div>
+    </div>
+  `;
+
+  const botonDescuento = d.querySelector('.desc-toggle');
+  const controlesDescuento = d.querySelector('.desc-controls');
+  const tipoDescuento = d.querySelector('.desc-tipo');
+  const valorDescuento = d.querySelector('.desc-valor');
+
+  botonDescuento.onclick = () => {
+    const mostrar = controlesDescuento.style.display === 'none';
+
+    controlesDescuento.style.display = mostrar ? 'grid' : 'none';
+    botonDescuento.textContent = mostrar
+      ? 'Quitar descuento'
+      : '+ Agregar descuento';
+
+    if (mostrar) {
+      tipoDescuento.value = 'porcentaje';
+      valorDescuento.value = '0';
+      valorDescuento.max = '100';
+    } else {
+      tipoDescuento.value = 'ninguno';
+      valorDescuento.value = '0';
+      valorDescuento.removeAttribute('max');
+    }
+
+    actualizarPrecioFila(d);
   };
+
+  d.querySelector('.quitar').onclick = () => {
+    if (items.children.length > 1) {
+      d.remove();
+      actualizarAvisosStock();
+    }
+  };
+
+  d.querySelector('.prod').addEventListener('input', () => {
+    actualizarAvisosStock();
+    actualizarPrecioFila(d);
+  });
+
+  d.querySelector('.cant').addEventListener('input', () => {
+    actualizarAvisosStock();
+    actualizarPrecioFila(d);
+  });
+
+  tipoDescuento.addEventListener('change', () => {
+    valorDescuento.max =
+      tipoDescuento.value === 'porcentaje' ? '100' : '';
+
+    actualizarPrecioFila(d);
+  });
+
+  valorDescuento.addEventListener('input', () => {
+    actualizarPrecioFila(d);
+  });
+
+  items.appendChild(d);
+
+  actualizarAvisosStock();
+  actualizarPrecioFila(d);
+};
+
+
 
   agregarItem();
   document.getElementById('mas').onclick = agregarItem;
@@ -1540,25 +2327,145 @@ async function vistaVentas(){
     e.preventDefault();
     const aviso = document.getElementById('aviso');
     const buscarProd = txt => productosLista.find(x => x.nombre.toUpperCase() === txt.trim().toUpperCase());
-    const crudas = [...items.children].map(d => ({texto: d.querySelector('.prod').value.trim(), cantidad: parseFloat(d.querySelector('.cant').value)})).filter(l => l.texto);
+    const crudas = [...items.children]
+  .map(d => ({
+    fila: d,
+    texto: d.querySelector('.prod').value.trim(),
+    cantidad: parseFloat(d.querySelector('.cant').value)
+  }))
+  .filter(l => l.texto);
     const noExiste = crudas.filter(l => !buscarProd(l.texto));
     if(noExiste.length) return aviso.innerHTML = `<div class="msg err">No está en la lista de productos: ${noExiste.map(l => esc(l.texto)).join(', ')}. Elegí uno de la lista o crealo en la solapa Productos.</div>`;
-    const lineas = [];
+    const clientePrecioId = Number(
+  document.getElementById('cliente').value
+);
+
+const clientePrecio = clientesActivos.find(
+  cl => Number(cl.id) === clientePrecioId
+);
+
+if (!clientePrecio) {
+  aviso.innerHTML =
+    '<div class="msg err">Seleccioná un cliente válido.</div>';
+  return;
+}
+
+// Consultar nuevamente los precios actuales de la lista del cliente.
+const {
+  data: datosPrecios,
+  error: errorConsultaPrecios
+} = await sb
+  .from('lista_precios_items')
+  .select('producto_id, precio')
+  .eq('lista_precio_id', clientePrecio.lista_precios_id);
+
+const preciosListaMap = new Map(
+  (datosPrecios || []).map(p => [
+    String(p.producto_id),
+    Number(p.precio)
+  ])
+);
+
+// No impedimos crear el pedido si falta una lista de precios,
+// pero avisamos que no se pudieron consultar sus importes.
+if (errorConsultaPrecios) {
+  aviso.innerHTML =
+    `<div class="msg">No se pudieron consultar los precios. El pedido podrá guardarse sin importes si no se aplican descuentos. Detalle: ${esc(errorConsultaPrecios.message)}</div>`;
+}
+  
+const lineas = [];
 
 for (const l of crudas) {
   const pr = buscarProd(l.texto);
   const esKit = pr.es_kit === true;
+
+  // El descuento solo se aplica si Ventas abrió sus controles.
+  const controlesDesc = l.fila.querySelector('.desc-controls');
+  const descuentoVisible =
+    controlesDesc && controlesDesc.style.display !== 'none';
+
+  const tipoElegido = descuentoVisible
+    ? l.fila.querySelector('.desc-tipo').value
+    : 'ninguno';
+
+  const valorElegido = descuentoVisible
+    ? Number(l.fila.querySelector('.desc-valor').value) || 0
+    : 0;
+
+  if (
+    !Number.isFinite(valorElegido) ||
+    valorElegido < 0 ||
+    (tipoElegido === 'porcentaje' && valorElegido > 100)
+  ) {
+    aviso.innerHTML =
+      `<div class="msg err">Revisá el descuento aplicado a ${esc(pr.nombre)}.</div>`;
+    return;
+  }
+
+  const descuentoTipo =
+    valorElegido > 0 ? tipoElegido : 'ninguno';
+
+  const descuentoValor =
+    descuentoTipo === 'ninguno' ? 0 : valorElegido;
+
+  const tienePrecio =
+    preciosListaMap.has(String(pr.id));
+
+  const precioUnitario = tienePrecio
+    ? Number(preciosListaMap.get(String(pr.id)))
+    : null;
+
+  // Se permite crear el pedido sin precio.
+  // Pero no se puede aplicar un descuento monetario sin conocer el precio.
+  if (
+    precioUnitario === null &&
+    descuentoValor > 0
+  ) {
+    aviso.innerHTML =
+      `<div class="msg err">${esc(pr.nombre)} no tiene precio en la lista del cliente. No se puede calcular su descuento.</div>`;
+    return;
+  }
+
+  const subtotal = precioUnitario === null
+    ? null
+    : precioUnitario * l.cantidad;
+
+  let descuentoImporte = 0;
+
+  if (subtotal !== null) {
+    if (descuentoTipo === 'porcentaje') {
+      descuentoImporte =
+        subtotal * descuentoValor / 100;
+    } else if (descuentoTipo === 'importe') {
+      descuentoImporte =
+        Math.min(descuentoValor, subtotal);
+    }
+  }
+
+  const totalLinea = subtotal === null
+    ? null
+    : Math.max(0, subtotal - descuentoImporte);
 
   const linea = {
     producto: pr.nombre,
     cantidad: l.cantidad,
     lleva_serie: esKit ? false : pr.lleva_serie,
     es_kit: esKit,
-    componentes: []
+    componentes: [],
+    precio_unitario: precioUnitario,
+    descuento_tipo: descuentoTipo,
+    descuento_valor: descuentoValor,
+    descuento_importe: precioUnitario === null
+      ? null
+      : descuentoImporte,
+    total_linea: totalLinea
   };
 
   if (esKit) {
-    const { data: componentes, error: errorComponentes } = await sb
+    const {
+      data: componentes,
+      error: errorComponentes
+    } = await sb
       .from('producto_componentes')
       .select('componente_producto_id, cantidad')
       .eq('kit_producto_id', pr.id);
@@ -1596,6 +2503,7 @@ for (const l of crudas) {
 
   lineas.push(linea);
 }
+
   if(!lineas.length || lineas.some(l =>
   !Number.isInteger(l.cantidad) || l.cantidad <= 0
 )){
@@ -1604,15 +2512,33 @@ for (const l of crudas) {
 }
     const btn = e.target.querySelector('[type=submit]');
     btn.disabled = true;
-    const {data:p, error} = await sb.from('pedidos').insert({
-      cliente: document.getElementById('cliente').value.trim(),
-      modalidad: document.getElementById('modalidad').value,
-      fecha_entrega: document.getElementById('fentrega').value || null,
-      comentarios: document.getElementById('coment').value.trim() || null,
-      creado_por: perfil.id
-    }).select().single();
+    const clienteId = Number(
+  document.getElementById('cliente').value
+);
+
+const clienteSeleccionado = clientesActivos.find(
+  cl => Number(cl.id) === clienteId
+);
+
+if (!clienteSeleccionado) {
+  btn.disabled = false;
+  aviso.innerHTML =
+    '<div class="msg err">Seleccioná un cliente válido antes de guardar el pedido.</div>';
+  return;
+}
+
+const {data:p, error} = await sb.from('pedidos').insert({
+  cliente: clienteSeleccionado.nombre,
+  cliente_id: clienteSeleccionado.id,
+  lista_precio_id: clienteSeleccionado.lista_precios_id,
+  modalidad: document.getElementById('modalidad').value,
+  fecha_entrega: document.getElementById('fentrega').value || null,
+  comentarios: document.getElementById('coment').value.trim() || null,
+  creado_por: perfil.id
+}).select().single();
     if(error){ btn.disabled = false; return aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`; }
-    let errorItems = null;
+    
+let errorItems = null;
 
 for (const linea of lineas) {
   // Guardar la línea principal del producto o Kit.
@@ -1633,7 +2559,29 @@ for (const linea of lineas) {
     break;
   }
 
-  // Si es un Kit, guardar sus componentes como líneas internas.
+  // Guardar el precio histórico si el producto tiene uno cargado.
+  // Si no tiene precio, se permite continuar sin importes.
+  if (linea.precio_unitario !== null) {
+    const { error: errorPrecio } = await sb
+      .from('pedido_item_precios')
+      .insert({
+        pedido_item_id: itemPadre.id,
+        lista_precio_id: clienteSeleccionado.lista_precios_id,
+        precio_unitario: linea.precio_unitario,
+        descuento_tipo: linea.descuento_tipo || 'ninguno',
+        descuento_valor: linea.descuento_valor ?? 0,
+        descuento_importe: linea.descuento_importe ?? 0,
+        total_linea: linea.total_linea,
+        creado_por: perfil.id
+      });
+
+    if (errorPrecio) {
+      errorItems = errorPrecio;
+      break;
+    }
+  }
+
+  // Guardar los componentes internos del Kit.
   if (linea.es_kit && linea.componentes?.length) {
     const componentesPedido = linea.componentes.map(comp => ({
       pedido_id: p.id,
@@ -1655,6 +2603,7 @@ for (const linea of lineas) {
     }
   }
 }
+
 
 if (errorItems) {
   await sb.from('pedidos').delete().eq('id', p.id);
@@ -1767,6 +2716,275 @@ async function cargarResultadosVentas(){
 }
 
 /* ---------- DETALLE / REMITO ---------- */
+
+function opcionesImpresionPedido(p) {
+  const puedePrecios =
+    ['ventas', 'admin', 'supervisor'].includes(perfil.rol);
+
+  document.getElementById('modal-opciones-impresion')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-opciones-impresion';
+  modal.style.cssText =
+    'position:fixed;inset:0;background:#0008;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  modal.innerHTML = `
+    <div style="background:white;color:#172033;padding:22px;border-radius:14px;width:min(460px,100%);max-height:90vh;overflow:auto">
+      <h2 style="margin-top:0">Imprimir presupuesto</h2>
+      <p>Presupuesto ${esc(fmtRemito(p.numero_remito))}</p>
+
+      <label for="imp-cantidad">Cantidad de copias</label>
+      <select id="imp-cantidad">
+        <option value="1">Una copia</option>
+        <option value="2">Dos copias</option>
+      </select>
+
+      <div id="imp-copias" style="margin-top:16px"></div>
+
+      ${puedePrecios ? '' : `
+        <p style="font-size:13px;color:#555">
+          Por tu rol, la impresión se realizará sin precios.
+        </p>
+      `}
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap">
+        <button type="button" class="btn sec chico" id="imp-cancelar">
+          Cancelar
+        </button>
+        <button type="button" class="btn chico" id="imp-confirmar">
+          Imprimir
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const selector = modal.querySelector('#imp-cantidad');
+  const copias = modal.querySelector('#imp-copias');
+
+  function dibujarCopias() {
+    const cantidad = Number(selector.value);
+
+    copias.innerHTML = Array.from({ length: cantidad }, (_, i) => `
+      <div style="border:1px solid #ddd;border-radius:9px;padding:12px;margin-bottom:10px">
+        <label for="imp-tipo-${i}">Copia ${i + 1}</label>
+        <select id="imp-tipo-${i}" class="imp-tipo-copia"
+          ${puedePrecios ? '' : 'disabled'}>
+          <option value="sin">Sin precios</option>
+          ${puedePrecios
+            ? `<option value="con" ${cantidad === 2 && i === 1 ? 'selected' : ''}>Con precios</option>`
+            : ''}
+        </select>
+      </div>
+    `).join('');
+  }
+
+  selector.onchange = dibujarCopias;
+  dibujarCopias();
+
+  modal.querySelector('#imp-cancelar').onclick = () => modal.remove();
+
+  modal.querySelector('#imp-confirmar').onclick = async () => {
+    const incluirPrecios = [
+      ...modal.querySelectorAll('.imp-tipo-copia')
+    ].map(x => puedePrecios && x.value === 'con');
+
+    // Abrir la ventana durante el clic del usuario para evitar
+    // que el navegador bloquee la impresión.
+    const ventana = window.open('', '_blank');
+
+    if (!ventana) {
+      alert('El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes para esta aplicación.');
+      return;
+    }
+
+    const boton = modal.querySelector('#imp-confirmar');
+    boton.disabled = true;
+
+    try {
+      await imprimirCopiasPedido(p, incluirPrecios, ventana);
+      modal.remove();
+    } catch (error) {
+      ventana.close();
+      alert('No se pudo preparar la impresión: ' + error.message);
+      boton.disabled = false;
+    }
+  };
+}
+
+async function imprimirCopiasPedido(p, incluirPrecios, ventana) {
+  const items = (p.pedido_items || [])
+    .filter(i => !i.padre_item_id)
+    .sort((a, b) => a.id - b.id);
+
+  const necesitaPrecios = incluirPrecios.some(Boolean);
+  const precios = new Map();
+
+  if (necesitaPrecios) {
+    if (!['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
+      throw new Error('Tu rol no tiene permiso para imprimir precios.');
+    }
+
+    const ids = items.map(i => i.id);
+
+    if (ids.length) {
+      const { data, error } = await sb
+        .from('pedido_item_precios')
+        .select('pedido_item_id,precio_unitario,descuento_tipo,descuento_valor,descuento_importe,total_linea')
+        .in('pedido_item_id', ids);
+
+      if (error) {
+        throw new Error('No se pudieron consultar los precios: ' + error.message);
+      }
+
+      (data || []).forEach(x => {
+        precios.set(String(x.pedido_item_id), x);
+      });
+    }
+
+    const faltantes = items.filter(i => !precios.has(String(i.id)));
+
+    if (faltantes.length && !confirm(
+      'Hay productos sin precio histórico guardado. En la copia con precios aparecerán como "Sin precio registrado". ¿Continuar?'
+    )) {
+      return;
+    }
+  }
+
+  const dinero = valor => Number(valor).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const filas = (conPrecios) => items.map(i => {
+    const serie = i.series?.length
+      ? `<small>N.º de serie: ${i.series.map(s => esc(s.numero_serie)).join(', ')}</small>`
+      : '';
+
+    const base = `
+      <td>${esc(i.producto)}${serie}</td>
+      <td class="numero">${esc(i.cantidad)}</td>
+    `;
+
+    if (!conPrecios) {
+      return `<tr>${base}</tr>`;
+    }
+
+    const precio = precios.get(String(i.id));
+
+    if (!precio) {
+      return `<tr>${base}<td colspan="3">Sin precio registrado</td></tr>`;
+    }
+
+    const descuento = Number(precio.descuento_importe || 0);
+    const etiquetaDescuento =
+      precio.descuento_tipo === 'porcentaje'
+        ? `${precio.descuento_valor}%`
+        : precio.descuento_tipo === 'importe'
+          ? dinero(descuento)
+          : '—';
+
+    return `
+      <tr>
+        ${base}
+        <td class="numero">${dinero(precio.precio_unitario)}</td>
+        <td class="numero">${esc(etiquetaDescuento)}</td>
+        <td class="numero">${dinero(precio.total_linea)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const logo = new URL('logo.png', document.baseURI).href;
+
+  const documentos = incluirPrecios.map((conPrecios, indice) => {
+    const hayPreciosFaltantes = conPrecios &&
+      items.some(i => !precios.has(String(i.id)));
+
+    const total = conPrecios && !hayPreciosFaltantes
+      ? items.reduce((suma, i) =>
+          suma + Number(precios.get(String(i.id)).total_linea), 0)
+      : null;
+
+    return `
+      <section class="copia">
+        <header>
+          <img src="${esc(logo)}" alt="SGV">
+          <div>
+            <h1>Presupuesto ${esc(fmtRemito(p.numero_remito))}</h1>
+            <p>Copia ${indice + 1} de ${incluirPrecios.length}</p>
+          </div>
+        </header>
+
+        <p><b>Cliente:</b> ${esc(p.cliente)}</p>
+        <p><b>Estado:</b> ${esc(ESTADOS[p.estado] || p.estado)}</p>
+        <p><b>Modalidad:</b> ${esc(MODAL[p.modalidad] || p.modalidad)}</p>
+        <p><b>Fecha de entrega:</b> ${esc(fmtFecha(p.fecha_entrega))}</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="numero">Cantidad</th>
+              ${conPrecios ? `
+                <th class="numero">Precio unitario</th>
+                <th class="numero">Descuento</th>
+                <th class="numero">Total</th>
+              ` : ''}
+            </tr>
+          </thead>
+          <tbody>${filas(conPrecios)}</tbody>
+        </table>
+
+        ${conPrecios ? `
+          <h2 class="total">
+            Total del presupuesto:
+            ${total === null ? 'No disponible: faltan precios' : dinero(total)}
+          </h2>
+        ` : ''}
+
+        ${p.comentarios
+          ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>`
+          : ''}
+      </section>
+    `;
+  }).join('');
+
+  ventana.document.open();
+  ventana.document.write(`
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>Presupuesto ${esc(fmtRemito(p.numero_remito))}</title>
+      <style>
+        body { font-family: Arial, sans-serif; color: #172033; margin: 28px; }
+        header { display:flex; justify-content:space-between; align-items:center; gap:20px; border-bottom:2px solid #1565B8; padding-bottom:14px; }
+        header img { max-width:90px; max-height:70px; object-fit:contain; }
+        h1 { font-size:22px; margin:0; }
+        header p { margin:6px 0 0; color:#555; }
+        table { width:100%; border-collapse:collapse; margin-top:24px; }
+        th, td { border-bottom:1px solid #ddd; padding:10px 8px; text-align:left; vertical-align:top; }
+        th { background:#f2f5f9; }
+        .numero { text-align:right; white-space:nowrap; }
+        small { display:block; margin-top:5px; color:#555; }
+        .total { text-align:right; margin-top:24px; font-size:18px; }
+        .copia:not(:last-child) { page-break-after:always; break-after:page; }
+        @media print { body { margin:12mm; } }
+      </style>
+    </head>
+    <body>${documentos}</body>
+    </html>
+  `);
+  ventana.document.close();
+  ventana.focus();
+
+  setTimeout(() => {
+  ventana.focus();
+  ventana.print();
+}, 400);
+}
+
 async function detallePedido(id, volver){
   const c = document.getElementById('contenido');
   c.innerHTML = '<div class="panel vacio">Cargando…</div>';
@@ -1803,7 +3021,8 @@ ${p.nota_deposito ? `<p><b>Observaciones de entrega:</b> ${esc(p.nota_deposito)}
 ${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${p.enargas_transferido ? 'Sí' : 'No'}</p>` : ''}
   </div>`;
   document.getElementById('volver').onclick = volver;
-  document.getElementById('imprimir').onclick = () => window.print();
+  document.getElementById('imprimir').onclick = () =>
+  opcionesImpresionPedido(p);
   const btnEditarNota = document.getElementById('editar-nota-deposito');
 
   if (btnEditarNota) {

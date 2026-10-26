@@ -2943,9 +2943,12 @@ async function imprimirCopiasPedido(p, incluirPrecios, ventana) {
           </h2>
         ` : ''}
 
-        ${p.comentarios
-          ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>`
-          : ''}
+       ${p.comentarios
+  ? `<p><b>Comentarios:</b> ${esc(p.comentarios)}</p>`
+  : ''}
+${p.nota_deposito
+  ? `<p><b>Nota de depósito:</b> ${esc(p.nota_deposito)}</p>`
+  : ''}
       </section>
     `;
   }).join('');

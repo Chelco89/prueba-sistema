@@ -1139,48 +1139,48 @@
           );
         });
         resultado.querySelectorAll('.lp-nombre').forEach(b => {
-  b.onclick = async () => {
-    const nombreActual = b.dataset.nombre;
-    const nuevoNombre = prompt(
-      'Ingresá el nuevo nombre de la lista:',
-      nombreActual
-    );
+          b.onclick = async () => {
+            const nombreActual = b.dataset.nombre;
+            const nuevoNombre = prompt(
+              'Ingresá el nuevo nombre de la lista:',
+              nombreActual
+            );
 
-    if (nuevoNombre === null) return;
+            if (nuevoNombre === null) return;
 
-    const nombre = nuevoNombre.trim().replace(/\s+/g, ' ');
+            const nombre = nuevoNombre.trim().replace(/\s+/g, ' ');
 
-    if (!nombre) {
-      alert('El nombre no puede estar vacío.');
-      return;
-    }
+            if (!nombre) {
+              alert('El nombre no puede estar vacío.');
+              return;
+            }
 
-    if (nombre === nombreActual) return;
+            if (nombre === nombreActual) return;
 
-    b.disabled = true;
+            b.disabled = true;
 
-    try {
-      const { error } = await sb
-        .from('listas_precios')
-        .update({ nombre })
-.eq('id', b.dataset.id);
+            try {
+              const { error } = await sb
+                .from('listas_precios')
+                .update({ nombre })
+                .eq('id', b.dataset.id);
 
-      if (error) {
-        alert(
-          error.code === '23505'
-            ? 'Ya existe una lista con ese nombre.'
-            : 'No se pudo cambiar el nombre: ' + error.message
-        );
-        return;
-      }
+              if (error) {
+                alert(
+                  error.code === '23505'
+                    ? 'Ya existe una lista con ese nombre.'
+                    : 'No se pudo cambiar el nombre: ' + error.message
+                );
+                return;
+              }
 
-      await cargarListas();
-      alert('Nombre actualizado correctamente.');
-    } finally {
-      if (b.isConnected) b.disabled = false;
-    }
-  };
-});
+              await cargarListas();
+              alert('Nombre actualizado correctamente.');
+            } finally {
+              if (b.isConnected) b.disabled = false;
+            }
+          };
+        });
       }
 
       form.onsubmit = async e => {
@@ -1228,6 +1228,7 @@
 
       await cargarListas();
     }
+
     /* ---------- EDITAR PRECIOS DE UNA LISTA ---------- */
     async function editarPreciosLista(id, nombre) {
       const c = document.getElementById('contenido');
@@ -1242,8 +1243,10 @@
       </div>
 
       <p class="vacio" style="padding-top:0">
-        Cargá el precio de cada producto para esta lista.
-        Los cambios no modificarán los precios de otras listas.
+        Agregá o modificá los precios de esta lista.
+        Para quitar un producto, usá el botón correspondiente.
+        Los cambios no modificarán otras listas ni los precios
+        guardados en pedidos anteriores.
       </p>
 
       <div id="lp-precios-aviso"></div>
@@ -1301,12 +1304,17 @@
 
       listado.innerHTML = productos.length
         ? productos.map(p => {
-          const actual = preciosPorProducto.get(String(p.id));
+          const clave = String(p.id);
+          const incluido = preciosPorProducto.has(clave);
+          const actual = preciosPorProducto.get(clave);
 
           return `
           <div class="fila">
             <div class="dato">
               <b>${esc(p.nombre)}</b>
+              <small>
+                ${incluido ? 'Incluido en esta lista' : 'No incluido'}
+              </small>
             </div>
 
             <div class="dato">
@@ -1318,10 +1326,22 @@
                 type="number"
                 min="0"
                 step="0.01"
-                value="${actual === undefined ? '' : actual}"
+                value="${incluido ? actual : ''}"
+                data-original="${incluido ? actual : ''}"
                 placeholder="Sin precio cargado"
               >
             </div>
+
+            ${incluido
+              ? `<button
+                    type="button"
+                    class="btn sec chico lp-quitar"
+                    data-producto-id="${p.id}"
+                    data-producto-nombre="${esc(p.nombre)}">
+                    Quitar de esta lista
+                  </button>`
+              : ''
+            }
           </div>
         `;
         }).join('')
@@ -1329,6 +1349,67 @@
 
       cargando.textContent = '';
       formulario.hidden = false;
+
+      listado.querySelectorAll('.lp-quitar').forEach(b => {
+        b.onclick = async () => {
+          const productoId = Number(b.dataset.productoId);
+          const productoNombre = b.dataset.productoNombre;
+
+          const hayCambiosSinGuardar = [
+            ...listado.querySelectorAll('.lp-precio-input')
+          ].some(input => {
+            const original = input.dataset.original ?? '';
+            const actual = input.value.trim();
+
+            if (original === '') return actual !== '';
+            if (actual === '') return true;
+
+            return (
+              Number.isFinite(Number(actual)) &&
+              Number(actual) !== Number(original)
+            );
+          });
+
+          if (hayCambiosSinGuardar) {
+            alert(
+              'Hay precios modificados sin guardar. ' +
+              'Guardá los cambios antes de quitar un producto de la lista.'
+            );
+            return;
+          }
+
+          if (!confirm(
+            `¿Quitar "${productoNombre}" de la lista "${nombre}"?\n\n` +
+            'No se eliminará del catálogo ni de las otras listas. ' +
+            'Los pedidos anteriores conservarán sus precios.'
+          )) {
+            return;
+          }
+
+          b.disabled = true;
+
+          try {
+            const { error } = await sb
+              .from('lista_precios_items')
+              .delete()
+              .eq('lista_precio_id', Number(id))
+              .eq('producto_id', productoId);
+
+            if (error) {
+              aviso.innerHTML =
+                `<div class="msg err">${esc(error.message)}</div>`;
+              return;
+            }
+
+            aviso.innerHTML =
+              '<div class="msg ok">Producto quitado de esta lista.</div>';
+
+            await editarPreciosLista(id, nombre);
+          } finally {
+            if (b.isConnected) b.disabled = false;
+          }
+        };
+      });
 
       formulario.onsubmit = async e => {
         e.preventDefault();
@@ -1381,8 +1462,9 @@
           aviso.innerHTML =
             '<div class="msg ok">Precios guardados correctamente.</div>';
 
+          await editarPreciosLista(id, nombre);
         } finally {
-          boton.disabled = false;
+          if (boton.isConnected) boton.disabled = false;
         }
       };
     }
@@ -1493,11 +1575,11 @@
         return;
       }
 
-     
-selectorLista.multiple = true;
-selectorLista.size = Math.min(Math.max(listas.length, 3), 6);
 
-selectorLista.innerHTML = listas.map(l => `
+      selectorLista.multiple = true;
+      selectorLista.size = Math.min(Math.max(listas.length, 3), 6);
+
+      selectorLista.innerHTML = listas.map(l => `
   <option value="${l.id}">
     ${esc(l.nombre)}${l.es_general ? ' (predeterminada)' : ''}
   </option>
@@ -1511,52 +1593,52 @@ selectorLista.innerHTML = listas.map(l => `
 
       selectorLista.disabled = true;
 
-      
-async function cargarClientes() {
-  listado.innerHTML = 'Cargando clientes...';
 
-  const { data, error } = await sb
-    .from('clientes')
-    .select('id,nombre,email,telefono,activo,lista_precios_id,creado_en,tiene_cuenta_corriente,datos_adicionales')
-    .order('nombre');
+      async function cargarClientes() {
+        listado.innerHTML = 'Cargando clientes...';
 
-  if (error) {
-    listado.innerHTML =
-      `<div class="msg err">${esc(error.message)}</div>`;
-    return;
-  }
+        const { data, error } = await sb
+          .from('clientes')
+          .select('id,nombre,email,telefono,activo,lista_precios_id,creado_en,tiene_cuenta_corriente,datos_adicionales')
+          .order('nombre');
 
-  clientes = data || [];
+        if (error) {
+          listado.innerHTML =
+            `<div class="msg err">${esc(error.message)}</div>`;
+          return;
+        }
 
-  const { data: asignaciones, error: errorAsignaciones } = await sb
-    .from('clientes_listas_precios')
-    .select('cliente_id,lista_precios_id');
+        clientes = data || [];
 
-  if (errorAsignaciones) {
-    listado.innerHTML =
-      `<div class="msg err">No se pudieron cargar las listas asignadas: ${esc(errorAsignaciones.message)}</div>`;
-    return;
-  }
+        const { data: asignaciones, error: errorAsignaciones } = await sb
+          .from('clientes_listas_precios')
+          .select('cliente_id,lista_precios_id');
 
-  const listasPorCliente = new Map();
+        if (errorAsignaciones) {
+          listado.innerHTML =
+            `<div class="msg err">No se pudieron cargar las listas asignadas: ${esc(errorAsignaciones.message)}</div>`;
+          return;
+        }
 
-  (asignaciones || []).forEach(a => {
-    const clave = String(a.cliente_id);
+        const listasPorCliente = new Map();
 
-    if (!listasPorCliente.has(clave)) {
-      listasPorCliente.set(clave, []);
-    }
+        (asignaciones || []).forEach(a => {
+          const clave = String(a.cliente_id);
 
-    listasPorCliente.get(clave).push(String(a.lista_precios_id));
-  });
+          if (!listasPorCliente.has(clave)) {
+            listasPorCliente.set(clave, []);
+          }
 
-  clientes.forEach(cl => {
-    cl.listas_precios_ids =
-      listasPorCliente.get(String(cl.id)) || [];
-  });
+          listasPorCliente.get(clave).push(String(a.lista_precios_id));
+        });
 
-  mostrarClientes();
-}
+        clientes.forEach(cl => {
+          cl.listas_precios_ids =
+            listasPorCliente.get(String(cl.id)) || [];
+        });
+
+        mostrarClientes();
+      }
 
 
       function mostrarClientes() {
@@ -1587,10 +1669,10 @@ async function cargarClientes() {
                <small>
   Listas:
   ${esc(
-    (cl.listas_precios_ids || [])
-      .map(id => listaPorId.get(String(id)) || 'Lista no encontrada')
-      .join(', ') || 'Sin listas asignadas'
-  )}
+            (cl.listas_precios_ids || [])
+              .map(id => listaPorId.get(String(id)) || 'Lista no encontrada')
+              .join(', ') || 'Sin listas asignadas'
+          )}
 </small>
               </small>
               <small>
@@ -1676,28 +1758,28 @@ async function cargarClientes() {
       }
 
       document.getElementById('cli-buscar').oninput = mostrarClientes;
-     
 
-listado.onclick = async e => {
-  const b = e.target.closest('.cli-editar');
-  if (!b) return;
 
-  const cl = clientes.find(c => String(c.id) === b.dataset.id);
-  if (!cl) return;
+      listado.onclick = async e => {
+        const b = e.target.closest('.cli-editar');
+        if (!b) return;
 
-  const datos = cl.datos_adicionales || {};
-  const campos = Object.entries(datos);
+        const cl = clientes.find(c => String(c.id) === b.dataset.id);
+        if (!cl) return;
 
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.style.cssText = `
+        const datos = cl.datos_adicionales || {};
+        const campos = Object.entries(datos);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = `
     position:fixed; inset:0; z-index:9999;
     background:rgba(0,0,0,.55); overflow:auto;
     padding:20px; display:flex; justify-content:center;
     align-items:flex-start;
   `;
 
-  overlay.innerHTML = `
+        overlay.innerHTML = `
     <div class="panel" style="width:100%;max-width:650px;margin:20px auto">
       <h2>Editar cliente</h2>
 
@@ -1747,160 +1829,160 @@ listado.onclick = async e => {
     </div>
   `;
 
-  document.body.appendChild(overlay);
+        document.body.appendChild(overlay);
 
-  const formEditar = overlay.querySelector('#cli-editar-form');
-  const extra = overlay.querySelector('#cli-datos-extra');
-  const avisoEditar = overlay.querySelector('#cli-editar-aviso');
+        const formEditar = overlay.querySelector('#cli-editar-form');
+        const extra = overlay.querySelector('#cli-datos-extra');
+        const avisoEditar = overlay.querySelector('#cli-editar-aviso');
 
-  function agregarFila(clave = '', valor = '') {
-    const fila = document.createElement('div');
-    fila.style.cssText =
-      'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin:10px 0';
+        function agregarFila(clave = '', valor = '') {
+          const fila = document.createElement('div');
+          fila.style.cssText =
+            'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin:10px 0';
 
-    const inputClave = document.createElement('input');
-    inputClave.placeholder = 'Nombre del dato';
-    inputClave.maxLength = 80;
-    inputClave.value = clave;
-    inputClave.setAttribute('aria-label', 'Nombre del dato');
+          const inputClave = document.createElement('input');
+          inputClave.placeholder = 'Nombre del dato';
+          inputClave.maxLength = 80;
+          inputClave.value = clave;
+          inputClave.setAttribute('aria-label', 'Nombre del dato');
 
-    const inputValor = document.createElement('input');
-    inputValor.placeholder = 'Valor';
-    inputValor.maxLength = 1000;
-    inputValor.value = valor;
-    inputValor.setAttribute('aria-label', 'Valor del dato');
+          const inputValor = document.createElement('input');
+          inputValor.placeholder = 'Valor';
+          inputValor.maxLength = 1000;
+          inputValor.value = valor;
+          inputValor.setAttribute('aria-label', 'Valor del dato');
 
-    const quitar = document.createElement('button');
-    quitar.type = 'button';
-    quitar.className = 'btn chico';
-    quitar.textContent = 'Quitar';
-    quitar.onclick = () => fila.remove();
+          const quitar = document.createElement('button');
+          quitar.type = 'button';
+          quitar.className = 'btn chico';
+          quitar.textContent = 'Quitar';
+          quitar.onclick = () => fila.remove();
 
-    fila.append(inputClave, inputValor, quitar);
-    extra.appendChild(fila);
-  }
+          fila.append(inputClave, inputValor, quitar);
+          extra.appendChild(fila);
+        }
 
-  campos.forEach(([clave, valor]) => agregarFila(clave, valor ?? ''));
+        campos.forEach(([clave, valor]) => agregarFila(clave, valor ?? ''));
 
-  overlay.querySelector('#cli-agregar-dato').onclick = () => {
-    agregarFila();
-  };
+        overlay.querySelector('#cli-agregar-dato').onclick = () => {
+          agregarFila();
+        };
 
-  overlay.querySelector('#cli-cancelar').onclick = () => overlay.remove();
+        overlay.querySelector('#cli-cancelar').onclick = () => overlay.remove();
 
-  
-formEditar.onsubmit = async ev => {
-  ev.preventDefault();
-  avisoEditar.innerHTML = '';
 
-  const fd = new FormData(formEditar);
-  const nombre = String(fd.get('nombre') || '').trim();
+        formEditar.onsubmit = async ev => {
+          ev.preventDefault();
+          avisoEditar.innerHTML = '';
 
-  if (!nombre) {
-    avisoEditar.textContent = 'El nombre es obligatorio.';
-    return;
-  }
+          const fd = new FormData(formEditar);
+          const nombre = String(fd.get('nombre') || '').trim();
 
-  const selectorListas =
-    formEditar.querySelector('[name="lista_precios_ids"]');
+          if (!nombre) {
+            avisoEditar.textContent = 'El nombre es obligatorio.';
+            return;
+          }
 
-  const seleccion = Array.from(selectorListas.selectedOptions)
-    .map(op => Number(op.value))
-    .filter(id => Number.isInteger(id) && id > 0);
+          const selectorListas =
+            formEditar.querySelector('[name="lista_precios_ids"]');
 
-  if (seleccion.length === 0) {
-    avisoEditar.textContent =
-      'Seleccioná al menos una lista de precios.';
-    selectorListas.focus();
-    return;
-  }
+          const seleccion = Array.from(selectorListas.selectedOptions)
+            .map(op => Number(op.value))
+            .filter(id => Number.isInteger(id) && id > 0);
 
-  const datosNuevos = {};
-  const clavesUsadas = new Set();
+          if (seleccion.length === 0) {
+            avisoEditar.textContent =
+              'Seleccioná al menos una lista de precios.';
+            selectorListas.focus();
+            return;
+          }
 
-  for (const fila of extra.children) {
-    const [inputClave, inputValor] =
-      fila.querySelectorAll('input');
+          const datosNuevos = {};
+          const clavesUsadas = new Set();
 
-    const clave = inputClave.value.trim();
-    const valor = inputValor.value.trim();
+          for (const fila of extra.children) {
+            const [inputClave, inputValor] =
+              fila.querySelectorAll('input');
 
-    if (!clave && !valor) continue;
+            const clave = inputClave.value.trim();
+            const valor = inputValor.value.trim();
 
-    if (!clave) {
-      avisoEditar.textContent = 'Poné un nombre para cada dato.';
-      inputClave.focus();
-      return;
-    }
+            if (!clave && !valor) continue;
 
-    const claveNormalizada = clave.toLocaleLowerCase('es-AR');
+            if (!clave) {
+              avisoEditar.textContent = 'Poné un nombre para cada dato.';
+              inputClave.focus();
+              return;
+            }
 
-    if (clavesUsadas.has(claveNormalizada)) {
-      avisoEditar.textContent = 'No repitas el nombre de un dato.';
-      inputClave.focus();
-      return;
-    }
+            const claveNormalizada = clave.toLocaleLowerCase('es-AR');
 
-    clavesUsadas.add(claveNormalizada);
-    datosNuevos[clave] = valor;
-  }
+            if (clavesUsadas.has(claveNormalizada)) {
+              avisoEditar.textContent = 'No repitas el nombre de un dato.';
+              inputClave.focus();
+              return;
+            }
 
-  const guardar = formEditar.querySelector('[type="submit"]');
-  guardar.disabled = true;
-  guardar.textContent = 'Guardando...';
+            clavesUsadas.add(claveNormalizada);
+            datosNuevos[clave] = valor;
+          }
 
-  try {
-    const { error: errorCliente } = await sb
-      .from('clientes')
-      .update({
-        nombre,
-        email: String(fd.get('email') || '').trim() || null,
-        telefono: String(fd.get('telefono') || '').trim() || null,
-        lista_precios_id: seleccion[0],
-        datos_adicionales: datosNuevos
-      })
-      .eq('id', cl.id);
+          const guardar = formEditar.querySelector('[type="submit"]');
+          guardar.disabled = true;
+          guardar.textContent = 'Guardando...';
 
-    if (errorCliente) {
-      throw new Error(
-        'No se pudieron guardar los datos del cliente: ' +
-        errorCliente.message
-      );
-    }
+          try {
+            const { error: errorCliente } = await sb
+              .from('clientes')
+              .update({
+                nombre,
+                email: String(fd.get('email') || '').trim() || null,
+                telefono: String(fd.get('telefono') || '').trim() || null,
+                lista_precios_id: seleccion[0],
+                datos_adicionales: datosNuevos
+              })
+              .eq('id', cl.id);
 
-   const { error: errorListas } = await sb.rpc(
-  'reemplazar_listas_cliente',
-  {
-    p_cliente_id: cl.id,
-    p_lista_ids: seleccion
-  }
-);
+            if (errorCliente) {
+              throw new Error(
+                'No se pudieron guardar los datos del cliente: ' +
+                errorCliente.message
+              );
+            }
 
-if (errorListas) {
-  throw new Error(
-    'No se pudieron guardar las listas del cliente: ' +
-    errorListas.message
-  );
-}
+            const { error: errorListas } = await sb.rpc(
+              'reemplazar_listas_cliente',
+              {
+                p_cliente_id: cl.id,
+                p_lista_ids: seleccion
+              }
+            );
 
-    overlay.remove();
-    alert('Cliente actualizado correctamente.');
-    await cargarClientes();
+            if (errorListas) {
+              throw new Error(
+                'No se pudieron guardar las listas del cliente: ' +
+                errorListas.message
+              );
+            }
 
-  } catch (error) {
-    console.error('Error al guardar el cliente:', error);
-    avisoEditar.textContent = error.message ||
-      'Ocurrió un error al guardar los cambios.';
+            overlay.remove();
+            alert('Cliente actualizado correctamente.');
+            await cargarClientes();
 
-  } finally {
-    if (guardar.isConnected) {
-      guardar.disabled = false;
-      guardar.textContent = 'Guardar cambios';
-    }
-  }
-};
+          } catch (error) {
+            console.error('Error al guardar el cliente:', error);
+            avisoEditar.textContent = error.message ||
+              'Ocurrió un error al guardar los cambios.';
 
-};
+          } finally {
+            if (guardar.isConnected) {
+              guardar.disabled = false;
+              guardar.textContent = 'Guardar cambios';
+            }
+          }
+        };
+
+      };
 
       form.onsubmit = async e => {
         e.preventDefault();
@@ -1916,11 +1998,11 @@ if (errorListas) {
           .value.trim();
 
         const listaIds = asignar.checked
-  ? Array.from(selectorLista.selectedOptions)
-      .map(op => Number(op.value))
-  : [Number(general.id)];
+          ? Array.from(selectorLista.selectedOptions)
+            .map(op => Number(op.value))
+          : [Number(general.id)];
 
-const listaId = listaIds[0];
+        const listaId = listaIds[0];
 
         if (!nombre || listaIds.length === 0 || listaIds.some(id => !id)) {
           aviso.innerHTML =
@@ -1939,31 +2021,31 @@ const listaId = listaIds[0];
         boton.disabled = true;
 
         try {
-        
-const { data: clienteNuevoId, error } = await sb.rpc(
-  'crear_cliente_con_listas',
-  {
-    p_nombre: nombre,
-    p_email: email || null,
-    p_telefono: telefono || null,
-    p_lista_ids: listaIds
-  }
-);
 
-if (error) {
-  console.error('Error al crear el cliente:', error);
-  aviso.innerHTML =
-    `<div class="msg err">No se pudo crear el cliente y sus listas: ${esc(error.message)}</div>`;
-  return;
-}
+          const { data: clienteNuevoId, error } = await sb.rpc(
+            'crear_cliente_con_listas',
+            {
+              p_nombre: nombre,
+              p_email: email || null,
+              p_telefono: telefono || null,
+              p_lista_ids: listaIds
+            }
+          );
 
-         form.reset();
-contenedorLista.hidden = true;
-selectorLista.disabled = true;
+          if (error) {
+            console.error('Error al crear el cliente:', error);
+            aviso.innerHTML =
+              `<div class="msg err">No se pudo crear el cliente y sus listas: ${esc(error.message)}</div>`;
+            return;
+          }
 
-Array.from(selectorLista.options).forEach(op => {
-  op.selected = String(op.value) === String(general.id);
-});
+          form.reset();
+          contenedorLista.hidden = true;
+          selectorLista.disabled = true;
+
+          Array.from(selectorLista.options).forEach(op => {
+            op.selected = String(op.value) === String(general.id);
+          });
 
           aviso.innerHTML =
             '<div class="msg ok">Cliente creado correctamente.</div>';
@@ -3037,27 +3119,40 @@ Array.from(selectorLista.options).forEach(op => {
           const botonEntrega = document.getElementById('marcar-entregado');
           if (botonEntrega) botonEntrega.disabled = true;
 
-          
-const { data, error: errorEntrega } = await sb.rpc(
-  'confirmar_entrega_pedido',
-  {
-    p_pedido_id: p.id,
-    p_enargas_transferido:
-      typeof campos.enargas_transferido === 'boolean'
-        ? campos.enargas_transferido
-        : null,
-    p_aceptar_precios_pendientes:
-      campos.aceptar_precios_pendientes === true
+
+          const { data, error: errorEntrega } = await sb.rpc(
+            'confirmar_entrega_pedido',
+            {
+              p_pedido_id: p.id,
+              p_enargas_transferido:
+                typeof campos.enargas_transferido === 'boolean'
+                  ? campos.enargas_transferido
+                  : null,
+              p_aceptar_precios_pendientes:
+                campos.aceptar_precios_pendientes === true
+            }
+          );
+
+
+         if (errorEntrega) {
+  if (botonEntrega) botonEntrega.disabled = false;
+
+  const mensajeError = errorEntrega.message || '';
+
+  if (mensajeError.includes('PRECIOS_PENDIENTES_CONFIRMACION')) {
+    alert(
+      'El pedido tiene precios pendientes y la entrega no fue confirmada. ' +
+      'Se actualizará la información del pedido.'
+    );
+
+    await detallePedidoDeposito(id);
+    return;
   }
-);
 
-
-          if (errorEntrega) {
-            if (botonEntrega) botonEntrega.disabled = false;
-            err('No se pudo confirmar la entrega ni descontar el stock: ' +
-              esc(errorEntrega.message));
-            return;
-          }
+  err('No se pudo confirmar la entrega ni descontar el stock: ' +
+    esc(mensajeError));
+  return;
+}
 
           if (data === 'ya_entregado') {
             aviso.innerHTML =
@@ -3136,45 +3231,45 @@ const { data, error: errorEntrega } = await sb.rpc(
         });
       };
 
-      
-const entregar = document.getElementById('marcar-entregado');
 
-if (entregar) entregar.onclick = () => {
-  const preciosPendientes = p.precios_pendientes === true;
+      const entregar = document.getElementById('marcar-entregado');
 
-  const confirmarEntrega = (enargasTransferido = null) => {
-    const mensaje = preciosPendientes
-      ? 'Este pedido tiene precios pendientes.\n\n' +
-        'Si confirmás la entrega, se descontará el stock y el pedido quedará Entregado. ' +
-        'Ventas deberá completar los precios después.\n\n' +
-        '¿Querés continuar?'
-      : '¿Confirmás que el pedido fue ' +
-        (p.modalidad === 'despacho' ? 'despachado' : 'entregado') +
-        '?';
+      if (entregar) entregar.onclick = () => {
+        const preciosPendientes = p.precios_pendientes === true;
 
-    if (!confirm(mensaje)) {
-      aviso.innerHTML = '';
-      return;
-    }
+        const confirmarEntrega = (enargasTransferido = null) => {
+          const mensaje = preciosPendientes
+            ? 'Este pedido tiene precios pendientes.\n\n' +
+            'Si confirmás la entrega, se descontará el stock y el pedido quedará Entregado. ' +
+            'Ventas deberá completar los precios después.\n\n' +
+            '¿Querés continuar?'
+            : '¿Confirmás que el pedido fue ' +
+            (p.modalidad === 'despacho' ? 'despachado' : 'entregado') +
+            '?';
 
-    const campos = {
-      estado: 'entregado',
-      aceptar_precios_pendientes: preciosPendientes
-    };
+          if (!confirm(mensaje)) {
+            aviso.innerHTML = '';
+            return;
+          }
 
-    if (typeof enargasTransferido === 'boolean') {
-      campos.enargas_transferido = enargasTransferido;
-    }
+          const campos = {
+            estado: 'entregado',
+            aceptar_precios_pendientes: preciosPendientes
+          };
 
-    cambiar(campos);
-  };
+          if (typeof enargasTransferido === 'boolean') {
+            campos.enargas_transferido = enargasTransferido;
+          }
 
-  if (!haySeries) {
-    confirmarEntrega();
-    return;
-  }
+          cambiar(campos);
+        };
 
-  aviso.innerHTML = `
+        if (!haySeries) {
+          confirmarEntrega();
+          return;
+        }
+
+        aviso.innerHTML = `
     <div class="enargas-box">
       <b>Este presupuesto tiene números de serie.</b><br>
       ¿Se transfirieron en el ENARGAS?
@@ -3190,18 +3285,18 @@ if (entregar) entregar.onclick = () => {
       </div>
     </div>`;
 
-  document.getElementById('eng-si').onclick = () => {
-    confirmarEntrega(true);
-  };
+        document.getElementById('eng-si').onclick = () => {
+          confirmarEntrega(true);
+        };
 
-  document.getElementById('eng-no').onclick = () => {
-    confirmarEntrega(false);
-  };
+        document.getElementById('eng-no').onclick = () => {
+          confirmarEntrega(false);
+        };
 
-  document.getElementById('eng-cancel').onclick = () => {
-    aviso.innerHTML = '';
-  };
-};
+        document.getElementById('eng-cancel').onclick = () => {
+          aviso.innerHTML = '';
+        };
+      };
 
 
       const eng = document.getElementById('marcar-enargas');
@@ -3945,42 +4040,42 @@ if (entregar) entregar.onclick = () => {
 
       const obtenerAvisoClientes = () => document.querySelector('#fp #aviso');
 
-const mostrarAvisoClientes = html => {
-  const elemento = obtenerAvisoClientes();
-  if (elemento) elemento.innerHTML = html;
-};
+      const mostrarAvisoClientes = html => {
+        const elemento = obtenerAvisoClientes();
+        if (elemento) elemento.innerHTML = html;
+      };
 
       if (errorClientes) {
-  selectorCliente.innerHTML =
-    '<option value="">No se pudieron cargar los clientes</option>';
+        selectorCliente.innerHTML =
+          '<option value="">No se pudieron cargar los clientes</option>';
 
-  mostrarAvisoClientes(
-    `<div class="msg err">${esc(errorClientes.message)}</div>`
-  );
-} else {
-  clientesActivos = datosClientes || [];
-  console.log('selectorCliente:', selectorCliente);
-console.log('aviso de Ventas:', document.querySelector('#fp #aviso'));
+        mostrarAvisoClientes(
+          `<div class="msg err">${esc(errorClientes.message)}</div>`
+        );
+      } else {
+        clientesActivos = datosClientes || [];
+        console.log('selectorCliente:', selectorCliente);
+        console.log('aviso de Ventas:', document.querySelector('#fp #aviso'));
 
-  selectorCliente.innerHTML =
-    '<option value="">Seleccioná un cliente</option>' +
-    clientesActivos.map(cl => `
+        selectorCliente.innerHTML =
+          '<option value="">Seleccioná un cliente</option>' +
+          clientesActivos.map(cl => `
       <option value="${cl.id}">${esc(cl.nombre)}</option>
     `).join('');
 
-  if (!clientesActivos.length) {
-    mostrarAvisoClientes(
-      '<div class="msg">Todavía no hay clientes activos. Cargalos en la solapa Clientes.</div>'
-    );
-  }
-}
+        if (!clientesActivos.length) {
+          mostrarAvisoClientes(
+            '<div class="msg">Todavía no hay clientes activos. Cargalos en la solapa Clientes.</div>'
+          );
+        }
+      }
 
-     const toggleForm = document.getElementById('toggle-form');
-const colForm = document.getElementById('col-form');
+      const toggleForm = document.getElementById('toggle-form');
+      const colForm = document.getElementById('col-form');
 
-if (toggleForm && colForm) {
-  toggleForm.onclick = () => colForm.classList.toggle('abierto');
-}
+      if (toggleForm && colForm) {
+        toggleForm.onclick = () => colForm.classList.toggle('abierto');
+      }
 
       const items = document.getElementById('items');
       const preciosPorProducto = new Map();
@@ -3991,266 +4086,290 @@ if (toggleForm && colForm) {
           maximumFractionDigits: 2
         });
 
-      
-function actualizarPrecioFila(fila) {
-  const resumen = fila.querySelector('.precio-resumen');
-  if (!resumen) return;
 
-  const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
-  const cantidad = Number(fila.querySelector('.cant').value);
-  const clienteId = Number(selectorCliente.value);
+      function actualizarPrecioFila(fila) {
+        const resumen = fila.querySelector('.precio-resumen');
+        if (!resumen) return;
 
-  if (!clienteId) {
-    resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
-    return;
-  }
+        const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
+        const cantidad = Number(fila.querySelector('.cant').value);
+        const clienteId = Number(selectorCliente.value);
 
-  const producto = productosLista.find(
-    p => p.nombre.toUpperCase() === nombre
-  );
+        if (!clienteId) {
+          resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
+          return;
+        }
 
-  if (!producto) {
-    resumen.textContent = 'Elegí un producto de la lista.';
-    return;
-  }
+        const producto = productosLista.find(
+          p => p.nombre.toUpperCase() === nombre
+        );
 
-  if (!Number.isFinite(cantidad) || cantidad <= 0) {
-    resumen.textContent = 'Ingresá una cantidad válida.';
-    return;
-  }
+        if (!producto) {
+          resumen.textContent = 'Elegí un producto de la lista.';
+          return;
+        }
 
-  const opciones = preciosPorProducto.get(String(producto.id)) || [];
+        if (!Number.isFinite(cantidad) || cantidad <= 0) {
+          resumen.textContent = 'Ingresá una cantidad válida.';
+          return;
+        }
 
-  const opcionesValidas = opciones.filter(
-    op => Number.isFinite(Number(op.precio)) && Number(op.precio) > 0
-  );
+        const opciones = preciosPorProducto.get(String(producto.id)) || [];
 
-  if (!opcionesValidas.length) {
-    resumen.textContent =
-      'No hay precio válido en las listas asignadas. Podrás ingresar un precio para este pedido.';
-    return;
-  }
+        const opcionesValidas = opciones.filter(
+          op => Number.isFinite(Number(op.precio)) && Number(op.precio) > 0
+        );
 
-  const esEspecial = opcionesValidas.some(
-    op => op.origen_precio === 'especial_permanente'
-  );
+        if (!opcionesValidas.length) {
+          resumen.textContent =
+            'No hay precio válido en las listas asignadas. Podrás ingresar un precio para este pedido.';
+          return;
+        }
 
-  // Si todas las listas tienen el mismo precio, no hace falta elegir.
-  const preciosUnicos = [...new Set(
-    opcionesValidas.map(op => Number(op.precio))
-  )];
+        const esEspecial = opcionesValidas.some(
+          op => op.origen_precio === 'especial_permanente'
+        );
 
-  let opcionElegida = opcionesValidas[0];
+        // Si todas las listas tienen el mismo precio, no hace falta elegir.
+        const preciosUnicos = [...new Set(
+          opcionesValidas.map(op => Number(op.precio))
+        )];
 
-  // Si los precios son distintos, permitir elegir la lista para esta fila.
-  if (!esEspecial && preciosUnicos.length > 1) {
-    const selectorPrecio = fila.querySelector('.precio-lista-elegida');
+        let opcionElegida = opcionesValidas[0];
 
-    const valorAnterior = selectorPrecio
-      ? selectorPrecio.value
-      : '';
+        // Si los precios son distintos, permitir elegir la lista para esta fila.
+        if (!esEspecial && preciosUnicos.length > 1) {
+          const selectorPrecio = fila.querySelector('.precio-lista-elegida');
 
-    const opcionesHTML = opcionesValidas.map((op, i) => {
-      const valor = String(i);
-      const etiqueta =
-        `${op.lista} — $${formatoDinero(Number(op.precio))}`;
+          const valorAnterior = selectorPrecio
+            ? selectorPrecio.value
+            : '';
 
-      return `<option value="${valor}" ${valor === valorAnterior ? 'selected' : ''}>${esc(etiqueta)}</option>`;
-    }).join('');
+          const opcionesHTML = opcionesValidas.map((op, i) => {
+            const valor = String(i);
+            const etiqueta =
+              `${op.lista} — $${formatoDinero(Number(op.precio))}`;
 
-    resumen.innerHTML =
-      `<div class="msg err">¡Atención! Hay listas con distintos precios. ¿Qué precio tomo?</div>
+            return `<option value="${valor}" ${valor === valorAnterior ? 'selected' : ''}>${esc(etiqueta)}</option>`;
+          }).join('');
+
+          resumen.innerHTML =
+            `<div class="msg err">¡Atención! Hay listas con distintos precios. ¿Qué precio tomo?</div>
        <label>Elegí el precio para este pedido:
          <select class="precio-lista-elegida">${opcionesHTML}</select>
        </label>`;
 
-    const selectorNuevo = resumen.querySelector('.precio-lista-elegida');
+          const selectorNuevo = resumen.querySelector('.precio-lista-elegida');
 
-    const indice = Number(selectorNuevo.value);
-    opcionElegida = opcionesValidas[
-      Number.isInteger(indice) && opcionesValidas[indice]
-        ? indice
-        : 0
-    ];
+// Recuperar el precio elegido por el usuario.
+const indice = Number(selectorNuevo.value);
 
-    selectorNuevo.addEventListener('change', () => {
-      actualizarPrecioFila(fila);
-    });
-  } else {
-    const etiquetaOrigen = esEspecial
-      ? 'Precio especial permanente'
-      : opcionesValidas[0].lista;
-
-    resumen.innerHTML =
-      `<div>${esc(etiquetaOrigen)}</div>`;
-  }
-
-  const precio = Number(opcionElegida.precio);
-  const subtotal = precio * cantidad;
-
-  const tipo = fila.querySelector('.desc-tipo').value;
-  const valor = Math.max(
-    0,
-    Number(fila.querySelector('.desc-valor').value) || 0
-  );
-
-  let descuento = 0;
-
-  if (tipo === 'porcentaje') {
-    descuento = subtotal * Math.min(valor, 100) / 100;
-  } else if (tipo === 'importe') {
-    descuento = Math.min(valor, subtotal);
-  }
-
-  const total = Math.max(0, subtotal - descuento);
-
-  resumen.insertAdjacentHTML(
-    'beforeend',
-    `<div>Precio unitario: $${formatoDinero(precio)} · ` +
-    `Subtotal: $${formatoDinero(subtotal)} · ` +
-    `Descuento: -$${formatoDinero(descuento)} · ` +
-    `Total: $${formatoDinero(total)}</div>`
-  );
+if (
+  Number.isInteger(indice) &&
+  indice >= 0 &&
+  indice < opcionesValidas.length
+) {
+  opcionElegida = opcionesValidas[indice];
+} else {
+  opcionElegida = opcionesValidas[0];
 }
 
-      
+          selectorNuevo.addEventListener('change', () => {
+            actualizarPrecioFila(fila);
+          });
+        } else {
+          const etiquetaOrigen = esEspecial
+            ? 'Precio especial permanente'
+            : opcionesValidas[0].lista;
 
-async function cargarPreciosCliente() {
-  preciosPorProducto.clear();
-  mostrarAvisoClientes('');
+          resumen.innerHTML =
+            `<div>${esc(etiquetaOrigen)}</div>`;
+        }
 
-  const clienteId = Number(selectorCliente.value);
+       const precio = Number(opcionElegida.precio);
 
-  if (!clienteId) {
-    items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
-    return;
-  }
+// Conservar la lista y el origen exactos del precio elegido.
+fila.dataset.listaPrecioId = opcionElegida.lista_precio_id || '';
+fila.dataset.origenPrecio = opcionElegida.origen_precio || 'lista';
 
-  const cliente = clientesActivos.find(
-    c => Number(c.id) === clienteId
-  );
+const subtotal = precio * cantidad;
 
-  if (!cliente) {
-  mostrarAvisoClientes(
-    '<div class="msg err">No se encontró el cliente seleccionado.</div>'
-  );
-  return false;
-}
+        const tipo = fila.querySelector('.desc-tipo').value;
+        const valor = Math.max(
+          0,
+          Number(fila.querySelector('.desc-valor').value) || 0
+        );
 
-  // Consultar listas adicionales y combinar con la principal.
-  const { data: asignaciones, error: errorAsignaciones } = await sb
-    .from('clientes_listas_precios')
-    .select('lista_precios_id')
-    .eq('cliente_id', clienteId);
+        let descuento = 0;
 
- if (errorAsignaciones) {
+        if (tipo === 'porcentaje') {
+          descuento = subtotal * Math.min(valor, 100) / 100;
+        } else if (tipo === 'importe') {
+          descuento = Math.min(valor, subtotal);
+        }
+
+        const total = Math.max(0, subtotal - descuento);
+
+        resumen.insertAdjacentHTML(
+          'beforeend',
+          `<div>Precio unitario: $${formatoDinero(precio)} · ` +
+          `Subtotal: $${formatoDinero(subtotal)} · ` +
+          `Descuento: -$${formatoDinero(descuento)} · ` +
+          `Total: $${formatoDinero(total)}</div>`
+        );
+      }
+
+
+
+      async function cargarPreciosCliente() {
+        preciosPorProducto.clear();
+        mostrarAvisoClientes('');
+
+        const clienteId = Number(selectorCliente.value);
+
+        if (!clienteId) {
+          items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
+          return;
+        }
+
+        const cliente = clientesActivos.find(
+          c => Number(c.id) === clienteId
+        );
+
+        if (!cliente) {
+          mostrarAvisoClientes(
+            '<div class="msg err">No se encontró el cliente seleccionado.</div>'
+          );
+          return false;
+        }
+
+       // Consultar únicamente las listas asignadas al cliente.
+const { data: asignaciones, error: errorAsignaciones } = await sb
+  .from('clientes_listas_precios')
+  .select('lista_precios_id')
+  .eq('cliente_id', clienteId);
+
+if (errorAsignaciones) {
   mostrarAvisoClientes(
     `<div class="msg err">No se pudieron consultar las listas: ${esc(errorAsignaciones.message)}</div>`
   );
   return false;
 }
 
-  const listaIds = [...new Set([
-    Number(cliente.lista_precios_id),
-    ...(asignaciones || []).map(x => Number(x.lista_precios_id))
-  ].filter(Number.isInteger).filter(id => id > 0))];
+const listaIds = [...new Set(
+  (asignaciones || [])
+    .map(x => Number(x.lista_precios_id))
+    .filter(id => Number.isInteger(id) && id > 0)
+)];
 
-  if (!listaIds.length) {
+// Si no hay listas asignadas, usar la lista principal válida del cliente.
+if (
+  listaIds.length === 0 &&
+  Number.isInteger(Number(cliente.lista_precios_id)) &&
+  Number(cliente.lista_precios_id) > 0
+) {
+  listaIds.push(Number(cliente.lista_precios_id));
+}
+
+        if (!listaIds.length) {
+          mostrarAvisoClientes(
+            '<div class="msg">Este cliente no tiene listas de precios asignadas.</div>'
+          );
+          items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
+          return;
+        }
+
+        const [
+          { data: listas, error: errorListas },
+          { data: precios, error: errorPrecios },
+          { data: especiales, error: errorEspeciales }
+        ] = await Promise.all([
+          sb.from('listas_precios')
+            .select('id,nombre')
+            .in('id', listaIds)
+            .eq('activo', true),
+
+          sb.from('lista_precios_items')
+            .select('lista_precio_id,producto_id,precio')
+            .in('lista_precio_id', listaIds),
+
+          sb.from('precios_especiales_clientes')
+            .select('producto_id,precio')
+            .eq('cliente_id', clienteId)
+            .eq('activo', true)
+        ]);
+
+        if (errorListas || errorPrecios || errorEspeciales) {
+          const error = errorListas || errorPrecios || errorEspeciales;
+          mostrarAvisoClientes(
+            `<div class="msg err">No se pudieron cargar todos los precios: ${esc(error.message)}</div>`
+          );
+          return false;
+        }
+
+        const nombresListas = new Map(
+          (listas || []).map(l => [Number(l.id), l.nombre])
+        );
+
+        const mapa = new Map();
+
+        (precios || []).forEach(p => {
+          const precio = Number(p.precio);
+          if (!Number.isFinite(precio) || precio <= 0) return;
+
+          const productoId = String(p.producto_id);
+          if (!mapa.has(productoId)) mapa.set(productoId, []);
+
+          mapa.get(productoId).push({
+            lista_precio_id: Number(p.lista_precio_id),
+            lista: nombresListas.get(Number(p.lista_precio_id)) || 'Lista',
+            precio,
+            origen_precio: 'lista'
+          });
+        });
+
+        const mapaEspeciales = new Map(
+          (especiales || [])
+            .filter(p => Number.isFinite(Number(p.precio)) && Number(p.precio) > 0)
+            .map(p => [String(p.producto_id), Number(p.precio)])
+        );
+
+        productosLista.forEach(producto => {
+          const id = String(producto.id);
+
+          if (mapaEspeciales.has(id)) {
+  const listaEspecialId = Number(cliente.lista_precios_id);
+
+  if (!Number.isInteger(listaEspecialId) || listaEspecialId <= 0) {
     mostrarAvisoClientes(
-      '<div class="msg">Este cliente no tiene listas de precios asignadas.</div>'
+      `<div class="msg err">El cliente ${esc(cliente.nombre)} tiene un precio especial, pero no tiene una lista principal válida asignada.</div>`
     );
-    items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
+    mapa.set(id, []);
     return;
   }
 
-  const [
-    { data: listas, error: errorListas },
-    { data: precios, error: errorPrecios },
-    { data: especiales, error: errorEspeciales }
-  ] = await Promise.all([
-    sb.from('listas_precios')
-      .select('id,nombre')
-      .in('id', listaIds)
-      .eq('activo', true),
-
-    sb.from('lista_precios_items')
-      .select('lista_precio_id,producto_id,precio')
-      .in('lista_precio_id', listaIds),
-
-    sb.from('precios_especiales_clientes')
-      .select('producto_id,precio')
-      .eq('cliente_id', clienteId)
-      .eq('activo', true)
-  ]);
-
-  if (errorListas || errorPrecios || errorEspeciales) {
-    const error = errorListas || errorPrecios || errorEspeciales;
-    mostrarAvisoClientes(
-      `<div class="msg err">No se pudieron cargar todos los precios: ${esc(error.message)}</div>`
-    );
-    return false;
-  }
-
-  const nombresListas = new Map(
-    (listas || []).map(l => [Number(l.id), l.nombre])
-  );
-
-  const mapa = new Map();
-
-  (precios || []).forEach(p => {
-    const precio = Number(p.precio);
-    if (!Number.isFinite(precio) || precio <= 0) return;
-
-    const productoId = String(p.producto_id);
-    if (!mapa.has(productoId)) mapa.set(productoId, []);
-
-    mapa.get(productoId).push({
-      lista_precio_id: Number(p.lista_precio_id),
-      lista: nombresListas.get(Number(p.lista_precio_id)) || 'Lista',
-      precio,
-      origen_precio: 'lista'
-    });
-  });
-
-  const mapaEspeciales = new Map(
-    (especiales || [])
-      .filter(p => Number.isFinite(Number(p.precio)) && Number(p.precio) > 0)
-      .map(p => [String(p.producto_id), Number(p.precio)])
-  );
-
-  productosLista.forEach(producto => {
-    const id = String(producto.id);
-
-    if (mapaEspeciales.has(id)) {
-      mapa.set(id, [{
-        lista_precio_id: Number(cliente.lista_precios_id),
-        lista: 'Precio especial permanente',
-        precio: mapaEspeciales.get(id),
-        origen_precio: 'especial_permanente'
-      }]);
-      return;
-    }
-
-    const opciones = mapa.get(id) || [];
-
-    // Eliminar duplicados con el mismo importe.
-    const unicos = [];
-    opciones.forEach(opcion => {
-      if (!unicos.some(x => x.precio === opcion.precio)) {
-        unicos.push(opcion);
-      }
-    });
-
-    mapa.set(id, unicos);
-  });
-
-  mapa.forEach((opciones, productoId) => {
-    preciosPorProducto.set(productoId, opciones);
-  });
-
-  items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
-  return true;
+  mapa.set(id, [{
+    lista_precio_id: listaEspecialId,
+    lista: 'Precio especial permanente',
+    precio: mapaEspeciales.get(id),
+    origen_precio: 'especial_permanente'
+  }]);
+  return;
 }
+
+          const opciones = mapa.get(id) || [];
+
+          // Conservar el precio y el identificador de su lista de origen.
+mapa.set(id, opciones);
+        });
+
+        mapa.forEach((opciones, productoId) => {
+          preciosPorProducto.set(productoId, opciones);
+        });
+
+        items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
+        return true;
+      }
 
 
       selectorCliente.addEventListener('change', cargarPreciosCliente);
@@ -4452,31 +4571,31 @@ async function cargarPreciosCliente() {
         }
         const preciosCargados = await cargarPreciosCliente();
 
-if (preciosCargados === false) {
-  aviso.innerHTML =
-    '<div class="msg err">No se pudieron actualizar los precios. Revisá la conexión e intentá nuevamente.</div>';
-  return;
-}
+        if (preciosCargados === false) {
+          aviso.innerHTML =
+            '<div class="msg err">No se pudieron actualizar los precios. Revisá la conexión e intentá nuevamente.</div>';
+          return;
+        }
 
-          // Usar los precios que ya se cargaron para el cliente seleccionado.
-const preciosEspecialesMap = new Map();
+        // Usar los precios que ya se cargaron para el cliente seleccionado.
+        const preciosEspecialesMap = new Map();
 
-preciosPorProducto.forEach((opciones, productoId) => {
-  const especial = opciones.find(
-    opcion => opcion.origen_precio === 'especial_permanente'
-  );
+        preciosPorProducto.forEach((opciones, productoId) => {
+          const especial = opciones.find(
+            opcion => opcion.origen_precio === 'especial_permanente'
+          );
 
-  if (
-    especial &&
-    Number.isFinite(Number(especial.precio)) &&
-    Number(especial.precio) > 0
-  ) {
-    preciosEspecialesMap.set(
-      String(productoId),
-      Number(especial.precio)
-    );
-  }
-});
+          if (
+            especial &&
+            Number.isFinite(Number(especial.precio)) &&
+            Number(especial.precio) > 0
+          ) {
+            preciosEspecialesMap.set(
+              String(productoId),
+              Number(especial.precio)
+            );
+          }
+        });
 
         const lineas = [];
 
@@ -4513,12 +4632,12 @@ preciosPorProducto.forEach((opciones, productoId) => {
           const descuentoValor =
             descuentoTipo === 'ninguno' ? 0 : valorElegido;
 
-                   const productoId = String(pr.id);
+          const productoId = String(pr.id);
 
           // El precio especial permanente siempre tiene prioridad.
           const precioEspecial = preciosEspecialesMap.get(productoId);
 
-         const opcionesPrecio = preciosPorProducto.get(productoId) || [];
+          const opcionesPrecio = preciosPorProducto.get(productoId) || [];
 
           // Leer la opción que Ventas seleccionó en la pantalla.
           const selectorPrecio = l.fila.querySelector(
@@ -4527,53 +4646,54 @@ preciosPorProducto.forEach((opciones, productoId) => {
 
           let opcionElegida = null;
 
-          if (Number.isFinite(precioEspecial) && precioEspecial > 0) {
-            opcionElegida = {
-              lista_precio_id: clientePrecio.lista_precios_id,
-              precio: precioEspecial,
-              origen_precio: 'especial_permanente'
-            };
-          } else if (opcionesPrecio.length) {
-                      const preciosDistintos = [
-            ...new Set(
-              opcionesPrecio
-                .filter(op => Number.isFinite(Number(op.precio)) && Number(op.precio) > 0)
-                .map(op => Number(op.precio))
-            )
-          ];
+         if (Number.isFinite(precioEspecial) && precioEspecial > 0) {
+  opcionElegida = opcionesPrecio.find(
+    opcion =>
+      opcion.origen_precio === 'especial_permanente' &&
+      Number.isFinite(Number(opcion.precio)) &&
+      Number(opcion.precio) > 0
+  ) || null;
+}else if (opcionesPrecio.length) {
+            const preciosDistintos = [
+              ...new Set(
+                opcionesPrecio
+                  .filter(op => Number.isFinite(Number(op.precio)) && Number(op.precio) > 0)
+                  .map(op => Number(op.precio))
+              )
+            ];
 
-          if (preciosDistintos.length === 1) {
-            opcionElegida = opcionesPrecio.find(
-              op => Number.isFinite(Number(op.precio)) &&
-                    Number(op.precio) > 0
-            ) || null;
-          } else if (preciosDistintos.length > 1 && selectorPrecio) {
-            const opcionesValidas = opcionesPrecio.filter(
-  op => Number.isFinite(Number(op.precio)) &&
-        Number(op.precio) > 0
-);
+            if (preciosDistintos.length === 1) {
+              opcionElegida = opcionesPrecio.find(
+                op => Number.isFinite(Number(op.precio)) &&
+                  Number(op.precio) > 0
+              ) || null;
+            } else if (preciosDistintos.length > 1 && selectorPrecio) {
+              const opcionesValidas = opcionesPrecio.filter(
+                op => Number.isFinite(Number(op.precio)) &&
+                  Number(op.precio) > 0
+              );
 
-const indice = Number(selectorPrecio.value);
+              const indice = Number(selectorPrecio.value);
 
-opcionElegida =
-  Number.isInteger(indice) &&
-  indice >= 0 &&
-  indice < opcionesValidas.length
-    ? opcionesValidas[indice]
-    : null;
+              opcionElegida =
+                Number.isInteger(indice) &&
+                  indice >= 0 &&
+                  indice < opcionesValidas.length
+                  ? opcionesValidas[indice]
+                  : null;
 
-            if (
-              opcionElegida &&
-              (!Number.isFinite(Number(opcionElegida.precio)) ||
-               Number(opcionElegida.precio) <= 0)
-            ) {
-              opcionElegida = null;
+              if (
+                opcionElegida &&
+                (!Number.isFinite(Number(opcionElegida.precio)) ||
+                  Number(opcionElegida.precio) <= 0)
+              ) {
+                opcionElegida = null;
+              }
+            } else {
+              aviso.innerHTML =
+                `<div class="msg err">Elegí una lista de precios válida para ${esc(pr.nombre)} antes de guardar.</div>`;
+              return;
             }
-          } else {
-            aviso.innerHTML =
-              `<div class="msg err">Elegí una lista de precios válida para ${esc(pr.nombre)} antes de guardar.</div>`;
-            return;
-          }
           }
 
           const precioUnitario = opcionElegida
@@ -4581,16 +4701,27 @@ opcionElegida =
             : null;
 
           const listaPrecioElegida = opcionElegida
-  ? Number(opcionElegida.lista_precio_id)
-  : Number(clientePrecio.lista_precios_id);
-if (opcionesPrecio.length > 0 && !opcionElegida) {
+            ? Number(opcionElegida.lista_precio_id)
+            : Number(clientePrecio.lista_precios_id);
+            if (
+  opcionElegida &&
+  (
+    !Number.isInteger(listaPrecioElegida) ||
+    listaPrecioElegida <= 0
+  )
+) {
   aviso.innerHTML =
-    `<div class="msg err">No se pudo determinar un precio válido para ${esc(pr.nombre)}. Volvé a elegir el precio antes de guardar.</div>`;
+    `<div class="msg err">El precio de ${esc(pr.nombre)} no tiene una lista válida asociada. No se puede guardar el pedido hasta corregir ese dato.</div>`;
   return;
 }
-const origenPrecio = opcionElegida
-  ? (opcionElegida.origen_precio || 'lista')
-  : 'excepcional_pedido';
+          if (opcionesPrecio.length > 0 && !opcionElegida) {
+            aviso.innerHTML =
+              `<div class="msg err">No se pudo determinar un precio válido para ${esc(pr.nombre)}. Volvé a elegir el precio antes de guardar.</div>`;
+            return;
+          }
+          const origenPrecio = opcionElegida
+            ? (opcionElegida.origen_precio || 'lista')
+            : 'excepcional_pedido';
           // Se permite crear el pedido sin precio.
           // Pero no se puede aplicar un descuento monetario sin conocer el precio.
 
@@ -4615,7 +4746,7 @@ const origenPrecio = opcionElegida
             ? null
             : Math.max(0, subtotal - descuentoImporte);
 
-                    const linea = {
+          const linea = {
             producto: pr.nombre,
             producto_id: pr.id,
             cantidad: l.cantidad,
@@ -4699,7 +4830,7 @@ const origenPrecio = opcionElegida
           return;
         }
 
-                for (const linea of lineas) {
+        for (const linea of lineas) {
           if (linea.precio_unitario !== null) continue;
 
           const cargarAhora = confirm(
@@ -4753,9 +4884,24 @@ const origenPrecio = opcionElegida
           }
 
           linea.precio_unitario = precioNuevo;
-          linea.lista_precio_id =
-            Number(clienteSeleccionado.lista_precios_id);
-          linea.origen_precio = 'excepcional_pedido';
+
+// Validar la lista de referencia antes de guardar el precio excepcional.
+const listaReferenciaId = Number(
+  clienteSeleccionado.lista_precios_id
+);
+
+if (
+  !Number.isInteger(listaReferenciaId) ||
+  listaReferenciaId <= 0
+) {
+  btn.disabled = false;
+  aviso.innerHTML =
+    `<div class="msg err">El cliente ${esc(clienteSeleccionado.nombre)} no tiene una lista principal válida. No se puede guardar el precio excepcional hasta corregir ese dato.</div>`;
+  return;
+}
+
+linea.lista_precio_id = listaReferenciaId;
+linea.origen_precio = 'excepcional_pedido';
           linea.descuento_importe = descuentoImporte;
           linea.total_linea =
             Math.max(0, subtotal - descuentoImporte);
@@ -4807,14 +4953,12 @@ const origenPrecio = opcionElegida
 
           // Guardar el precio histórico si el producto tiene uno cargado.
           // Si no tiene precio, se permite continuar sin importes.
-                   if (linea.precio_unitario !== null) {
+          if (linea.precio_unitario !== null) {
             const { error: errorPrecio } = await sb
               .from('pedido_item_precios')
               .insert({
                 pedido_item_id: itemPadre.id,
-                lista_precio_id:
-                  linea.lista_precio_id ||
-                  clienteSeleccionado.lista_precios_id,
+lista_precio_id: linea.lista_precio_id,
                 precio_unitario: linea.precio_unitario,
                 descuento_tipo: linea.descuento_tipo || 'ninguno',
                 descuento_valor: linea.descuento_valor ?? 0,
@@ -4856,17 +5000,20 @@ const origenPrecio = opcionElegida
 
         if (errorItems) {
           const { error: errorEliminarPedido } = await sb
-  .from('pedidos')
-  .delete()
-  .eq('id', p.id);
+            .from('pedidos')
+            .delete()
+            .eq('id', p.id);
 
-if (errorEliminarPedido) {
-  console.error('No se pudo eliminar el pedido incompleto:', errorEliminarPedido);
-}
           btn.disabled = false;
 
+          if (errorEliminarPedido) {
+            console.error('No se pudo eliminar el pedido incompleto:', errorEliminarPedido);
+            return aviso.innerHTML =
+              `<div class="msg err">Hubo un error al guardar el pedido: ${esc(errorItems.message)}. Además, no se pudo cancelar automáticamente el pedido incompleto (${esc(errorEliminarPedido.message)}). No vuelvas a intentarlo todavía: avisá al administrador para revisar si quedó algún registro parcial.</div>`;
+          }
+
           return aviso.innerHTML =
-            `<div class="msg err">No se pudo guardar el pedido completo: ${esc(errorItems.message)}. No se conservó el pedido incompleto.</div>`;
+            `<div class="msg err">No se pudo guardar el pedido completo: ${esc(errorItems.message)}. Se canceló el pedido creado durante este intento.</div>`;
         }
         const { error: errorNotificacion } = await sb.functions.invoke(
           'enviar-notificaciones',
@@ -5244,371 +5391,517 @@ ${p.nota_deposito
       }, 400);
     }
 
-    
-/* ---------- COMPLETAR PRECIOS PENDIENTES ---------- */
-async function completarPreciosPedido(pedidoId, volver) {
-  if (!['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
-    alert('No tenés permiso para completar precios.');
-    return;
-  }
-
-  const { data: pedido, error: errorPedido } = await sb
-    .from('pedidos')
-    .select('id,cliente_id,lista_precio_id,precios_pendientes,estado')
-    .eq('id', pedidoId)
-    .single();
-
-  if (errorPedido || !pedido) {
-    alert('No se pudo cargar el pedido.');
-    return;
-  }
-
-  if (!pedido.precios_pendientes) {
-    alert('Este pedido no tiene precios pendientes.');
-    await detallePedido(pedidoId, volver);
-    return;
-  }
-
-  const estado = String(pedido.estado || '').toLowerCase();
-
-  if (estado === 'anulado') {
-  alert('No se pueden completar precios desde un pedido anulado.');
-  return;
-}
-  if (!pedido.lista_precio_id) {
-    alert('El pedido no tiene una lista de precios principal asignada.');
-    return;
-  }
-
-  const { data: items, error: errorItems } = await sb
-    .from('pedido_items')
-    .select('id,producto,cantidad')
-    .eq('pedido_id', pedidoId)
-    .is('padre_item_id', null);
-
-  if (errorItems || !items || !items.length) {
-    alert('No se pudieron cargar los productos del pedido.');
-    return;
-  }
-
-  const itemIds = items.map(i => i.id);
-
-  const { data: preciosPedido, error: errorPreciosPedido } = await sb
-    .from('pedido_item_precios')
-    .select('pedido_item_id,precio_unitario,total_linea')
-    .in('pedido_item_id', itemIds);
-
-  if (errorPreciosPedido) {
-    alert('No se pudieron consultar los precios del pedido: ' + errorPreciosPedido.message);
-    return;
-  }
-
-  
-const preciosRegistrados = new Map(
-  (preciosPedido || []).map(r => [
-    Number(r.pedido_item_id),
-    r
-  ])
-);
-
-const preciosExistentes = new Set();
-
-for (const item of items) {
-  const registro = preciosRegistrados.get(Number(item.id));
-
-  if (!registro) continue;
-
-  const precioValido =
-    Number.isFinite(Number(registro.precio_unitario)) &&
-    Number(registro.precio_unitario) > 0 &&
-    registro.total_linea !== null &&
-    registro.total_linea !== undefined &&
-    Number.isFinite(Number(registro.total_linea));
-
-  if (!precioValido) {
-    alert(
-      `El producto "${item.producto}" ya tiene un precio registrado, ` +
-      'pero es inválido o está incompleto. No se modificó ese registro. ' +
-      'El pedido seguirá pendiente. Revisá el precio antes de continuar.'
-    );
-    return;
-  }
-
-  preciosExistentes.add(Number(item.id));
-}
 
 
-  const { data: catalogo, error: errorCatalogo } = await sb
-    .from('productos')
-    .select('id,nombre');
+    /* ---------- COMPLETAR PRECIOS PENDIENTES ---------- */
+    async function completarPreciosPedido(pedidoId, volver) {
+      if (!['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
+        alert('No tenés permiso para completar precios.');
+        return;
+      }
 
-  if (errorCatalogo || !catalogo) {
-    alert('No se pudo consultar el catálogo de productos.');
-    return;
-  }
+      const { data: pedido, error: errorPedido } = await sb
+        .from('pedidos')
+        .select('id,cliente_id,lista_precio_id,precios_pendientes,estado')
+        .eq('id', pedidoId)
+        .single();
 
-  // Obtener las listas asignadas al cliente, incluyendo la principal.
-  let listaIds = [Number(pedido.lista_precio_id)];
+      if (errorPedido || !pedido) {
+        alert('No se pudo cargar el pedido.');
+        return;
+      }
 
-  if (pedido.cliente_id) {
-    const { data: asignaciones, error: errorAsignaciones } = await sb
-      .from('clientes_listas_precios')
-      .select('lista_precios_id')
-      .eq('cliente_id', pedido.cliente_id);
+      if (!pedido.precios_pendientes) {
+        alert('Este pedido no tiene precios pendientes.');
+        await detallePedido(pedidoId, volver);
+        return;
+      }
 
-    if (errorAsignaciones) {
-      alert('No se pudieron consultar las listas del cliente: ' + errorAsignaciones.message);
-      return;
-    }
+      const estado = String(pedido.estado || '').toLowerCase();
 
-    listaIds = [...new Set([
-      ...listaIds,
-      ...(asignaciones || []).map(x => Number(x.lista_precios_id))
-    ].filter(id => Number.isInteger(id) && id > 0))];
-  }
+      if (estado === 'anulado') {
+        alert('No se pueden completar precios desde un pedido anulado.');
+        return;
+      }
 
-  const { data: listas, error: errorListas } = await sb
-    .from('listas_precios')
-    .select('id,nombre')
-    .in('id', listaIds)
-    .eq('activo', true);
+      if (!pedido.lista_precio_id) {
+        alert('El pedido no tiene una lista de precios principal asignada.');
+        return;
+      }
 
-  if (errorListas) {
-    alert('No se pudieron consultar los nombres de las listas: ' + errorListas.message);
-    return;
-  }
+      const { data: items, error: errorItems } = await sb
+        .from('pedido_items')
+        .select('id,producto,cantidad')
+        .eq('pedido_id', pedidoId)
+        .is('padre_item_id', null);
 
-  const nombreLista = new Map(
-    (listas || []).map(l => [Number(l.id), l.nombre])
-  );
+      if (errorItems || !items || !items.length) {
+        alert('No se pudieron cargar los productos del pedido.');
+        return;
+      }
 
-  const { data: preciosListas, error: errorPreciosListas } = await sb
-    .from('lista_precios_items')
-    .select('lista_precio_id,producto_id,precio')
-    .in('lista_precio_id', listaIds);
+      const itemIds = items.map(i => i.id);
 
-  if (errorPreciosListas) {
-    alert('No se pudieron consultar los precios de las listas: ' + errorPreciosListas.message);
-    return;
-  }
+      const { data: preciosPedido, error: errorPreciosPedido } = await sb
+        .from('pedido_item_precios')
+        .select('pedido_item_id,precio_unitario,total_linea,precio_cero_motivo')
+        .in('pedido_item_id', itemIds);
 
-  let especiales = [];
+      if (errorPreciosPedido) {
+        alert('No se pudieron consultar los precios del pedido: ' + errorPreciosPedido.message);
+        return;
+      }
 
-  if (pedido.cliente_id) {
-    const { data, error } = await sb
-      .from('precios_especiales_clientes')
-      .select('producto_id,precio')
-      .eq('cliente_id', pedido.cliente_id)
-      .eq('activo', true);
-
-    if (error) {
-      alert('No se pudieron consultar los precios especiales: ' + error.message);
-      return;
-    }
-
-    especiales = data || [];
-  }
-
-  for (const item of items) {
-    if (preciosExistentes.has(Number(item.id))) continue;
-
-    const producto = catalogo.find(
-      pr => String(pr.nombre).trim() === String(item.producto).trim()
-    );
-
-    if (!producto) {
-      alert(`No se encontró "${item.producto}" en el catálogo. El pedido seguirá pendiente.`);
-      return;
-    }
-
-    // El precio especial permanente tiene prioridad.
-   const especial = (especiales || []).find(
-  p => Number(p.producto_id) === Number(producto.id) &&
-       Number.isFinite(Number(p.precio)) &&
-       Number(p.precio) > 0
-);
-    let opciones = [];
-
-    if (especial) {
-      opciones = [{
-        lista_precio_id: Number(pedido.lista_precio_id),
-        precio: Number(especial.precio),
-        origen_precio: 'especial_permanente',
-        lista: 'Precio especial permanente'
-      }];
-    } else {
-      opciones = (preciosListas || [])
-        .filter(p =>
-          Number(p.producto_id) === Number(producto.id) &&
-          Number(p.precio) > 0 &&
-          Number.isFinite(Number(p.precio))
-        )
-        .map(p => ({
-          lista_precio_id: Number(p.lista_precio_id),
-          precio: Number(p.precio),
-          origen_precio: 'lista',
-          lista: nombreLista.get(Number(p.lista_precio_id)) || 'Lista'
-        }));
-    }
-
-    // Agrupar importes iguales para evitar elecciones duplicadas.
-    const opcionesValidas = opciones.filter(o =>
-  Number.isFinite(Number(o.precio)) &&
-  Number(o.precio) > 0
-);
-
-const importes = [...new Set(
-  opcionesValidas.map(o => Number(o.precio))
-)];
-    let elegido;
-
-    if (importes.length === 1) {
-      elegido = opcionesValidas[0];
-    } else if (importes.length > 1) {
-      const detalle = opcionesValidas
-        .map((o, i) => `${i + 1}. ${o.lista}: $${o.precio}`)
-        .join('\n');
-
-      const respuesta = prompt(
-        `El producto "${item.producto}" tiene distintos precios:\n\n` +
-        `${detalle}\n\n` +
-        'Ingresá el número de la opción que querés usar.'
+      const preciosRegistrados = new Map(
+        (preciosPedido || []).map(r => [Number(r.pedido_item_id), r])
       );
 
-      if (respuesta === null) {
-        alert('Operación cancelada. El pedido seguirá pendiente.');
+      const preciosExistentes = new Set();
+
+      for (const item of items) {
+        const registro = preciosRegistrados.get(Number(item.id));
+        if (!registro) continue;
+
+        const precioRegistrado = Number(registro.precio_unitario);
+        const totalRegistrado = Number(registro.total_linea);
+
+        const precioValido =
+          Number.isFinite(precioRegistrado) &&
+          precioRegistrado >= 0 &&
+          registro.total_linea !== null &&
+          registro.total_linea !== undefined &&
+          Number.isFinite(totalRegistrado) &&
+          totalRegistrado >= 0 &&
+          (
+            precioRegistrado !== 0 ||
+            Boolean(registro.precio_cero_motivo)
+          );
+
+        if (!precioValido) {
+          alert(
+            `El producto "${item.producto}" ya tiene un precio registrado, ` +
+            'pero es inválido o le falta el motivo obligatorio para un precio cero. ' +
+            'No se modificó ese registro. Revisalo antes de continuar.'
+          );
+          return;
+        }
+
+        preciosExistentes.add(Number(item.id));
+      }
+
+      const { data: catalogo, error: errorCatalogo } = await sb
+        .from('productos')
+        .select('id,nombre');
+
+      if (errorCatalogo || !catalogo) {
+        alert('No se pudo consultar el catálogo de productos.');
         return;
       }
 
-      const indice = Number(respuesta) - 1;
+      let listaIds = [Number(pedido.lista_precio_id)];
 
-      if (!Number.isInteger(indice) || !opcionesValidas[indice]) {
-        alert('La opción ingresada no es válida. El pedido seguirá pendiente.');
+      if (pedido.cliente_id) {
+        const { data: asignaciones, error: errorAsignaciones } = await sb
+          .from('clientes_listas_precios')
+          .select('lista_precios_id')
+          .eq('cliente_id', pedido.cliente_id);
+
+        if (errorAsignaciones) {
+          alert('No se pudieron consultar las listas del cliente: ' + errorAsignaciones.message);
+          return;
+        }
+
+        listaIds = [...new Set([
+          ...listaIds,
+          ...(asignaciones || []).map(x => Number(x.lista_precios_id))
+        ].filter(id => Number.isInteger(id) && id > 0))];
+      }
+
+      const { data: listas, error: errorListas } = await sb
+        .from('listas_precios')
+        .select('id,nombre')
+        .in('id', listaIds)
+        .eq('activo', true);
+
+      if (errorListas) {
+        alert('No se pudieron consultar los nombres de las listas: ' + errorListas.message);
         return;
       }
 
-      elegido = opcionesValidas[indice];
-    } else {
-      const entrada = prompt(
-        `El producto "${item.producto}" no tiene un precio válido en las listas asignadas.\n` +
-        'Ingresá un precio excepcional para este pedido. No modificará las listas compartidas.'
+      const nombreLista = new Map(
+        (listas || []).map(l => [Number(l.id), l.nombre])
       );
 
-      if (entrada === null || !entrada.trim()) {
-        alert('No se completaron todos los precios. El pedido sigue pendiente.');
+      const { data: preciosListas, error: errorPreciosListas } = await sb
+        .from('lista_precios_items')
+        .select('lista_precio_id,producto_id,precio')
+        .in('lista_precio_id', listaIds);
+
+      if (errorPreciosListas) {
+        alert('No se pudieron consultar los precios de las listas: ' + errorPreciosListas.message);
         return;
       }
 
-      const precio = Number(entrada.trim().replace(',', '.'));
+      let especiales = [];
 
-      if (!Number.isFinite(precio) || precio <= 0) {
-        alert('El precio debe ser un número mayor que cero. El pedido sigue pendiente.');
+      if (pedido.cliente_id) {
+        const { data, error } = await sb
+          .from('precios_especiales_clientes')
+          .select('producto_id,precio')
+          .eq('cliente_id', pedido.cliente_id)
+          .eq('activo', true);
+
+        if (error) {
+          alert('No se pudieron consultar los precios especiales: ' + error.message);
+          return;
+        }
+
+        especiales = data || [];
+      }
+
+      // Solicita una decisión explícita cuando el precio elegido es cero.
+      async function confirmarPrecioCero(item, elegido) {
+        const confirmacion = confirm(
+          `ATENCIÓN: "${item.producto}" tiene un precio de $0.\n\n` +
+          `Origen: ${elegido.lista || elegido.origen_precio}\n\n` +
+          '¿Confirmás que este producto se entregará sin cargo?\n\n' +
+          'Aceptar: elegir el motivo del precio cero.\n' +
+          'Cancelar: ingresar otro precio o cancelar la operación.'
+        );
+
+        if (!confirmacion) {
+          const cambiar = confirm(
+            '¿Querés ingresar otro precio excepcional para este pedido?\n\n' +
+            'Aceptar: ingresar otro precio.\n' +
+            'Cancelar: dejar este producto pendiente.'
+          );
+
+          if (!cambiar) return null;
+
+          const entrada = prompt(
+            `Ingresá el nuevo precio para "${item.producto}".\n` +
+            'Este cambio será solo para este pedido y no modificará las listas.'
+          );
+
+          if (entrada === null || !entrada.trim()) return null;
+
+          const precioAlternativo = Number(entrada.trim().replace(',', '.'));
+
+          if (!Number.isFinite(precioAlternativo) || precioAlternativo <= 0) {
+            alert('El precio alternativo debe ser mayor que cero. No se guardó el precio.');
+            return null;
+          }
+
+          return {
+            ...elegido,
+            precio: precioAlternativo,
+            origen_precio: 'excepcional_pedido',
+            precio_cero_motivo: null,
+            lista: 'Precio excepcional para este pedido'
+          };
+        }
+
+        const opcionesMotivo = [
+          '1. Bonificación',
+          '2. Muestra sin cargo',
+          '3. Promoción',
+          '4. Otro'
+        ].join('\n');
+
+        const respuestaMotivo = prompt(
+          `Elegí el motivo del precio cero para "${item.producto}":\n\n` +
+          opcionesMotivo +
+          '\n\nIngresá 1, 2, 3 o 4.'
+        );
+
+        if (respuestaMotivo === null) return null;
+
+        const motivos = {
+          '1': 'bonificacion',
+          '2': 'muestra_sin_cargo',
+          '3': 'promocion',
+          '4': 'otro'
+        };
+
+        const motivo = motivos[respuestaMotivo.trim()];
+
+        if (!motivo) {
+          alert('El motivo ingresado no es válido. No se guardó el precio.');
+          return null;
+        }
+
+        let motivoGuardado = motivo;
+
+        if (motivo === 'otro') {
+          const detalleMotivo = prompt(
+            'Motivo: Otro.\n' +
+            'Si querés, escribí una aclaración. Podés dejarla vacía.'
+          );
+
+          if (detalleMotivo === null) {
+            // Cancelar la aclaración no cancela la selección del motivo.
+            motivoGuardado = 'otro';
+          } else if (detalleMotivo.trim()) {
+            motivoGuardado = 'otro: ' + detalleMotivo.trim();
+          }
+        }
+
+        return {
+          ...elegido,
+          precio: 0,
+          precio_cero_motivo: motivoGuardado
+        };
+      }
+
+      for (const item of items) {
+        if (preciosExistentes.has(Number(item.id))) continue;
+
+        const producto = catalogo.find(
+          pr => String(pr.nombre).trim() === String(item.producto).trim()
+        );
+
+        if (!producto) {
+          alert(`No se encontró "${item.producto}" en el catálogo. El pedido seguirá pendiente.`);
+          return;
+        }
+
+        // El precio especial permanente tiene prioridad, incluso si es cero.
+        const especial = (especiales || []).find(
+          p =>
+            Number(p.producto_id) === Number(producto.id) &&
+            Number.isFinite(Number(p.precio)) &&
+            Number(p.precio) >= 0
+        );
+
+        let opciones = [];
+
+        if (especial) {
+          opciones = [{
+            lista_precio_id: Number(pedido.lista_precio_id),
+            precio: Number(especial.precio),
+            origen_precio: 'especial_permanente',
+            lista: 'Precio especial permanente'
+          }];
+        } else {
+          opciones = (preciosListas || [])
+            .filter(p =>
+              Number(p.producto_id) === Number(producto.id) &&
+              Number.isFinite(Number(p.precio)) &&
+              Number(p.precio) >= 0
+            )
+            .map(p => ({
+              lista_precio_id: Number(p.lista_precio_id),
+              precio: Number(p.precio),
+              origen_precio: 'lista',
+              lista: nombreLista.get(Number(p.lista_precio_id)) || 'Lista'
+            }));
+        }
+        // Avisar siempre que exista una opción de precio cero,
+        // aunque también haya precios positivos disponibles.
+        const hayPrecioCero = opciones.some(
+          opcion => Number(opcion.precio) === 0
+        );
+
+        if (hayPrecioCero) {
+          const detalleCeros = opciones
+            .filter(opcion => Number(opcion.precio) === 0)
+            .map(opcion => opcion.lista || opcion.origen_precio)
+            .filter((nombre, indice, lista) => lista.indexOf(nombre) === indice)
+            .join(' / ');
+
+          alert(
+            `ATENCIÓN: "${item.producto}" tiene una opción de precio $0.\n\n` +
+            `Origen: ${detalleCeros || 'Precio disponible'}\n\n` +
+            'Revisá las opciones y elegí el precio que corresponda. ' +
+            'Si seleccionás $0, deberás confirmar el motivo.'
+          );
+        }
+        // Agrupa importes iguales sin ocultar opciones de precio cero.
+        const grupos = new Map();
+
+        for (const opcion of opciones) {
+          const precioOpcion = Number(opcion.precio);
+          const clave = String(precioOpcion);
+
+          if (!grupos.has(clave)) {
+            grupos.set(clave, {
+              ...opcion,
+              listas: [opcion.lista]
+            });
+          } else {
+            const grupo = grupos.get(clave);
+            if (!grupo.listas.includes(opcion.lista)) {
+              grupo.listas.push(opcion.lista);
+            }
+          }
+        }
+
+        const opcionesAgrupadas = [...grupos.values()];
+        let elegido;
+
+        if (opcionesAgrupadas.length === 1) {
+          elegido = opcionesAgrupadas[0];
+        } else if (opcionesAgrupadas.length > 1) {
+          const detalle = opcionesAgrupadas
+            .map((o, i) =>
+              `${i + 1}. ${o.listas.join(' / ')}: $${Number(o.precio)}`
+            )
+            .join('\n');
+
+          const respuesta = prompt(
+            `El producto "${item.producto}" tiene distintas opciones de precio:\n\n` +
+            `${detalle}\n\n` +
+            'Ingresá el número de la opción que querés usar.'
+          );
+
+          if (respuesta === null) {
+            alert('Operación cancelada. El pedido seguirá pendiente.');
+            return;
+          }
+
+          const indice = Number(respuesta) - 1;
+
+          if (!Number.isInteger(indice) || !opcionesAgrupadas[indice]) {
+            alert('La opción ingresada no es válida. El pedido seguirá pendiente.');
+            return;
+          }
+
+          elegido = opcionesAgrupadas[indice];
+        } else {
+          const entrada = prompt(
+            `El producto "${item.producto}" no tiene precio en las listas asignadas.\n` +
+            'Ingresá un precio excepcional para este pedido. No modificará las listas.'
+          );
+
+          if (entrada === null || !entrada.trim()) {
+            alert('No se completaron todos los precios. El pedido sigue pendiente.');
+            return;
+          }
+
+          const precioExcepcional = Number(entrada.trim().replace(',', '.'));
+
+          if (!Number.isFinite(precioExcepcional) || precioExcepcional < 0) {
+            alert('El precio debe ser un número mayor o igual que cero. El pedido sigue pendiente.');
+            return;
+          }
+
+          const listaPrecioId = Number(pedido.lista_precio_id);
+
+          if (!Number.isInteger(listaPrecioId) || listaPrecioId <= 0) {
+            alert('El pedido no tiene una lista de precios válida. No se guardó el precio.');
+            return;
+          }
+
+          elegido = {
+            lista_precio_id: listaPrecioId,
+            precio: precioExcepcional,
+            origen_precio: 'excepcional_pedido',
+            lista: 'Precio excepcional para este pedido'
+          };
+        }
+
+        // Si el precio seleccionado es cero, siempre exige confirmación y motivo.
+        if (Number(elegido.precio) === 0) {
+          elegido = await confirmarPrecioCero(item, elegido);
+
+          if (!elegido) {
+            alert(
+              `No se guardó el precio de "${item.producto}". ` +
+              'El pedido seguirá pendiente.'
+            );
+            return;
+          }
+        }
+
+        const precio = Number(elegido.precio);
+        const cantidad = Number(item.cantidad);
+        const subtotal = precio * cantidad;
+
+        if (
+          !Number.isFinite(precio) ||
+          precio < 0 ||
+          !Number.isFinite(cantidad) ||
+          cantidad <= 0 ||
+          !Number.isFinite(subtotal) ||
+          subtotal < 0
+        ) {
+          alert(
+            `El precio, la cantidad o el subtotal de "${item.producto}" no son válidos. ` +
+            'No se guardó ese precio y el pedido seguirá pendiente.'
+          );
+          return;
+        }
+
+        if (precio === 0 && !elegido.precio_cero_motivo) {
+          alert('Para guardar un precio cero es obligatorio seleccionar un motivo.');
+          return;
+        }
+
+        const { error: errorGuardarPedido } = await sb
+          .from('pedido_item_precios')
+          .insert({
+            pedido_item_id: item.id,
+            lista_precio_id: elegido.lista_precio_id,
+            precio_unitario: precio,
+            descuento_tipo: 'ninguno',
+            descuento_valor: 0,
+            descuento_importe: 0,
+            total_linea: subtotal,
+            origen_precio: elegido.origen_precio,
+            precio_cero_motivo: precio === 0 ? elegido.precio_cero_motivo : null,
+            creado_por: perfil.id
+          });
+
+        if (errorGuardarPedido) {
+          alert(
+            'No se pudo guardar el precio en el pedido: ' +
+            errorGuardarPedido.message +
+            '. El pedido seguirá pendiente.'
+          );
+          return;
+        }
+
+        preciosExistentes.add(Number(item.id));
+      }
+
+      if (preciosExistentes.size !== items.length) {
+        alert('Todavía quedan productos sin precio. El pedido seguirá pendiente.');
         return;
       }
 
-      const listaPrecioId = Number(pedido.lista_precio_id);
+      const { data: resultadoFinalizacion, error: errorActualizarPedido } =
+        await sb.rpc('finalizar_precios_pedido', {
+          p_pedido_id: pedidoId
+        });
 
-if (!Number.isInteger(listaPrecioId) || listaPrecioId <= 0) {
-  alert(
-    'El pedido no tiene una lista de precios válida asociada. ' +
-    'No se guardó el precio excepcional y el pedido seguirá pendiente.'
-  );
-  return;
-}
+      if (errorActualizarPedido) {
+        alert(
+          'Los precios están registrados, pero no se pudo finalizar el pedido: ' +
+          errorActualizarPedido.message +
+          '. El pedido seguirá pendiente.'
+        );
+        return;
+      }
 
-elegido = {
-  lista_precio_id: listaPrecioId,
-  precio,
-  origen_precio: 'excepcional_pedido'
-};
+      if (
+        resultadoFinalizacion !== 'precios_completados' &&
+        resultadoFinalizacion !== 'ya_completado'
+      ) {
+        alert(
+          'No se pudo confirmar el cierre de precios. Resultado: ' +
+          resultadoFinalizacion
+        );
+        return;
+      }
+
+      if (estado === 'entregado') {
+        alert('Los precios se completaron correctamente. El pedido sigue entregado.');
+      } else {
+        alert('Los precios se completaron correctamente. El pedido ya puede continuar su proceso.');
+      }
+
+      await detallePedido(pedidoId, volver);
     }
-
-    
-const precio = Number(elegido.precio);
-const cantidad = Number(item.cantidad);
-const subtotal = precio * cantidad;
-
-if (
-  !Number.isFinite(precio) ||
-  precio <= 0 ||
-  !Number.isFinite(cantidad) ||
-  cantidad <= 0 ||
-  !Number.isFinite(subtotal) ||
-  subtotal <= 0
-) {
-  alert(
-    `El precio, la cantidad o el subtotal de "${item.producto}" ` +
-    'no son válidos. No se guardó ese precio y el pedido seguirá pendiente.'
-  );
-  return;
-}
-
-
-    const { error: errorGuardarPedido } = await sb
-      .from('pedido_item_precios')
-      .insert({
-        pedido_item_id: item.id,
-        lista_precio_id: elegido.lista_precio_id,
-        precio_unitario: precio,
-        descuento_tipo: 'ninguno',
-        descuento_valor: 0,
-        descuento_importe: 0,
-        total_linea: subtotal,
-        origen_precio: elegido.origen_precio,
-        creado_por: perfil.id
-      });
-
-    if (errorGuardarPedido) {
-      alert(
-        'No se pudo guardar el precio en el pedido: ' +
-        errorGuardarPedido.message +
-        '. El pedido seguirá pendiente.'
-      );
-      return;
-    }
-
-    preciosExistentes.add(Number(item.id));
-  }
-
-  if (preciosExistentes.size !== items.length) {
-    alert('Todavía quedan productos sin precio. El pedido seguirá pendiente.');
-    return;
-  }
-
-  
-  const { data: resultadoFinalizacion, error: errorActualizarPedido } =
-    await sb.rpc('finalizar_precios_pedido', {
-      p_pedido_id: pedidoId
-    });
-
-  if (errorActualizarPedido) {
-    alert(
-      'Los precios están registrados, pero no se pudo finalizar el pedido: ' +
-      errorActualizarPedido.message +
-      '. El pedido seguirá pendiente.'
-    );
-    return;
-  }
-
-  if (
-    resultadoFinalizacion !== 'precios_completados' &&
-    resultadoFinalizacion !== 'ya_completado'
-  ) {
-    alert(
-      'No se pudo confirmar el cierre de precios. Resultado: ' +
-      resultadoFinalizacion
-    );
-    return;
-  }
-
-
- if (estado === 'entregado') {
-  alert('Los precios se completaron correctamente. El pedido sigue entregado.');
-} else {
-  alert('Los precios se completaron correctamente. El pedido ya puede continuar su proceso.');
-}
-  await detallePedido(pedidoId, volver);
-}
 
 
     async function detallePedido(id, volver) {

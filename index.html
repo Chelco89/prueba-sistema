@@ -970,12 +970,13 @@
 
       if (['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
         tabs.push(
-          ['ventas', 'Ventas'],
-          ['productos', 'Productos'],
-          ['listas_precios', 'Listas de Precios'],
-          ['clientes', 'Clientes'],
-          ['caja', 'Caja']
-        );
+  ['ventas', 'Ventas'],
+  ['productos', 'Productos'],
+  ['listas_precios', 'Listas de Precios'],
+  ['clientes', 'Clientes'],
+  ['caja', 'Caja'],
+  ['cuentas_corrientes', 'Cuenta Corriente']
+);
       }
 
       if (['deposito', 'admin', 'supervisor'].includes(perfil.rol)) {
@@ -1809,7 +1810,22 @@
 </select>
 
 <small>Mantené presionada la tecla Ctrl para seleccionar varias listas.</small>
+<hr>
 
+<label style="display:flex;align-items:center;gap:10px;margin:14px 0">
+  <input
+    type="checkbox"
+    id="cli-editar-cuenta-corriente"
+    style="width:auto"
+    ${cl.tiene_cuenta_corriente ? 'checked' : ''}
+  >
+  Habilitar cuenta corriente
+</label>
+
+<small>
+  Al deshabilitarla se conservará el historial. No se permitirá deshabilitar
+  una cuenta con saldo pendiente.
+</small>
 
         <hr>
         <h3>Datos adicionales</h3>
@@ -1935,12 +1951,14 @@
             const { error: errorCliente } = await sb
               .from('clientes')
               .update({
-                nombre,
-                email: String(fd.get('email') || '').trim() || null,
-                telefono: String(fd.get('telefono') || '').trim() || null,
-                lista_precios_id: seleccion[0],
-                datos_adicionales: datosNuevos
-              })
+  nombre,
+  email: String(fd.get('email') || '').trim() || null,
+  telefono: String(fd.get('telefono') || '').trim() || null,
+  lista_precios_id: seleccion[0],
+  datos_adicionales: datosNuevos,
+  tiene_cuenta_corriente:
+    overlay.querySelector('#cli-editar-cuenta-corriente').checked
+})
               .eq('id', cl.id);
 
             if (errorCliente) {
@@ -2172,57 +2190,106 @@
       });
     }
 
-    async function verCuentaCorriente(id) {
-      const c = document.getElementById('contenido');
+    
+async function verCuentaCorriente(id) {
+  const c = document.getElementById('contenido');
+  c.innerHTML = '<div class="panel">Cargando movimientos…</div>';
 
-      c.innerHTML = '<div class="panel">Cargando movimientos…</div>';
+  const { data: cuenta, error: errorCuenta } = await sb
+    .from('cuentas_corrientes_resumen')
+    .select('*')
+    .eq('cuenta_corriente_id', id)
+    .maybeSingle();
 
-      const { data: cuenta, error: errorCuenta } = await sb
-        .from('cuentas_corrientes_resumen')
-        .select('*')
-        .eq('cuenta_corriente_id', id)
-        .maybeSingle();
-
-      if (errorCuenta || !cuenta) {
-        c.innerHTML = `<div class="panel">
+  if (errorCuenta || !cuenta) {
+    c.innerHTML = `<div class="panel">
       No se pudo cargar la cuenta.
       ${esc(errorCuenta?.message || '')}
     </div>`;
-        return;
-      }
+    return;
+  }
 
-      const { data: movimientos, error: errorMovimientos } = await sb
-        .from('cuenta_corriente_movimientos')
-        .select('*')
-        .eq('cuenta_corriente_id', id)
-        .order('fecha', { ascending: false });
+  const { data: movimientos, error: errorMovimientos } = await sb
+    .from('cuenta_corriente_movimientos')
+    .select('*')
+    .eq('cuenta_corriente_id', id)
+    .order('fecha', { ascending: false });
 
-      if (errorMovimientos) {
-        c.innerHTML = `<div class="panel">
+  if (errorMovimientos) {
+    c.innerHTML = `<div class="panel">
       Error al cargar movimientos: ${esc(errorMovimientos.message)}
     </div>`;
-        return;
-      }
+    return;
+  }
 
-      const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
-        style: 'currency',
-        currency: 'ARS'
+  const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const nombresTipo = {
+    cargo: 'Entrega de mercaderia',
+    pago: 'Pago',
+    ajuste_debito: 'Ajuste débito',
+    ajuste_credito: 'Ajuste crédito'
+  };
+
+  // Buscar los presupuestos asociados a los movimientos.
+  const idsPedidos = [...new Set(
+    (movimientos || [])
+      .map(m => m.pedido_id)
+      .filter(idPedido => idPedido != null)
+  )];
+
+  let pedidosPorId = {};
+
+  if (idsPedidos.length) {
+    const { data: pedidos, error: errorPedidos } = await sb
+      .from('pedidos')
+      .select('id, numero_remito, cliente')
+      .in('id', idsPedidos);
+
+    if (errorPedidos) {
+      console.error('Error al buscar presupuestos:', errorPedidos);
+    } else {
+      (pedidos || []).forEach(p => {
+        pedidosPorId[String(p.id)] = p;
       });
+    }
+  }
 
-      const nombresTipo = {
-        cargo: 'Cargo',
-        pago: 'Pago',
-        ajuste_debito: 'Ajuste débito',
-        ajuste_credito: 'Ajuste crédito'
-      };
-      const saldoActual = Number(cuenta.saldo || 0);
+  
+const saldoActual = Number(cuenta.saldo || 0);
 
-      const etiquetaSaldo = saldoActual > 0
-        ? `Saldo pendiente: ${dinero(saldoActual)}`
-        : saldoActual < 0
-          ? `Saldo a favor del cliente: ${dinero(Math.abs(saldoActual))}`
-          : 'Cuenta al día';
-      c.innerHTML = `
+// Calcula el saldo después de cada movimiento,
+// partiendo del saldo actual y recorriendo hacia atrás.
+const saldosPorMovimiento = {};
+let saldoAcumulado = saldoActual;
+
+const movimientosCronologicos = [...(movimientos || [])].sort(
+  (a, b) => new Date(b.fecha) - new Date(a.fecha)
+);
+
+for (const m of movimientosCronologicos) {
+  saldosPorMovimiento[String(m.id)] = saldoAcumulado;
+
+  const importe = Number(m.importe || 0);
+
+  if (['cargo', 'ajuste_debito'].includes(m.tipo)) {
+    saldoAcumulado -= importe;
+  } else if (['pago', 'ajuste_credito'].includes(m.tipo)) {
+    saldoAcumulado += importe;
+  }
+}
+
+
+  const etiquetaSaldo = saldoActual > 0
+    ? `Saldo pendiente: ${dinero(saldoActual)}`
+    : saldoActual < 0
+      ? `Saldo a favor del cliente: ${dinero(Math.abs(saldoActual))}`
+      : 'Cuenta al día';
+
+  c.innerHTML = `
     <div class="panel">
       <div style="display:flex;gap:12px;align-items:center;
         flex-wrap:wrap;justify-content:space-between">
@@ -2233,13 +2300,43 @@
       <p>Estado de la cuenta:
         <strong>${cuenta.cuenta_activa ? 'Activa' : 'Inactiva'}</strong>
       </p>
+
       <h2>${etiquetaSaldo}</h2>
 
+      <h3>Registrar saldo inicial</h3>
+      <p class="vacio">
+        Registrá la situación del cliente antes de comenzar a usar
+        el sistema. Solo se puede cargar un saldo inicial por cuenta.
+      </p>
+
+      <form id="cc-saldo-inicial-form" class="panel">
+        <label>Situación inicial del cliente</label>
+        <select id="cc-saldo-inicial-tipo" required>
+          <option value="">Seleccionar…</option>
+          <option value="deuda">Tiene deuda pendiente</option>
+          <option value="favor">Tiene saldo a favor</option>
+        </select>
+
+        <label>Importe ($)</label>
+        <input id="cc-saldo-inicial-importe"
+          type="number" min="0.01" step="0.01"
+          required placeholder="0,00">
+
+        <label>Observaciones</label>
+        <input id="cc-saldo-inicial-observaciones"
+          maxlength="500" placeholder="Saldo anterior al sistema">
+
+        <button class="btn" type="submit">
+          Registrar saldo inicial
+        </button>
+      </form>
+
       <h3>Registrar pago o anticipo</h3>
-<p class="vacio">
-  Podés registrar un pago superior a la deuda.
-  La diferencia quedará como saldo a favor del cliente.
-</p>
+      <p class="vacio">
+        Podés registrar un pago superior a la deuda.
+        La diferencia quedará como saldo a favor del cliente.
+      </p>
+
       <form id="cc-form" class="panel">
         <label>Importe del pago</label>
         <input id="cc-importe" type="number"
@@ -2262,78 +2359,375 @@
       </form>
 
       <h3>Historial de movimientos</h3>
+
       <div style="overflow-x:auto">
         <table>
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Movimiento</th>
-              <th class="num">Importe</th>
-              <th>Pedido</th>
-              <th>Medio de pago</th>
-              <th>Observaciones</th>
-            </tr>
+  <th>Fecha</th>
+<th>Movimiento</th>
+<th>Comprobante</th>
+<th>Debe</th>
+<th>Haber</th>
+<th>Saldo</th>
+<th>Observaciones</th>
+</tr>
           </thead>
+
           <tbody>
-            ${(movimientos || []).length ? movimientos.map(m => `
-              <tr>
-                <td>${new Date(m.fecha).toLocaleString('es-AR')}</td>
-                <td>${esc(nombresTipo[m.tipo] || m.tipo)}</td>
-                <td class="num">${dinero(m.importe)}</td>
-                <td>${m.pedido_id ? '#' + m.pedido_id : '—'}</td>
-                <td>${esc(m.medio_pago || '—')}</td>
-                <td>${esc(m.observaciones || m.referencia || '—')}</td>
-              </tr>
-            `).join('') : `
-              <tr><td colspan="6">Todavía no hay movimientos.</td></tr>
-            `}
+            ${(movimientos || []).length
+              ? movimientos.map(m => {
+                  const esDebe = ['cargo', 'ajuste_debito'].includes(m.tipo);
+                  const pedido = m.pedido_id
+  ? pedidosPorId[String(m.pedido_id)]
+  : null;
+
+const observacionOriginal = m.observaciones || m.referencia || '';
+const reciboEncontrado = observacionOriginal.match(/\bRC-\d{6}\b/i);
+const numeroRecibo = reciboEncontrado ? reciboEncontrado[0].toUpperCase() : null;
+
+const observacionesLimpias = observacionOriginal
+  .replace(/\bRC-\d{6}\b/ig, '')
+  .trim();
+
+const comprobante = pedido
+  ? `<button type="button"
+       class="btn chico cc-presupuesto-link"
+       data-pedido-id="${esc(String(pedido.id))}">
+       Presupuesto ${esc(fmtRemito(pedido.numero_remito))}
+     </button>`
+  : numeroRecibo
+    ? esc(numeroRecibo)
+    : m.pedido_id
+      ? `Pedido #${esc(String(m.pedido_id))}`
+      : '—';
+
+const movimientoTexto = m.tipo === 'pago'
+  ? `Pago${m.medio_pago ? ' · ' + ({
+      efectivo: 'Efectivo',
+      cheque: 'Cheque',
+      echeq: 'E-cheq',
+      transferencia: 'Transferencia',
+      otro: 'Otro'
+    }[String(m.medio_pago).toLowerCase()] || m.medio_pago) : ''}`
+  : (nombresTipo[m.tipo] || m.tipo);
+
+return `
+  <tr>
+    <td>${esc(new Date(m.fecha).toLocaleString('es-AR'))}</td>
+    <td>${esc(movimientoTexto)}</td>
+    <td>${comprobante}</td>
+    <td class="num" style="color:#c62828;font-weight:600">
+      ${esDebe ? dinero(m.importe) : '—'}
+    </td>
+    <td class="num" style="color:#218838;font-weight:600">
+      ${esDebe ? '—' : dinero(m.importe)}
+    </td>
+    <td class="num" style="color:${Number(saldosPorMovimiento[String(m.id)] ?? 0) > 0 ? '#c62828' : '#218838'};font-weight:600">
+  ${dinero(saldosPorMovimiento[String(m.id)] ?? 0)}
+</td>
+    <td>${esc(observacionesLimpias || '—')}</td>
+  </tr>
+`;
+                }).join('')
+              : `<tr><td colspan="7">Todavía no hay movimientos.</td></tr>`
+            }
           </tbody>
         </table>
       </div>
     </div>
   `;
 
-      document.getElementById('cc-volver').onclick = () =>
-        vistaCuentasCorrientes();
+  document.getElementById('cc-volver').onclick = () =>
+    vistaCuentasCorrientes();
 
-      document.getElementById('cc-form').onsubmit = async e => {
-        e.preventDefault();
+  // Abrir el detalle del presupuesto asociado.
+  c.querySelectorAll('.cc-presupuesto-link').forEach(btn => {
+    btn.onclick = () => {
+      verPresupuestoCuentaCorriente(
+        btn.dataset.pedidoId,
+        id
+      );
+    };
+  });
 
-        const importe = Number(document.getElementById('cc-importe').value);
-        const medio = document.getElementById('cc-medio').value;
-        const observaciones =
-          document.getElementById('cc-observaciones').value.trim();
+  document.getElementById('cc-form').onsubmit = async e => {
+    e.preventDefault();
 
-        if (!(importe > 0)) {
-          alert('Ingresá un importe válido.');
-          return;
-        }
+    const importe = Number(
+      document.getElementById('cc-importe').value
+    );
+    const medio = document.getElementById('cc-medio').value;
+    const observaciones = document
+      .getElementById('cc-observaciones').value.trim();
 
-
-        const btn = e.submitter;
-        btn.disabled = true;
-
-        const { error } = await sb
-          .from('cuenta_corriente_movimientos')
-          .insert({
-            cuenta_corriente_id: id,
-            tipo: 'pago',
-            importe,
-            medio_pago: medio,
-            observaciones: observaciones || null,
-            creado_por: perfil.id
-          });
-
-        if (error) {
-          alert('No se pudo registrar el pago: ' + error.message);
-          btn.disabled = false;
-          return;
-        }
-
-        alert('Pago registrado correctamente.');
-        await verCuentaCorriente(id);
-      };
+    if (!(importe > 0) || !Number.isFinite(importe)) {
+      alert('Ingresá un importe válido.');
+      return;
     }
+
+    const btn = e.submitter;
+    btn.disabled = true;
+
+    const { error } = await sb
+      .from('cuenta_corriente_movimientos')
+      .insert({
+        cuenta_corriente_id: id,
+        tipo: 'pago',
+        importe,
+        medio_pago: medio,
+        observaciones: observaciones || null,
+        creado_por: perfil.id
+      });
+
+    if (error) {
+      alert('No se pudo registrar el pago: ' + error.message);
+      btn.disabled = false;
+      return;
+    }
+
+    alert('Pago registrado correctamente.');
+    await verCuentaCorriente(id);
+  };
+
+  document.getElementById('cc-saldo-inicial-form').onsubmit = async e => {
+    e.preventDefault();
+
+    const tipo = document.getElementById('cc-saldo-inicial-tipo').value;
+    const importe = Number(
+      document.getElementById('cc-saldo-inicial-importe').value
+    );
+    const observaciones = document
+      .getElementById('cc-saldo-inicial-observaciones')
+      .value.trim();
+
+    if (!['deuda', 'favor'].includes(tipo)) {
+      alert('Seleccioná si el cliente tiene deuda o saldo a favor.');
+      return;
+    }
+
+    if (!(importe > 0) || !Number.isFinite(importe)) {
+      alert('Ingresá un importe mayor que cero.');
+      return;
+    }
+
+    const btn = e.submitter;
+    btn.disabled = true;
+
+    const { error } = await sb.rpc('registrar_saldo_inicial_cc', {
+      p_cuenta_corriente_id: id,
+      p_tipo_saldo: tipo,
+      p_importe: importe,
+      p_observaciones: observaciones || null
+    });
+
+    if (error) {
+      alert('No se pudo registrar el saldo inicial: ' + error.message);
+      btn.disabled = false;
+      return;
+    }
+
+    alert(
+      tipo === 'deuda'
+        ? 'Deuda inicial registrada correctamente.'
+        : 'Saldo a favor inicial registrado correctamente.'
+    );
+
+    await verCuentaCorriente(id);
+  };
+}
+
+async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
+  const c = document.getElementById('contenido');
+  c.innerHTML = '<div class="panel">Cargando presupuesto…</div>';
+
+  const { data: p, error: errorPedido } = await sb
+    .from('pedidos')
+    .select('*')
+    .eq('id', pedidoId)
+    .maybeSingle();
+
+  if (errorPedido || !p) {
+    c.innerHTML = `<div class="panel">
+      <button class="btn chico" id="cc-presupuesto-volver">
+        ← Volver a Cuenta Corriente
+      </button>
+      <p>No se pudo cargar el presupuesto.</p>
+      ${esc(errorPedido?.message || '')}
+    </div>`;
+    document.getElementById('cc-presupuesto-volver').onclick =
+      () => verCuentaCorriente(cuentaId);
+    return;
+  }
+
+  const { data: items, error: errorItems } = await sb
+    .from('pedido_items')
+    .select('*')
+    .eq('pedido_id', pedidoId)
+    .order('id');
+
+  if (errorItems) {
+    c.innerHTML = `<div class="panel">
+      <button class="btn chico" id="cc-presupuesto-volver">
+        ← Volver a Cuenta Corriente
+      </button>
+      <p>No se pudieron cargar los productos.</p>
+      ${esc(errorItems.message)}
+    </div>`;
+    document.getElementById('cc-presupuesto-volver').onclick =
+      () => verCuentaCorriente(cuentaId);
+    return;
+  }
+
+  const itemsPrincipales = (items || []).filter(i => !i.padre_item_id);
+  const idsItems = itemsPrincipales.map(i => i.id);
+
+  let precios = [];
+
+  if (idsItems.length) {
+    const { data, error } = await sb
+      .from('pedido_item_precios')
+      .select('*')
+      .in('pedido_item_id', idsItems);
+
+    if (error) {
+      c.innerHTML = `<div class="panel">
+        <button class="btn chico" id="cc-presupuesto-volver">
+          ← Volver a Cuenta Corriente
+        </button>
+        <p>No se pudieron cargar los precios históricos.</p>
+        ${esc(error.message)}
+      </div>`;
+      document.getElementById('cc-presupuesto-volver').onclick =
+        () => verCuentaCorriente(cuentaId);
+      return;
+    }
+
+    precios = data || [];
+  }
+
+  const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const preciosPorItem = {};
+  precios.forEach(precio => {
+    preciosPorItem[String(precio.pedido_item_id)] = precio;
+  });
+
+  let total = 0;
+  let hayPreciosPendientes = false;
+
+  const filas = itemsPrincipales.map(item => {
+    const precio = preciosPorItem[String(item.id)];
+    const cantidad = Number(item.cantidad || 0);
+
+    if (!precio || precio.total_linea == null) {
+      hayPreciosPendientes = true;
+
+      return `
+        <tr>
+          <td>${esc(item.producto || 'Producto')}</td>
+          <td class="num">${cantidad.toLocaleString('es-AR')}</td>
+          <td class="num">Sin precio registrado</td>
+          <td class="num">Pendiente</td>
+        </tr>
+      `;
+    }
+
+    const precioUnitario = Number(precio.precio_unitario || 0);
+    const totalLinea = Number(precio.total_linea);
+    total += totalLinea;
+
+    const componentes = (items || []).filter(
+      hijo => String(hijo.padre_item_id) === String(item.id)
+    );
+
+    return `
+      <tr>
+        <td>
+          <strong>${esc(item.producto || 'Producto')}</strong>
+          ${componentes.length ? `
+            <div class="vacio" style="margin-top:4px">
+              Componentes del kit:
+              ${componentes.map(hijo =>
+                esc(hijo.producto || 'Componente') +
+                ' × ' +
+                Number(hijo.cantidad || 0).toLocaleString('es-AR')
+              ).join(' · ')}
+            </div>
+          ` : ''}
+        </td>
+        <td class="num">${cantidad.toLocaleString('es-AR')}</td>
+        <td class="num">${dinero(precioUnitario)}</td>
+        <td class="num">${dinero(totalLinea)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  c.innerHTML = `
+    <div class="panel">
+      <button class="btn chico" id="cc-presupuesto-volver">
+        ← Volver a Cuenta Corriente
+      </button>
+
+      <h2>Presupuesto ${esc(fmtRemito(p.numero_remito))}</h2>
+
+      <p><strong>Cliente:</strong> ${esc(p.cliente || '—')}</p>
+      <p><strong>Estado:</strong> ${esc(p.estado || '—')}</p>
+      <p><strong>Fecha de creación:</strong>
+        ${p.creado_en
+          ? esc(new Date(p.creado_en).toLocaleString('es-AR'))
+          : '—'}
+      </p>
+      <p><strong>Fecha de entrega:</strong>
+        ${p.fecha_entrega
+          ? esc(new Date(p.fecha_entrega + 'T12:00:00').toLocaleDateString('es-AR'))
+          : '—'}
+      </p>
+
+      ${p.comentarios
+        ? `<p><strong>Observaciones:</strong> ${esc(p.comentarios)}</p>`
+        : ''}
+
+      <h3>Detalle de productos</h3>
+
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Cantidad</th>
+              <th class="num">Precio unitario</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filas || '<tr><td colspan="4">El presupuesto no tiene productos.</td></tr>'}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="3" class="num">Total registrado</th>
+              <th class="num">${dinero(total)}</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      ${hayPreciosPendientes ? `
+        <p class="vacio">
+          Atención: hay productos sin precio histórico registrado.
+          El total mostrado es parcial y no incluye esos productos.
+        </p>
+      ` : ''}
+    </div>
+  `;
+
+  document.getElementById('cc-presupuesto-volver').onclick =
+    () => verCuentaCorriente(cuentaId);
+}
+
 
     /* ---------- CAJA ---------- */
 
@@ -2500,85 +2894,913 @@
       }
 
       c.innerHTML = `
-    <div class="panel">
-      <div class="barra">
-        <h2>CAJA</h2>
-      </div>
+      <div class="panel">
+    <div class="barra" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <h2 style="margin:0">CAJA</h2>
 
-      <p class="vacio" style="padding-top:0">
-        Registro de cobros en efectivo, cheque y e-cheq.
-      </p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+    <button type="button" class="btn sec chico" id="btn-mostrar-cobro">
+      Registrar cobro
+    </button>
+    <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
+      Registrar egreso
+    </button>
+    <button type="button" class="btn sec chico" id="btn-mostrar-sesion">
+      Abrir / Cerrar Caja
+    </button>
+  </div>
+</div>
 
-      <h3>Registrar cobro</h3>
+<div id="caja-panel-cobro" hidden style="margin:16px 0"></div>
+<div id="caja-panel-egreso" hidden style="margin:16px 0"></div>
+<div id="caja-panel-sesion" hidden style="margin:16px 0"></div>
+<div id="caja-informes" class="panel" style="margin:16px 0">
+  <h3>Informes de cierre de Caja</h3>
+  <p class="vacio">Consultá e imprimí los informes de sesiones anteriores.</p>
 
-      <form id="caja-form">
-        <label for="caja-cliente">Cliente que realiza el pago</label>
-        <select id="caja-cliente" required>
-          <option value="">Seleccionar cliente…</option>
-          ${(clientes || []).map(cl => `
-            <option value="${Number(cl.id)}">
-              ${esc(cl.nombre)}${cl.activo ? '' : ' (inactivo)'}
-            </option>
-          `).join('')}
-        </select>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    <div style="flex:1;min-width:180px">
+      <label for="caja-informe-sesion">Sesión cerrada</label>
+      <select id="caja-informe-sesion">
+        <option value="">Cargando sesiones…</option>
+      </select>
+    </div>
+    <button type="button" class="btn" id="caja-ver-informe">
+      Ver informe
+    </button>
+  </div>
 
-        <label for="caja-pedido">Pedido relacionado (opcional)</label>
-        <select id="caja-pedido">
-          <option value="">Sin pedido asociado</option>
-        </select>
+  <div id="caja-informe-resultado" style="margin-top:16px"></div>
+</div>
 
-        <label class="check-serie" style="margin-top:14px" id="caja-cc-contenedor" hidden>
-          <input type="checkbox" id="caja-aplicar-cc">
-          Registrar también el pago en la cuenta corriente del cliente
-        </label>
-
-        <hr style="margin:20px 0;border:0;border-top:1px solid var(--borde,#ddd)">
-
-        <h3>Medios de pago</h3>
-        <p class="vacio" style="padding-top:0">
-          Podés agregar varios medios para un mismo cobro.
-        </p>
-
-        <div id="caja-valores"></div>
-
-        <button type="button" class="btn sec chico" id="caja-agregar-valor">
-          + Agregar otro medio de pago
-        </button>
-
-        <div class="panel" style="margin-top:16px">
-          <b>Total del cobro:</b>
-          <span id="caja-total">$ 0,00</span>
+      <section class="panel" style="margin:16px 0;border:1px solid var(--linea)">
+        <div class="barra" style="flex-wrap:wrap">
+          <h3 style="margin:0">Disponible ahora</h3>
+          <button type="button" class="btn sec chico" id="caja-actualizar-resumen">Actualizar</button>
         </div>
+        <div id="caja-resumen-aviso" class="vacio">Consultando disponibilidad…</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+          <div class="panel"><small>Efectivo disponible ARS</small><h2 id="caja-resumen-ars">—</h2></div>
+          <div class="panel"><small>Efectivo disponible USD</small><h2 id="caja-resumen-usd">—</h2></div>
+          <div class="panel"><small>Cheques disponibles</small><h2 id="caja-resumen-cheques">—</h2><div id="caja-resumen-cheques-total"></div></div>
+          <div class="panel"><small>E-cheqs disponibles</small><h2 id="caja-resumen-echeqs">—</h2><div id="caja-resumen-echeqs-total"></div></div>
+        </div>
+            </section>
 
-        <label for="caja-observaciones">Observaciones generales</label>
-        <textarea id="caja-observaciones" rows="2"
-          placeholder="Referencia u observaciones del cobro"></textarea>
+      <div id="caja-cobro-contenido">
 
-        <div id="caja-aviso" style="margin-top:12px"></div>
+  <p class="vacio" style="padding-top:0">
+    Registro de cobros en efectivo, cheque y e-cheq.
+  </p>
+<hr style="margin:20px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
-        <button class="btn" type="submit" id="caja-guardar">
-          Registrar cobro
-        </button>
-      </form>
+<h3>Cartera de cheques y e-cheqs</h3>
+<p class="vacio">
+  Consultá los valores recibidos y administrá su estado.
+</p>
+
+<div id="caja-cartera-aviso" class="vacio">
+  Cargando cartera…
+</div>
+
+<div id="caja-cartera-valores"></div>
+  <h3>Registrar cobro</h3>
+
+  <form id="caja-form">
+    <label for="caja-cliente">Cliente que realiza el pago</label>
+    <select id="caja-cliente" required>
+      <option value="">Seleccionar cliente…</option>
+      ${(clientes || []).map(cl => `
+        <option value="${Number(cl.id)}">
+          ${esc(cl.nombre)}${cl.activo ? '' : ' (inactivo)'}
+        </option>
+      `).join('')}
+    </select>
+
+    <label for="caja-pedido">Pedido relacionado (opcional)</label>
+    <select id="caja-pedido">
+      <option value="">Sin pedido asociado</option>
+    </select>
+
+   
+    <hr style="margin:20px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+    <h3>Medios de pago</h3>
+    <p class="vacio" style="padding-top:0">
+      Podés agregar varios medios para un mismo cobro.
+    </p>
+
+    <div id="caja-valores"></div>
+
+    <button type="button" class="btn sec chico" id="caja-agregar-valor">
+      + Agregar otro medio de pago
+    </button>
+
+    <div class="panel" style="margin-top:16px">
+      <b>Total del cobro:</b>
+      <span id="caja-total">$ 0,00</span>
+    </div>
+
+    <label for="caja-observaciones">Observaciones generales</label>
+    <textarea id="caja-observaciones" rows="2"
+      placeholder="Referencia u observaciones del cobro"></textarea>
+
+    <div id="caja-aviso" style="margin-top:12px"></div>
+
+    <button class="btn" type="submit" id="caja-guardar">
+      Registrar cobro
+    </button>
+  </form>
+
+</div>
 
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
       <h3>Últimos cobros registrados</h3>
       <div id="caja-historial" class="vacio">Cargando historial…</div>
+      
+      <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+      <div id="caja-egreso-contenido">
+
+  <h3>Registrar egreso</h3>
+  <p class="vacio" style="padding-top:0">
+    Registrá gastos de Caja en pesos o dólares, sin mezclar monedas.
+  </p>
+
+  <form id="caja-egreso-form">
+    <label for="caja-egreso-fecha">Fecha del egreso</label>
+    <input id="caja-egreso-fecha" type="datetime-local" required>
+
+    <label for="caja-egreso-moneda">Moneda</label>
+    <select id="caja-egreso-moneda" required>
+      <option value="ARS">Pesos argentinos (ARS)</option>
+      <option value="USD">Dólares estadounidenses (USD)</option>
+    </select>
+
+    <label for="caja-egreso-importe">Importe</label>
+    <input id="caja-egreso-importe" type="number"
+      min="0.01" step="0.01" required placeholder="0,00">
+
+    <label for="caja-egreso-motivo">Motivo (opcional)</label>
+    <textarea id="caja-egreso-motivo" rows="2"
+      maxlength="500" placeholder="Detalle del gasto"></textarea>
+
+    <div id="caja-egreso-aviso" style="margin-top:12px"></div>
+
+    <button class="btn" type="submit" id="caja-egreso-guardar">
+      Registrar egreso
+    </button>
+  </form>
+
+</div>
+      <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+      <h3>Últimos egresos registrados</h3>
+      <div id="caja-egresos-historial" class="vacio">
+        Próximamente: historial de egresos.
+      </div>
+
     </div>
   `;
+const panelCobro = document.getElementById('caja-panel-cobro');
+function alternarPanelCaja(id) {
+  const panel = document.getElementById(id);
+  const mostrar = panel.hidden;
 
+  document.getElementById('caja-panel-cobro').hidden = true;
+  document.getElementById('caja-panel-egreso').hidden = true;
+  document.getElementById('caja-panel-sesion').hidden = true;
+
+  panel.hidden = !mostrar;
+}
+
+document.getElementById('btn-mostrar-cobro').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-cobro');
+});
+
+document.getElementById('btn-mostrar-egreso').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-egreso');
+});
+
+document.getElementById('btn-mostrar-sesion').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-sesion');
+});
+panelCobro.appendChild(
+  document.getElementById('caja-cobro-contenido')
+);
+const panelEgreso = document.getElementById('caja-panel-egreso');
+
+panelEgreso.appendChild(
+  document.getElementById('caja-egreso-contenido')
+);
       const form = document.getElementById('caja-form');
       const selectorCliente = document.getElementById('caja-cliente');
       const selectorPedido = document.getElementById('caja-pedido');
-      const aplicarCC = document.getElementById('caja-aplicar-cc');
-      const contenedorCC = document.getElementById('caja-cc-contenedor');
       const valoresContenedor = document.getElementById('caja-valores');
       const aviso = document.getElementById('caja-aviso');
       const dinero = n => Number(n || 0).toLocaleString('es-AR', {
         style: 'currency',
         currency: 'ARS'
       });
+
+      const dineroUSD = n => Number(n || 0).toLocaleString('es-AR', {
+        style: 'currency', currency: 'USD'
+      });
+
+async function cargarSesionesParaInformeCaja() {
+  const selector = document.getElementById('caja-informe-sesion');
+  const resultado = document.getElementById('caja-informe-resultado');
+
+  selector.innerHTML = '<option value="">Cargando sesiones…</option>';
+
+  const { data, error } = await sb
+    .from('caja_sesiones')
+    .select('id,abierta_en,cerrada_en')
+    .eq('estado', 'cerrada')
+    .order('cerrada_en', { ascending: false });
+
+  if (error) {
+    selector.innerHTML = '<option value="">Error al cargar sesiones</option>';
+    resultado.innerHTML =
+      `<div class="msg err">No se pudieron cargar las sesiones: ${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    selector.innerHTML = '<option value="">No hay cierres registrados</option>';
+    return;
+  }
+
+  selector.innerHTML =
+    '<option value="">Seleccionar sesión…</option>' +
+    data.map(s => {
+      const fecha = s.cerrada_en
+        ? new Date(s.cerrada_en).toLocaleString('es-AR')
+        : 'Sin fecha';
+
+      return `<option value="${Number(s.id)}">
+        Sesión ${Number(s.id)} · ${esc(fecha)}
+      </option>`;
+    }).join('');
+} 
+async function verInformeCaja() {
+  const selector = document.getElementById('caja-informe-sesion');
+  const resultado = document.getElementById('caja-informe-resultado');
+  const sesionId = Number(selector.value);
+
+  if (!sesionId) {
+    resultado.innerHTML = '<div class="msg err">Seleccioná una sesión cerrada.</div>';
+    return;
+  }
+
+  resultado.innerHTML = '<p class="vacio">Generando informe…</p>';
+
+  const { data, error } = await sb.rpc('informe_cierre_caja', {
+    p_sesion_id: sesionId
+  });
+
+  if (error) {
+    resultado.innerHTML =
+      `<div class="msg err">No se pudo generar el informe: ${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!data || !data.sesion) {
+    resultado.innerHTML = '<div class="msg err">No se recibieron datos del informe.</div>';
+    return;
+  }
+
+  const s = data.sesion;
+  const movimientos = Array.isArray(data.movimientos) ? data.movimientos : [];
+  const formatoImporte = n => Number(n || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  
+  // Cheques y e-cheqs de esta sesión
+  const valores = Array.isArray(data.valores) ? data.valores : [];
+
+  const valoresRecibidos = valores.filter(v =>
+    ['cheque', 'echeq', 'e-cheq'].includes(
+      String(v.medio_pago || '').toLowerCase()
+    )
+  );
+
+  const cheques = valoresRecibidos.filter(v =>
+    String(v.medio_pago).toLowerCase() === 'cheque'
+  );
+
+  const echeqs = valoresRecibidos.filter(v =>
+    ['echeq', 'e-cheq'].includes(
+      String(v.medio_pago).toLowerCase()
+    )
+  );
+
+  const totalCheques = cheques.reduce(
+    (total, v) => total + Number(v.importe || 0), 0
+  );
+
+  const totalEcheqs = echeqs.reduce(
+    (total, v) => total + Number(v.importe || 0), 0
+  );
+
+  const formatoFechaPago = fecha => fecha
+    ? new Date(`${fecha}T00:00:00`).toLocaleDateString('es-AR')
+    : 'No informada';
+
+  
+
+  
+  // Totales de movimientos de esta sesión
+  const sumarMovimientos = (tipo, moneda) =>
+    movimientos
+      .filter(m => m.tipo === tipo && m.moneda === moneda)
+      .reduce((total, m) => total + Number(m.importe || 0), 0);
+
+  const totalCobrosARS = sumarMovimientos('cobro', 'ARS');
+  const totalCobrosUSD = sumarMovimientos('cobro', 'USD');
+
+  const totalEgresosARS = sumarMovimientos('egreso', 'ARS');
+  const totalEgresosUSD = sumarMovimientos('egreso', 'USD');
+
+  const totalGastosEntreSesionesARS =
+    sumarMovimientos('gasto_entre_sesiones', 'ARS');
+
+  const totalGastosEntreSesionesUSD =
+    sumarMovimientos('gasto_entre_sesiones', 'USD');
+
+  // Desglose de cobros por medio de pago
+  const cobrosPorMedio = {};
+
+  movimientos
+    .filter(m => m.tipo === 'cobro')
+    .forEach(m => {
+      const moneda = m.moneda || 'ARS';
+      const medio = m.medio_pago || 'Sin especificar';
+      const clave = `${moneda}|${medio}`;
+
+      cobrosPorMedio[clave] =
+        (cobrosPorMedio[clave] || 0) + Number(m.importe || 0);
+    });
+
+  const filasCobrosPorMedio = Object.entries(cobrosPorMedio)
+    .map(([clave, total]) => {
+      const [moneda, medio] = clave.split('|');
+
+      return `
+        <tr>
+          <td>${esc(medio)}</td>
+          <td>${esc(moneda)}</td>
+          <td style="text-align:right">${esc(formatoImporte(total))}</td>
+        </tr>
+      `;
+    }).join('');
+
+
+  
+const filasValores = lista => lista.map(v => `
+    <tr>
+      <td>${esc(v.banco || '—')}</td>
+      <td>${esc(v.titular || '—')}</td>
+      <td>${esc(
+        v.medio_pago === 'cheque'
+          ? v.numero_cheque || '—'
+          : v.identificador_echeq || '—'
+      )}</td>
+      <td>${esc(formatoFechaPago(v.fecha_cobro))}</td>
+      <td style="text-align:right">${esc(formatoImporte(v.importe))}</td>
+      <td>${esc(v.estado || 'Sin estado')}</td>
+    </tr>
+  `).join('');
+  const formatoFecha = f => f
+    ? new Date(f).toLocaleString('es-AR')
+    : 'No informado';
+
+  const importe = (n, moneda) =>
+    moneda === 'USD'
+      ? `USD ${formatoImporte(n)}`
+      : `$ ${formatoImporte(n)}`;
+
+  const diferencia = (contado, calculado, moneda) => {
+    if (contado === null || contado === undefined) {
+      return 'Sin conteo informado';
+    }
+
+    const valor = Number(contado) - Number(calculado || 0);
+    const signo = valor > 0 ? '+' : '';
+    return `${signo}${importe(valor, moneda)}`;
+  };
+
+  const filas = movimientos.map(m => `
+    <tr>
+      <td>${esc(formatoFecha(m.fecha))}</td>
+      <td>${esc(m.tipo || '')}</td>
+      <td>${esc(m.descripcion || '—')}</td>
+      <td>${esc(m.moneda || '')}</td>
+      <td style="text-align:right">${esc(formatoImporte(m.importe))}</td>
+      <td>${esc(m.nombre_usuario || 'No disponible')}</td>
+      <td>${esc(m.observaciones || '—')}</td>
+    </tr>
+  `).join('');
+
+  resultado.innerHTML = `
+    <div id="caja-informe-documento" class="panel">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2>Distribuidora SGV</h2>
+          <h3>Informe de cierre de Caja · Sesión ${esc(s.id)}</h3>
+        </div>
+        <div><b>Estado:</b> ${esc(s.estado)}</div>
+      </div>
+
+      <hr>
+
+      <h3>Datos de la sesión</h3>
+      <p><b>Apertura:</b> ${esc(formatoFecha(s.abierta_en))}</p>
+      <p><b>Abrió:</b> ${esc(s.nombre_apertura || 'No disponible')}</p>
+      <p><b>Cierre:</b> ${esc(formatoFecha(s.cerrada_en))}</p>
+      <p><b>Cerró:</b> ${esc(s.nombre_cierre || 'No disponible')}</p>
+
+      <hr>
+
+<hr>
+
+<h3>Resumen de movimientos</h3>
+
+<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th style="text-align:left">Concepto</th>
+        <th style="text-align:right">ARS</th>
+        <th style="text-align:right">USD</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Total de cobros</b></td>
+        <td style="text-align:right">${importe(totalCobrosARS, 'ARS')}</td>
+        <td style="text-align:right">${importe(totalCobrosUSD, 'USD')}</td>
+      </tr>
+      <tr>
+        <td><b>Total de egresos</b></td>
+        <td style="text-align:right">${importe(totalEgresosARS, 'ARS')}</td>
+        <td style="text-align:right">${importe(totalEgresosUSD, 'USD')}</td>
+      </tr>
+      <tr>
+        <td>Gastos entre sesiones (informativo)</td>
+        <td style="text-align:right">${importe(totalGastosEntreSesionesARS, 'ARS')}</td>
+        <td style="text-align:right">${importe(totalGastosEntreSesionesUSD, 'USD')}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h4>Cobros por medio de pago</h4>
+
+<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th style="text-align:left">Medio de pago</th>
+        <th>Moneda</th>
+        <th style="text-align:right">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filasCobrosPorMedio || '<tr><td colspan="3">No hay cobros registrados.</td></tr>'}
+    </tbody>
+  </table>
+</div>
+
+<hr>
+
+<h3>Cheques recibidos</h3>
+<p>
+  <b>Cantidad:</b> ${cheques.length}
+  &nbsp; | &nbsp;
+  <b>Total:</b> ${importe(totalCheques, 'ARS')}
+</p>
+
+<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th>Banco</th>
+        <th>Titular</th>
+        <th>Número de cheque</th>
+        <th>Fecha de cobro</th>
+        <th>Importe</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filasValores(cheques) ||
+        '<tr><td colspan="6">No hay cheques registrados.</td></tr>'}
+    </tbody>
+  </table>
+</div>
+
+<hr>
+
+<h3>E-cheqs recibidos</h3>
+<p>
+  <b>Cantidad:</b> ${echeqs.length}
+  &nbsp; | &nbsp;
+  <b>Total:</b> ${importe(totalEcheqs, 'ARS')}
+</p>
+
+<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th>Banco</th>
+        <th>Titular</th>
+        <th>Identificador e-cheq</th>
+        <th>Fecha de cobro</th>
+        <th>Importe</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filasValores(echeqs) ||
+        '<tr><td colspan="6">No hay e-cheqs registrados.</td></tr>'}
+    </tbody>
+  </table>
+</div>
+
+
+      <h3>Resumen de efectivo</h3>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left">Concepto</th>
+              <th style="text-align:right">ARS</th>
+              <th style="text-align:right">USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Saldo inicial</td>
+              <td style="text-align:right">${importe(s.saldo_inicial_ars, 'ARS')}</td>
+              <td style="text-align:right">${importe(s.saldo_inicial_usd, 'USD')}</td>
+            </tr>
+            <tr>
+              <td><b>Saldo calculado por sistema</b></td>
+              <td style="text-align:right"><b>${importe(s.saldo_calculado_ars, 'ARS')}</b></td>
+              <td style="text-align:right"><b>${importe(s.saldo_calculado_usd, 'USD')}</b></td>
+            </tr>
+            <tr>
+              <td>Efectivo contado</td>
+              <td style="text-align:right">${s.saldo_contado_ars == null ? 'Sin informar' : importe(s.saldo_contado_ars, 'ARS')}</td>
+              <td style="text-align:right">${s.saldo_contado_usd == null ? 'Sin informar' : importe(s.saldo_contado_usd, 'USD')}</td>
+            </tr>
+            <tr>
+              <td><b>Diferencia contado vs. sistema</b></td>
+              <td style="text-align:right"><b>${diferencia(s.saldo_contado_ars, s.saldo_calculado_ars, 'ARS')}</b></td>
+              <td style="text-align:right"><b>${diferencia(s.saldo_contado_usd, s.saldo_calculado_usd, 'USD')}</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr>
+
+      <h3>Observaciones</h3>
+      <p><b>Apertura:</b> ${esc(s.observaciones_apertura || 'Sin observaciones')}</p>
+      <p><b>Cierre:</b> ${esc(s.observaciones_cierre || 'Sin observaciones')}</p>
+
+      <hr>
+
+      <h3>Movimientos de la sesión (${movimientos.length})</h3>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Descripción</th>
+              <th>Moneda</th>
+              <th>Importe</th>
+              <th>Usuario</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filas || '<tr><td colspan="7">No hay movimientos registrados.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <button type="button" class="btn" id="caja-imprimir-informe" style="margin-top:12px">
+      Imprimir informe / Guardar PDF
+    </button>
+  `;
+
+  document.getElementById('caja-imprimir-informe').onclick = imprimirInformeCaja;
+}
+
+function imprimirInformeCaja() {
+  const documento = document.getElementById('caja-informe-documento');
+
+  if (!documento) return;
+
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes para esta aplicación.');
+    return;
+  }
+
+  ventana.document.open();
+  ventana.document.write(`
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>Informe de cierre de Caja - Distribuidora SGV</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          color: #222;
+          padding: 24px;
+          font-size: 12px;
+        }
+        h2 { color: #1565B8; }
+        h2, h3 { margin-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td {
+          border: 1px solid #ccc;
+          padding: 7px;
+          text-align: left;
+          vertical-align: top;
+        }
+        th { background: #eee; }
+        hr { border: 0; border-top: 1px solid #ccc; margin: 18px 0; }
+        @media print {
+          body { padding: 0; }
+          tr { break-inside: avoid; }
+        }
+      </style>
+    </head>
+    <body>
+      ${documento.innerHTML}
+    </body>
+    </html>
+  `);
+  ventana.document.close();
+  ventana.focus();
+  ventana.print();
+}
+
+document.getElementById('caja-ver-informe').addEventListener('click', verInformeCaja);
+
+cargarSesionesParaInformeCaja();
+
+
+      async function cargarResumenCaja() {
+        const avisoResumen = document.getElementById('caja-resumen-aviso');
+        const accionesSesion = document.getElementById('caja-panel-sesion');
+        avisoResumen.textContent = 'Actualizando disponibilidad…';
+
+        const { data, error } = await sb.rpc('resumen_caja');
+        if (error) {
+          avisoResumen.innerHTML = `<div class="msg err">No se pudo consultar el resumen: ${esc(error.message)}</div>`;
+          return;
+        }
+
+        const r = Array.isArray(data) ? data[0] : data;
+        if (!r) {
+          avisoResumen.textContent = 'No se recibió información del resumen.';
+          return;
+        }
+
+        document.getElementById('caja-resumen-ars').textContent = dinero(r.efectivo_ars);
+        document.getElementById('caja-resumen-usd').textContent = dineroUSD(r.efectivo_usd);
+        document.getElementById('caja-resumen-cheques').textContent = `${Number(r.cheques_cantidad || 0)} unidades`;
+        document.getElementById('caja-resumen-cheques-total').textContent = dinero(r.cheques_importe);
+        document.getElementById('caja-resumen-echeqs').textContent = `${Number(r.echeqs_cantidad || 0)} unidades`;
+        document.getElementById('caja-resumen-echeqs-total').textContent = dinero(r.echeqs_importe);
+
+        if (r.sesion_abierta) {
+          avisoResumen.textContent = `Caja abierta · Sesión ${r.sesion_id}`;
+          accionesSesion.innerHTML = `
+            <form id="caja-cerrar-sesion" class="panel" style="background:var(--fondo)">
+              <b>Cerrar sesión de Caja</b>
+              <p class="vacio">El conteo físico es opcional. Si lo completás, se guarda para comparar; una diferencia no impide el cierre.</p>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+                <div><label for="caja-contado-ars">Efectivo contado ARS (opcional)</label><input id="caja-contado-ars" type="number" min="0" step="0.01" placeholder="Sin informar"></div>
+                <div><label for="caja-contado-usd">Efectivo contado USD (opcional)</label><input id="caja-contado-usd" type="number" min="0" step="0.01" placeholder="Sin informar"></div>
+              </div>
+              <label for="caja-cierre-observaciones">Observaciones del cierre (opcional)</label>
+              <textarea id="caja-cierre-observaciones" rows="2"></textarea>
+              <div id="caja-cierre-aviso"></div>
+              <button class="btn" type="submit" id="caja-cerrar-btn">Cerrar Caja</button>
+            </form>`;
+          
+document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
+  e.preventDefault();
+
+  const arsTxt = document.getElementById('caja-contado-ars').value;
+  const usdTxt = document.getElementById('caja-contado-usd').value;
+  const ars = arsTxt === '' ? null : Number(arsTxt);
+  const usd = usdTxt === '' ? null : Number(usdTxt);
+  const msg = document.getElementById('caja-cierre-aviso');
+
+  if (
+    (ars !== null && (!Number.isFinite(ars) || ars < 0)) ||
+    (usd !== null && (!Number.isFinite(usd) || usd < 0))
+  ) {
+    msg.innerHTML = '<div class="msg err">Los importes contados deben ser cero o mayores.</div>';
+    return;
+  }
+
+  const sistemaARS = Number(r.efectivo_ars || 0);
+  const sistemaUSD = Number(r.efectivo_usd || 0);
+  const diferenciaARS = ars === null ? 0 : ars - sistemaARS;
+  const diferenciaUSD = usd === null ? 0 : usd - sistemaUSD;
+
+  const hayDiferencia =
+    (ars !== null && Math.abs(diferenciaARS) >= 0.01) ||
+    (usd !== null && Math.abs(diferenciaUSD) >= 0.01);
+
+  const formato = n => Number(n).toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  if (hayDiferencia) {
+    const detalle = [
+      'DIFERENCIA DETECTADA EN CAJA',
+      '',
+      ars !== null
+        ? `ARS: Sistema $${formato(sistemaARS)} | Contado $${formato(ars)} | Diferencia ${diferenciaARS > 0 ? '+' : ''}$${formato(diferenciaARS)}`
+        : 'ARS: Sin conteo físico informado',
+      usd !== null
+        ? `USD: Sistema USD ${formato(sistemaUSD)} | Contado USD ${formato(usd)} | Diferencia ${diferenciaUSD > 0 ? '+' : ''}USD ${formato(diferenciaUSD)}`
+        : 'USD: Sin conteo físico informado',
+      '',
+      '¿Querés cerrar Caja igualmente?'
+    ].join('\n');
+
+    msg.innerHTML = '<div class="msg err">Hay diferencias entre el efectivo calculado y el contado. Revisá los importes antes de confirmar.</div>';
+
+    if (!confirm(detalle)) return;
+  }
+
+  const btn = document.getElementById('caja-cerrar-btn');
+  btn.disabled = true;
+
+  const { error: cierreError } = await sb.rpc('cerrar_sesion_caja', {
+    p_saldo_contado_ars: ars,
+    p_saldo_contado_usd: usd,
+    p_observaciones: document.getElementById('caja-cierre-observaciones').value.trim() || null
+  });
+
+  if (cierreError) {
+    msg.innerHTML = `<div class="msg err">No se pudo cerrar Caja: ${esc(cierreError.message)}</div>`;
+    btn.disabled = false;
+    return;
+  }
+
+  await cargarResumenCaja();
+};
+
+        
+        } else {
+          avisoResumen.textContent = 'Caja cerrada · Se muestran los últimos saldos finales registrados.';
+
+          const { data: cierreAnterior, error: errorCierre } = await sb
+            .from('caja_sesiones')
+            .select('id,saldo_calculado_ars,saldo_calculado_usd')
+            .eq('estado', 'cerrada')
+            .order('cerrada_en', { ascending: false })
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (errorCierre) {
+            accionesSesion.innerHTML =
+              `<div class="msg err">No se pudo consultar el último cierre: ${esc(errorCierre.message)}</div>`;
+            return;
+          }
+
+          const hayCierreAnterior = !!cierreAnterior;
+          const saldoAnteriorARS = Number(cierreAnterior?.saldo_calculado_ars || 0);
+          const saldoAnteriorUSD = Number(cierreAnterior?.saldo_calculado_usd || 0);
+
+          const formatoApertura = n => Number(n).toLocaleString('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          });
+
+          accionesSesion.innerHTML = `
+            <form id="caja-abrir-sesion" class="panel" style="background:var(--fondo)">
+              <b>Abrir sesión de Caja</b>
+
+              ${hayCierreAnterior ? `
+                <div class="msg ok" style="margin:12px 0">
+                  <b>Saldo del último cierre</b>
+                  <p>ARS: $${formatoApertura(saldoAnteriorARS)}</p>
+                  <p>USD: USD ${formatoApertura(saldoAnteriorUSD)}</p>
+                  Podés mantener estos importes o ingresar cuánto efectivo quedó realmente.
+                </div>
+              ` : `
+                <p class="vacio">Primera apertura de Caja. Ingresá los saldos iniciales.</p>
+              `}
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+                <div>
+                  <label for="caja-inicial-ars">Efectivo inicial ARS</label>
+                  <input id="caja-inicial-ars" type="number" min="0" step="0.01"
+                    value="${hayCierreAnterior ? saldoAnteriorARS : 0}" required>
+                </div>
+                <div>
+                  <label for="caja-inicial-usd">Efectivo inicial USD</label>
+                  <input id="caja-inicial-usd" type="number" min="0" step="0.01"
+                    value="${hayCierreAnterior ? saldoAnteriorUSD : 0}" required>
+                </div>
+              </div>
+
+              <label for="caja-apertura-observaciones">
+                Detalle del gasto entre sesiones (opcional)
+              </label>
+              <textarea id="caja-apertura-observaciones" rows="2"
+                placeholder="Ej.: Colectivo, compras, gastos realizados entre sesiones..."></textarea>
+
+              <div id="caja-apertura-aviso"></div>
+              <button class="btn" type="submit" id="caja-abrir-btn">Abrir Caja</button>
+            </form>`;
+
+          document.getElementById('caja-abrir-sesion').onsubmit = async e => {
+            e.preventDefault();
+
+            const ars = Number(document.getElementById('caja-inicial-ars').value);
+            const usd = Number(document.getElementById('caja-inicial-usd').value);
+            const detalle = document.getElementById('caja-apertura-observaciones').value.trim();
+            const msg = document.getElementById('caja-apertura-aviso');
+
+            if (
+              !Number.isFinite(ars) || ars < 0 ||
+              !Number.isFinite(usd) || usd < 0
+            ) {
+              msg.innerHTML = '<div class="msg err">Los importes deben ser cero o mayores.</div>';
+              return;
+            }
+
+            const gastoARS = hayCierreAnterior ? saldoAnteriorARS - ars : 0;
+            const gastoUSD = hayCierreAnterior ? saldoAnteriorUSD - usd : 0;
+
+            if (hayCierreAnterior && (gastoARS < -0.009 || gastoUSD < -0.009)) {
+              msg.innerHTML = '<div class="msg err">El efectivo inicial no puede superar el saldo del último cierre.</div>';
+              return;
+            }
+
+            const hayGasto =
+              gastoARS >= 0.01 || gastoUSD >= 0.01;
+
+            if (hayGasto) {
+              const lineas = [
+                'DIFERENCIA ENTRE EL ÚLTIMO CIERRE Y LA NUEVA APERTURA',
+                '',
+                `ARS: saldo anterior $${formatoApertura(saldoAnteriorARS)} | Nuevo efectivo $${formatoApertura(ars)} | Gasto $${formatoApertura(Math.max(0, gastoARS))}`,
+                `USD: saldo anterior USD ${formatoApertura(saldoAnteriorUSD)} | Nuevo efectivo USD ${formatoApertura(usd)} | Gasto USD ${formatoApertura(Math.max(0, gastoUSD))}`,
+                '',
+                detalle
+                  ? `Detalle informado: ${detalle}`
+                  : 'No se informó detalle del gasto.',
+                '',
+                'El sistema registrará la diferencia como gasto entre sesiones. ¿Querés continuar con la apertura?'
+              ];
+
+              if (!confirm(lineas.join('\n'))) return;
+            }
+
+            const btn = document.getElementById('caja-abrir-btn');
+            btn.disabled = true;
+
+            const { error: aperturaError } = await sb.rpc('abrir_sesion_caja', {
+              p_saldo_inicial_ars: ars,
+              p_saldo_inicial_usd: usd,
+              p_observaciones: detalle || null
+            });
+
+            if (aperturaError) {
+              msg.innerHTML = `<div class="msg err">No se pudo abrir Caja: ${esc(aperturaError.message)}</div>`;
+              btn.disabled = false;
+              return;
+            }
+
+            await cargarResumenCaja();
+          };
+        }
+
+      }
+
+      document.getElementById('caja-actualizar-resumen').onclick = cargarResumenCaja;
 
       function actualizarTotalCaja() {
         const total = [...valoresContenedor.querySelectorAll('.caja-importe')]
@@ -2633,7 +3855,7 @@
             placeholder="ID o número del e-cheq">
         </div>
 
-        <label>Fecha de vencimiento</label>
+        <label>Fecha de cobro</label>
         <input class="caja-vencimiento" type="date">
 
         <label>Observaciones del valor (opcional)</label>
@@ -2674,19 +3896,164 @@
         actualizarCampos();
       }
 
+async function cargarCarteraCheques() {
+  const aviso = document.getElementById('caja-cartera-aviso');
+  const contenedor = document.getElementById('caja-cartera-valores');
+
+  aviso.textContent = 'Consultando cheques y e-cheqs…';
+
+  const { data: valores, error } = await sb
+    .from('caja_cobro_valores')
+    .select('id,cobro_id,medio_pago,importe,titular,banco,numero_cheque,identificador_echeq,fecha_vencimiento,estado,observaciones')
+    .in('estado', ['recibido', 'depositado'])
+    .in('medio_pago', ['cheque', 'echeq'])
+    .order('fecha_vencimiento', { ascending: true });
+
+  if (error) {
+    aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!valores?.length) {
+    aviso.textContent = 'No hay cheques ni e-cheqs pendientes en cartera.';
+    contenedor.innerHTML = '';
+    return;
+  }
+
+  const cobroIds = [...new Set(valores.map(v => Number(v.cobro_id)))];
+
+  const { data: cobros, error: errorCobros } = await sb
+    .from('caja_cobros')
+    .select('id,cliente_id')
+    .in('id', cobroIds);
+
+  if (errorCobros) {
+    aviso.innerHTML = `<div class="msg err">${esc(errorCobros.message)}</div>`;
+    return;
+  }
+
+  const cobrosMap = new Map(
+    (cobros || []).map(c => [Number(c.id), c])
+  );
+
+  const nombres = new Map(
+    (clientes || []).map(c => [Number(c.id), c.nombre])
+  );
+
+  aviso.textContent = `${valores.length} instrumento(s) pendiente(s).`;
+
+  contenedor.innerHTML = `
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Cliente</th>
+            <th>Titular</th>
+            <th>Banco</th>
+            <th>Número / ID</th>
+            <th>Vencimiento</th>
+            <th>Importe</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${valores.map(v => {
+            const cobro = cobrosMap.get(Number(v.cobro_id));
+            const cliente = nombres.get(Number(cobro?.cliente_id)) || 'Cliente';
+
+            return `
+              <tr>
+                <td>${v.medio_pago === 'echeq' ? 'E-cheq' : 'Cheque'}</td>
+                <td>${esc(cliente)}</td>
+                <td>${esc(v.titular || '—')}</td>
+                <td>${esc(v.banco || '—')}</td>
+                <td>${esc(v.numero_cheque || v.identificador_echeq || '—')}</td>
+                <td>${esc(v.fecha_vencimiento || '—')}</td>
+                <td class="num">${dinero(v.importe)}</td>
+                <td>${esc(v.estado)}</td>
+                <td>
+                  <button type="button"
+                    class="btn sec chico caja-rechazar-valor"
+                    data-id="${Number(v.id)}">
+                    Rechazar
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  contenedor.querySelectorAll('.caja-rechazar-valor').forEach(b => {
+    b.onclick = async () => {
+      const id = Number(b.dataset.id);
+
+      const observaciones = prompt(
+        'Observaciones del rechazo:',
+        'Cheque rechazado por el banco.'
+      );
+
+      if (observaciones === null) return;
+
+      const gastoTexto = prompt(
+        '¿Qué gasto bancario adicional querés cobrarle al cliente? Ingresá 0 si no corresponde.',
+        '0'
+      );
+
+      if (gastoTexto === null) return;
+
+      const gasto = Number(gastoTexto.replace(',', '.'));
+
+      if (!Number.isFinite(gasto) || gasto < 0 ||
+          Math.round(gasto * 100) !== gasto * 100) {
+        alert('Ingresá un gasto válido, con hasta dos decimales.');
+        return;
+      }
+
+      if (!confirm(
+        `¿Confirmás el rechazo del instrumento ${id}?\n\n` +
+        `Gasto bancario adicional al cliente: ${dinero(gasto)}`
+      )) return;
+
+      b.disabled = true;
+
+      const { data, error } = await sb.rpc('rechazar_valor_caja', {
+        p_valor_id: id,
+        p_gasto_bancario_cliente: gasto,
+        p_observaciones: observaciones.trim() || null
+      });
+
+      if (error) {
+        alert('No se pudo rechazar el instrumento: ' + error.message);
+        b.disabled = false;
+        return;
+      }
+
+      alert('Instrumento rechazado correctamente.');
+
+      await cargarCarteraCheques();
+      await cargarHistorialCaja();
+      await cargarResumenCaja();
+    };
+  });
+}
+
       document.getElementById('caja-agregar-valor').onclick = agregarValorCaja;
       agregarValorCaja();
 
       selectorCliente.onchange = async () => {
         selectorPedido.innerHTML = '<option value="">Sin pedido asociado</option>';
-        aplicarCC.checked = false;
+      
 
         const cliente = (clientes || []).find(
           cl => Number(cl.id) === Number(selectorCliente.value)
         );
 
-        contenedorCC.hidden = !cliente?.tiene_cuenta_corriente;
-
+       
         if (!cliente?.id) return;
 
         const { data: pedidos, error } = await sb
@@ -2711,26 +4078,40 @@
       };
 
       async function cargarHistorialCaja() {
-        const historial = document.getElementById('caja-historial');
+  const historial = document.getElementById('caja-historial');
 
-        const { data: cobros, error } = await sb
-          .from('caja_cobros')
-          .select('id,cliente_id,pedido_id,importe_total,observaciones,creado_en')
-          .order('creado_en', { ascending: false })
-          .limit(30);
+  const [
+    { data: cobros, error: errorCobros },
+    { data: rechazos, error: errorRechazos }
+  ] = await Promise.all([
+    sb.from('caja_cobros')
+      .select('id,cliente_id,pedido_id,importe_total,observaciones,creado_en')
+      .order('creado_en', { ascending: false })
+      .limit(30),
 
-        if (error) {
-          historial.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-          return;
-        }
+    sb.from('caja_movimientos')
+      .select('id,fecha,importe,medio_pago,descripcion,observaciones,cobro_valor_id')
+      .eq('tipo', 'rechazo_cheque')
+      .order('fecha', { ascending: false })
+      .limit(30)
+  ]);
 
-        const nombres = new Map(
-          (clientes || []).map(cl => [Number(cl.id), cl.nombre])
-        );
+  if (errorCobros || errorRechazos) {
+    const mensaje = errorCobros?.message || errorRechazos?.message;
+    historial.innerHTML =
+      `<div class="msg err">${esc(mensaje)}</div>`;
+    return;
+  }
 
-        historial.className = '';
+  const nombres = new Map(
+    (clientes || []).map(cl => [Number(cl.id), cl.nombre])
+  );
 
-        historial.innerHTML = cobros?.length ? `
+  historial.className = '';
+
+  historial.innerHTML = `
+    <h3>Recibos de cobro</h3>
+    ${cobros?.length ? `
       <div style="overflow-x:auto">
         <table>
           <thead>
@@ -2760,13 +4141,39 @@
           </tbody>
         </table>
       </div>
-    ` : '<p class="vacio">Todavía no hay cobros registrados.</p>';
+    ` : '<p class="vacio">Todavía no hay cobros registrados.</p>'}
 
-        historial.querySelectorAll('.caja-imprimir').forEach(b => {
-          b.onclick = () => imprimirComprobanteCaja(Number(b.dataset.id));
-        });
-      }
+    <h3>Cheques y e-cheqs rechazados</h3>
+    ${rechazos?.length ? `
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Medio</th>
+              <th class="num">Importe</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rechazos.map(x => `
+              <tr>
+                <td>${new Date(x.fecha).toLocaleString('es-AR')}</td>
+                <td>${esc(x.medio_pago || '—')}</td>
+                <td class="num">${dinero(x.importe)}</td>
+                <td>${esc(x.observaciones || x.descripcion || '—')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : '<p class="vacio">Todavía no hay cheques o e-cheqs rechazados.</p>'}
+  `;
 
+  historial.querySelectorAll('.caja-imprimir').forEach(b => {
+    b.onclick = () => imprimirComprobanteCaja(Number(b.dataset.id));
+  });
+}
       form.onsubmit = async e => {
         e.preventDefault();
         aviso.innerHTML = '';
@@ -2802,13 +4209,6 @@
           return;
         }
 
-        const aplicar = aplicarCC.checked;
-
-        if (aplicar && !cliente.tiene_cuenta_corriente) {
-          aviso.innerHTML = '<div class="msg err">Este cliente no tiene una cuenta corriente habilitada.</div>';
-          return;
-        }
-
         const boton = document.getElementById('caja-guardar');
         boton.disabled = true;
 
@@ -2820,7 +4220,7 @@
               p_pedido_id: selectorPedido.value
                 ? Number(selectorPedido.value)
                 : null,
-              p_aplicar_cuenta_corriente: aplicar,
+              p_aplicar_cuenta_corriente: false,
               p_observaciones:
                 document.getElementById('caja-observaciones').value.trim() || null,
               p_valores: valores
@@ -2857,20 +4257,160 @@
 
           form.reset();
           selectorPedido.innerHTML = '<option value="">Sin pedido asociado</option>';
-          aplicarCC.checked = false;
-          contenedorCC.hidden = true;
           valoresContenedor.innerHTML = '';
           agregarValorCaja();
           actualizarTotalCaja();
 
           await cargarHistorialCaja();
+          await cargarResumenCaja();
 
         } finally {
           boton.disabled = false;
         }
       };
+      
+      // ---------- EGRESOS DE CAJA ----------
 
+      const formEgreso = document.getElementById('caja-egreso-form');
+      const avisoEgreso = document.getElementById('caja-egreso-aviso');
+      const botonEgreso = document.getElementById('caja-egreso-guardar');
+      const fechaEgreso = document.getElementById('caja-egreso-fecha');
+      const historialEgresos = document.getElementById('caja-egresos-historial');
+
+      function fechaLocalParaCampo() {
+        const ahora = new Date();
+        const local = new Date(
+          ahora.getTime() - ahora.getTimezoneOffset() * 60000
+        );
+        return local.toISOString().slice(0, 16);
+      }
+
+      fechaEgreso.value = fechaLocalParaCampo();
+
+      const dineroMoneda = (importe, moneda) =>
+        Number(importe || 0).toLocaleString('es-AR', {
+          style: 'currency',
+          currency: moneda === 'USD' ? 'USD' : 'ARS'
+        });
+
+      async function cargarHistorialEgresos() {
+        historialEgresos.className = 'vacio';
+        historialEgresos.textContent = 'Cargando egresos…';
+
+        const { data: egresos, error } = await sb
+          .from('caja_egresos')
+          .select('id,fecha,moneda,importe,motivo,creado_en')
+          .order('fecha', { ascending: false })
+          .limit(30);
+
+        if (error) {
+          historialEgresos.innerHTML =
+            `<div class="msg err">No se pudo cargar el historial: ${esc(error.message)}</div>`;
+          return;
+        }
+
+        historialEgresos.className = '';
+
+        if (!egresos?.length) {
+          historialEgresos.innerHTML =
+            '<p class="vacio">Todavía no hay egresos registrados.</p>';
+          return;
+        }
+
+        historialEgresos.innerHTML = `
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Moneda</th>
+                  <th class="num">Importe</th>
+                  <th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${egresos.map(x => `
+                  <tr>
+                    <td>${new Date(x.fecha).toLocaleString('es-AR')}</td>
+                    <td>${esc(x.moneda)}</td>
+                    <td class="num">${dineroMoneda(x.importe, x.moneda)}</td>
+                    <td>${esc(x.motivo || '—')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      formEgreso.onsubmit = async e => {
+        e.preventDefault();
+        avisoEgreso.innerHTML = '';
+
+        const moneda = document.getElementById('caja-egreso-moneda').value;
+        const importe = Number(
+          document.getElementById('caja-egreso-importe').value
+        );
+        const motivo = document.getElementById('caja-egreso-motivo').value.trim();
+        const fechaValor = fechaEgreso.value;
+
+        if (!['ARS', 'USD'].includes(moneda)) {
+          avisoEgreso.innerHTML =
+            '<div class="msg err">Seleccioná una moneda válida.</div>';
+          return;
+        }
+
+        if (!Number.isFinite(importe) || importe <= 0) {
+          avisoEgreso.innerHTML =
+            '<div class="msg err">El importe debe ser mayor que cero.</div>';
+          return;
+        }
+
+        if (!fechaValor || Number.isNaN(new Date(fechaValor).getTime())) {
+          avisoEgreso.innerHTML =
+            '<div class="msg err">Ingresá una fecha válida.</div>';
+          return;
+        }
+
+        botonEgreso.disabled = true;
+
+        try {
+          const { data: egresoId, error } = await sb.rpc(
+            'registrar_egreso_caja',
+            {
+              p_moneda: moneda,
+              p_importe: importe,
+              p_motivo: motivo || null,
+              p_fecha: new Date(fechaValor).toISOString()
+            }
+          );
+
+          if (error) {
+            avisoEgreso.innerHTML =
+              `<div class="msg err">No se pudo registrar el egreso: ${esc(error.message)}</div>`;
+            return;
+          }
+
+          avisoEgreso.innerHTML =
+            `<div class="msg ok">Egreso registrado correctamente. Número: ${esc(String(egresoId))}.</div>`;
+
+          formEgreso.reset();
+          fechaEgreso.value = fechaLocalParaCampo();
+
+          await cargarHistorialEgresos();
+          await cargarResumenCaja();
+        } catch (error) {
+          avisoEgreso.innerHTML =
+            `<div class="msg err">Ocurrió un error: ${esc(error.message || 'Error inesperado')}</div>`;
+        } finally {
+          botonEgreso.disabled = false;
+        }
+      };
+
+      await cargarHistorialEgresos();
       await cargarHistorialCaja();
+      await cargarCarteraCheques();
+      await cargarResumenCaja();
     }
 
     /* ---------- DEPÓSITO ---------- */

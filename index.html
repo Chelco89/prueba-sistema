@@ -2898,21 +2898,25 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     <div class="barra" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <h2 style="margin:0">CAJA</h2>
 
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
-    <button type="button" class="btn sec chico" id="btn-mostrar-cobro">
-      Registrar cobro
-    </button>
-    <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
-      Registrar egreso
-    </button>
-    <button type="button" class="btn sec chico" id="btn-mostrar-sesion">
-      Abrir / Cerrar Caja
-    </button>
-  </div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+  <button type="button" class="btn sec chico" id="btn-mostrar-cobro">
+    Registrar cobro
+  </button>
+  <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
+    Registrar egreso
+  </button>
+  <button type="button" class="btn sec chico" id="btn-mostrar-cartera">
+    Cartera de cheques y e-cheq
+  </button>
+  <button type="button" class="btn sec chico" id="btn-mostrar-sesion">
+    Abrir / Cerrar Caja
+  </button>
+</div>
 </div>
 
 <div id="caja-panel-cobro" hidden style="margin:16px 0"></div>
 <div id="caja-panel-egreso" hidden style="margin:16px 0"></div>
+<div id="caja-panel-cartera" hidden style="margin:16px 0"></div>
 <div id="caja-panel-sesion" hidden style="margin:16px 0"></div>
 <div id="caja-informes" class="panel" style="margin:16px 0">
   <h3>Informes de cierre de Caja</h3>
@@ -2952,18 +2956,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   <p class="vacio" style="padding-top:0">
     Registro de cobros en efectivo, cheque y e-cheq.
   </p>
-<hr style="margin:20px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
-<h3>Cartera de cheques y e-cheqs</h3>
-<p class="vacio">
-  Consultá los valores recibidos y administrá su estado.
-</p>
-
-<div id="caja-cartera-aviso" class="vacio">
-  Cargando cartera…
-</div>
-
-<div id="caja-cartera-valores"></div>
   <h3>Registrar cobro</h3>
 
   <form id="caja-form">
@@ -3013,6 +3006,85 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   </form>
 
 </div>
+
+      <div id="caja-cartera-contenido">
+        <h3>Cartera de cheques y e-cheqs</h3>
+        <p class="vacio">
+          Consultá los valores recibidos y administrá su estado.
+        </p>
+        <hr style="margin:20px 0;border:0;border-top:1px solid var(--linea)">
+
+<h3>Registrar cheque o e-cheq inicial</h3>
+<p class="vacio">
+  Cargá manualmente los valores que ya tenías antes de utilizar SGV.
+</p>
+
+<form id="caja-inicial-form">
+
+  <label for="caja-inicial-tipo">Tipo de valor</label>
+  <select id="caja-inicial-tipo" required>
+    <option value="cheque">Cheque físico</option>
+    <option value="echeq">E-cheq</option>
+  </select>
+
+  <label for="caja-inicial-cliente">Cliente</label>
+  <select id="caja-inicial-cliente" required>
+    <option value="">Seleccionar cliente...</option>
+    ${(clientes || []).filter(cl => cl.activo).map(cl => `
+      <option value="${Number(cl.id)}">${esc(cl.nombre)}</option>
+    `).join('')}
+  </select>
+
+  <label for="caja-inicial-titular">Titular</label>
+  <input id="caja-inicial-titular" type="text" maxlength="200" required>
+
+  <label for="caja-inicial-cuit">CUIT del titular</label>
+  <input id="caja-inicial-cuit" type="text" maxlength="20">
+
+  <label for="caja-inicial-banco">Banco</label>
+  <input id="caja-inicial-banco" type="text" maxlength="100" required>
+
+  <div id="caja-inicial-numero-contenedor">
+    <label for="caja-inicial-numero">Número de cheque</label>
+    <input id="caja-inicial-numero" type="text" maxlength="100">
+  </div>
+
+  <div id="caja-inicial-echeq-contenedor" hidden>
+    <label for="caja-inicial-identificador">Identificador del e-cheq</label>
+    <input id="caja-inicial-identificador" type="text" maxlength="150">
+  </div>
+
+  <label for="caja-inicial-importe">Importe en pesos (ARS)</label>
+  <input id="caja-inicial-importe" type="number"
+    min="0.01" step="0.01" required>
+
+  <label for="caja-inicial-emision">Fecha de emisión</label>
+  <input id="caja-inicial-emision" type="date">
+
+  <label for="caja-inicial-cobro">Fecha de cobro</label>
+  <input id="caja-inicial-cobro" type="date" required>
+
+  <label for="caja-inicial-observaciones">Observaciones</label>
+  <textarea id="caja-inicial-observaciones"
+    rows="2" maxlength="500"></textarea>
+
+  <div id="caja-inicial-duplicado"></div>
+  <div id="caja-inicial-aviso"></div>
+
+  <button type="submit" class="btn" id="caja-inicial-guardar">
+    Guardar en cartera
+  </button>
+
+</form>
+
+<hr style="margin:24px 0;border:0;border-top:1px solid var(--linea)">
+
+        <div id="caja-cartera-aviso" class="vacio">
+          Cargando cartera…
+        </div>
+
+        <div id="caja-cartera-valores"></div>
+      </div>
 
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
@@ -3064,12 +3136,179 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     </div>
   `;
 const panelCobro = document.getElementById('caja-panel-cobro');
+const tipoInicial = document.getElementById('caja-inicial-tipo');
+const numeroInicial = document.getElementById('caja-inicial-numero');
+const identificadorInicial = document.getElementById('caja-inicial-identificador');
+
+function actualizarCamposValorInicial() {
+  const esCheque = tipoInicial.value === 'cheque';
+
+  document.getElementById('caja-inicial-numero-contenedor').hidden = !esCheque;
+  document.getElementById('caja-inicial-echeq-contenedor').hidden = esCheque;
+
+  numeroInicial.required = esCheque;
+  identificadorInicial.required = !esCheque;
+
+  if (esCheque) {
+    identificadorInicial.value = '';
+  } else {
+    numeroInicial.value = '';
+  }
+}
+
+tipoInicial.addEventListener('change', actualizarCamposValorInicial);
+actualizarCamposValorInicial();
+async function verificarDuplicadoValorInicial() {
+  const aviso = document.getElementById('caja-inicial-duplicado');
+  const tipo = tipoInicial.value;
+  const banco = document.getElementById('caja-inicial-banco').value.trim().toLowerCase();
+  const cuit = document.getElementById('caja-inicial-cuit').value.replace(/\D/g, '');
+  const numero = numeroInicial.value.trim().toLowerCase();
+  const identificador = identificadorInicial.value.trim().toLowerCase();
+
+  aviso.innerHTML = '';
+
+  const identificadorIngresado = tipo === 'cheque' ? numero : identificador;
+
+  if (!banco || !identificadorIngresado) return;
+
+  aviso.textContent = 'Verificando posibles duplicados…';
+
+  const { data: iniciales, error: errorIniciales } = await sb
+    .from('caja_valores_iniciales')
+    .select('id,medio_pago,banco,numero_cheque,identificador_echeq,cuit_titular')
+    .eq('medio_pago', tipo);
+
+  if (errorIniciales) {
+    aviso.textContent = 'No se pudo verificar si existen duplicados.';
+    return;
+  }
+
+  const { data: registrados, error: errorRegistrados } = await sb
+    .from('caja_cobro_valores')
+    .select('id,medio_pago,banco,numero_cheque,identificador_echeq,cuit_titular')
+    .eq('medio_pago', tipo);
+
+  if (errorRegistrados) {
+    aviso.textContent = 'No se pudo completar la verificación de duplicados.';
+    return;
+  }
+
+  const coincide = v => {
+    const mismoBanco =
+      (v.banco || '').trim().toLowerCase() === banco;
+
+    if (!mismoBanco) return false;
+
+    if (tipo === 'cheque') {
+      const mismoNumero =
+        (v.numero_cheque || '').trim().toLowerCase() === numero;
+
+      const cuitExistente = (v.cuit_titular || '').replace(/\D/g, '');
+
+      return mismoNumero && (!cuit || !cuitExistente || cuit === cuitExistente);
+    }
+
+    return (v.identificador_echeq || '').trim().toLowerCase() === identificador;
+  };
+
+  const encontrados = [
+    ...(iniciales || []),
+    ...(registrados || [])
+  ].filter(coincide);
+
+  if (encontrados.length) {
+    aviso.innerHTML = `
+      <div class="msg err">
+        Atención: encontramos ${encontrados.length} posible(s) duplicado(s)
+        con el mismo banco e identificador. Revisá los datos antes de guardar.
+        La carga no está bloqueada.
+      </div>
+    `;
+  } else {
+    aviso.innerHTML = `
+      <div class="msg ok">No encontramos coincidencias con esos datos.</div>
+    `;
+  }
+}
+
+[
+  tipoInicial,
+  document.getElementById('caja-inicial-banco'),
+  document.getElementById('caja-inicial-cuit'),
+  numeroInicial,
+  identificadorInicial
+].forEach(campo => {
+  campo.addEventListener('change', verificarDuplicadoValorInicial);
+  campo.addEventListener('blur', verificarDuplicadoValorInicial);
+});
+
+const formularioInicial = document.getElementById('caja-inicial-form');
+
+formularioInicial.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const boton = document.getElementById('caja-inicial-guardar');
+  const aviso = document.getElementById('caja-inicial-aviso');
+
+  const tipo = tipoInicial.value;
+  const importe = Number(document.getElementById('caja-inicial-importe').value);
+
+  const datos = {
+    p_cliente_id: Number(document.getElementById('caja-inicial-cliente').value),
+    p_medio_pago: tipo,
+    p_importe: importe,
+    p_titular: document.getElementById('caja-inicial-titular').value.trim(),
+    p_cuit_titular: document.getElementById('caja-inicial-cuit').value.trim() || null,
+    p_banco: document.getElementById('caja-inicial-banco').value.trim(),
+    p_numero_cheque: tipo === 'cheque' ? numeroInicial.value.trim() : null,
+    p_identificador_echeq: tipo === 'echeq' ? identificadorInicial.value.trim() : null,
+    p_fecha_emision: document.getElementById('caja-inicial-emision').value || null,
+    p_fecha_cobro: document.getElementById('caja-inicial-cobro').value,
+    p_observaciones: document.getElementById('caja-inicial-observaciones').value.trim() || null
+  };
+
+  if (!datos.p_cliente_id || !Number.isFinite(importe) || importe <= 0) {
+    aviso.textContent = 'Seleccioná un cliente e ingresá un importe válido.';
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = 'Guardando…';
+  aviso.textContent = '';
+
+  try {
+    const { data, error } = await sb.rpc(
+      'registrar_valor_inicial_caja',
+      datos
+    );
+
+    if (error) throw error;
+
+    aviso.textContent = `Valor guardado correctamente. Número de registro: ${data}.`;
+
+formularioInicial.reset();
+actualizarCamposValorInicial();
+
+await cargarCarteraCheques();
+await cargarResumenCaja();
+
+  } catch (error) {
+    console.error('Error al guardar valor inicial:', error);
+    aviso.textContent = error.message || 'No se pudo guardar el valor.';
+  } finally {
+    boton.disabled = false;
+    boton.textContent = 'Guardar en cartera';
+  }
+});
+
 function alternarPanelCaja(id) {
   const panel = document.getElementById(id);
   const mostrar = panel.hidden;
 
   document.getElementById('caja-panel-cobro').hidden = true;
   document.getElementById('caja-panel-egreso').hidden = true;
+  document.getElementById('caja-panel-cartera').hidden = true;
   document.getElementById('caja-panel-sesion').hidden = true;
 
   panel.hidden = !mostrar;
@@ -3083,9 +3322,14 @@ document.getElementById('btn-mostrar-egreso').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-egreso');
 });
 
+document.getElementById('btn-mostrar-cartera').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-cartera');
+});
+
 document.getElementById('btn-mostrar-sesion').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-sesion');
 });
+
 panelCobro.appendChild(
   document.getElementById('caja-cobro-contenido')
 );
@@ -3093,6 +3337,11 @@ const panelEgreso = document.getElementById('caja-panel-egreso');
 
 panelEgreso.appendChild(
   document.getElementById('caja-egreso-contenido')
+);
+const panelCartera = document.getElementById('caja-panel-cartera');
+
+panelCartera.appendChild(
+  document.getElementById('caja-cartera-contenido')
 );
       const form = document.getElementById('caja-form');
       const selectorCliente = document.getElementById('caja-cliente');
@@ -3901,84 +4150,162 @@ async function cargarCarteraCheques() {
   const contenedor = document.getElementById('caja-cartera-valores');
 
   aviso.textContent = 'Consultando cheques y e-cheqs…';
+  contenedor.innerHTML = '';
 
-  const { data: valores, error } = await sb
+  // Valores de cobros normales
+  const { data: valoresNormales, error: errorNormales } = await sb
     .from('caja_cobro_valores')
     .select('id,cobro_id,medio_pago,importe,titular,banco,numero_cheque,identificador_echeq,fecha_vencimiento,estado,observaciones')
     .in('estado', ['recibido', 'depositado'])
     .in('medio_pago', ['cheque', 'echeq'])
     .order('fecha_vencimiento', { ascending: true });
 
-  if (error) {
-    aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  if (errorNormales) {
+    aviso.innerHTML =
+      `<div class="msg err">${esc(errorNormales.message)}</div>`;
     return;
   }
 
-  if (!valores?.length) {
-    aviso.textContent = 'No hay cheques ni e-cheqs pendientes en cartera.';
-    contenedor.innerHTML = '';
+  // Valores iniciales
+  const { data: valoresIniciales, error: errorIniciales } = await sb
+    .from('caja_valores_iniciales')
+    .select('id,cliente_id,medio_pago,importe,titular,banco,numero_cheque,identificador_echeq,fecha_cobro,estado,observaciones')
+    .in('estado', ['recibido', 'depositado'])
+    .in('medio_pago', ['cheque', 'echeq'])
+    .order('fecha_cobro', { ascending: true });
+
+  if (errorIniciales) {
+    aviso.innerHTML =
+      `<div class="msg err">${esc(errorIniciales.message)}</div>`;
     return;
   }
 
-  const cobroIds = [...new Set(valores.map(v => Number(v.cobro_id)))];
+  const normales = valoresNormales || [];
+  const iniciales = valoresIniciales || [];
 
-  const { data: cobros, error: errorCobros } = await sb
-    .from('caja_cobros')
-    .select('id,cliente_id')
-    .in('id', cobroIds);
+  // Buscar los cobros relacionados con los valores normales
+  const cobroIds = [
+    ...new Set(normales.map(v => Number(v.cobro_id)))
+  ];
 
-  if (errorCobros) {
-    aviso.innerHTML = `<div class="msg err">${esc(errorCobros.message)}</div>`;
-    return;
+  let cobrosMap = new Map();
+
+  if (cobroIds.length) {
+    const { data: cobros, error: errorCobros } = await sb
+      .from('caja_cobros')
+      .select('id,cliente_id')
+      .in('id', cobroIds);
+
+    if (errorCobros) {
+      aviso.innerHTML =
+        `<div class="msg err">${esc(errorCobros.message)}</div>`;
+      return;
+    }
+
+    cobrosMap = new Map(
+      (cobros || []).map(c => [Number(c.id), c])
+    );
   }
-
-  const cobrosMap = new Map(
-    (cobros || []).map(c => [Number(c.id), c])
-  );
 
   const nombres = new Map(
     (clientes || []).map(c => [Number(c.id), c.nombre])
   );
 
-  aviso.textContent = `${valores.length} instrumento(s) pendiente(s).`;
+  // Unificar ambas fuentes solo para mostrarlas
+  const lista = [
+    ...normales.map(v => {
+      const cobro = cobrosMap.get(Number(v.cobro_id));
+
+      return {
+        ...v,
+        origen: 'normal',
+        cliente_id: cobro?.cliente_id,
+        fecha_lista: v.fecha_vencimiento
+      };
+    }),
+
+    ...iniciales.map(v => ({
+      ...v,
+      origen: 'inicial',
+      fecha_lista: v.fecha_cobro
+    }))
+  ].sort((a, b) =>
+    String(a.fecha_lista || '').localeCompare(
+      String(b.fecha_lista || '')
+    )
+  );
+
+  if (!lista.length) {
+    aviso.textContent =
+      'No hay cheques ni e-cheqs pendientes en cartera.';
+    return;
+  }
+
+  aviso.textContent =
+    `${lista.length} instrumento(s) pendiente(s) en cartera.`;
 
   contenedor.innerHTML = `
     <div style="overflow-x:auto">
       <table>
         <thead>
           <tr>
+            <th>Origen</th>
             <th>Tipo</th>
             <th>Cliente</th>
             <th>Titular</th>
             <th>Banco</th>
             <th>Número / ID</th>
-            <th>Vencimiento</th>
+            <th>Fecha de cobro</th>
             <th>Importe</th>
             <th>Estado</th>
             <th>Acción</th>
           </tr>
         </thead>
         <tbody>
-          ${valores.map(v => {
-            const cobro = cobrosMap.get(Number(v.cobro_id));
-            const cliente = nombres.get(Number(cobro?.cliente_id)) || 'Cliente';
+          ${lista.map(v => {
+            const cliente =
+              nombres.get(Number(v.cliente_id)) || 'Cliente';
 
             return `
               <tr>
-                <td>${v.medio_pago === 'echeq' ? 'E-cheq' : 'Cheque'}</td>
+                <td>
+                  ${v.origen === 'inicial'
+                    ? 'Inicial'
+                    : 'Cobro SGV'}
+                </td>
+                <td>
+                  ${v.medio_pago === 'echeq'
+                    ? 'E-cheq'
+                    : 'Cheque'}
+                </td>
                 <td>${esc(cliente)}</td>
                 <td>${esc(v.titular || '—')}</td>
                 <td>${esc(v.banco || '—')}</td>
-                <td>${esc(v.numero_cheque || v.identificador_echeq || '—')}</td>
-                <td>${esc(v.fecha_vencimiento || '—')}</td>
+                <td>${esc(
+                  v.numero_cheque ||
+                  v.identificador_echeq ||
+                  '—'
+                )}</td>
+                <td>${esc(v.fecha_lista || '—')}</td>
                 <td class="num">${dinero(v.importe)}</td>
                 <td>${esc(v.estado)}</td>
                 <td>
-                  <button type="button"
-                    class="btn sec chico caja-rechazar-valor"
-                    data-id="${Number(v.id)}">
-                    Rechazar
-                  </button>
+                  ${v.origen === 'normal'
+                    ? `
+                      <button type="button"
+                        class="btn sec chico caja-rechazar-valor"
+                        data-id="${Number(v.id)}">
+                        Rechazar
+                      </button>
+                    `
+                    : `
+  <button type="button"
+    class="btn sec chico caja-rechazar-inicial"
+    data-id="${Number(v.id)}">
+    Rechazar
+  </button>
+`
+                  }
                 </td>
               </tr>
             `;
@@ -3988,6 +4315,7 @@ async function cargarCarteraCheques() {
     </div>
   `;
 
+  // Mantener el rechazo actual de los cobros normales
   contenedor.querySelectorAll('.caja-rechazar-valor').forEach(b => {
     b.onclick = async () => {
       const id = Number(b.dataset.id);
@@ -4021,7 +4349,7 @@ async function cargarCarteraCheques() {
 
       b.disabled = true;
 
-      const { data, error } = await sb.rpc('rechazar_valor_caja', {
+      const { error } = await sb.rpc('rechazar_valor_caja', {
         p_valor_id: id,
         p_gasto_bancario_cliente: gasto,
         p_observaciones: observaciones.trim() || null
@@ -4040,6 +4368,60 @@ async function cargarCarteraCheques() {
       await cargarResumenCaja();
     };
   });
+  // Rechazo de valores iniciales
+contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
+  b.onclick = async () => {
+    const id = Number(b.dataset.id);
+
+    const observaciones = prompt(
+      'Observaciones del rechazo:',
+      'Cheque rechazado por el banco.'
+    );
+
+    if (observaciones === null) return;
+
+    const gastoTexto = prompt(
+      '¿Qué gasto bancario adicional querés cobrarle al cliente? Ingresá 0 si no corresponde.',
+      '0'
+    );
+
+    if (gastoTexto === null) return;
+
+    const gasto = Number(gastoTexto.replace(',', '.'));
+
+    if (!Number.isFinite(gasto) || gasto < 0 ||
+        Math.round(gasto * 100) !== gasto * 100) {
+      alert('Ingresá un gasto válido, con hasta dos decimales.');
+      return;
+    }
+
+    if (!confirm(
+      `¿Confirmás el rechazo del valor inicial ${id}?\n\n` +
+      `Cargo al cliente: importe del instrumento.\n` +
+      `Gasto bancario adicional: ${dinero(gasto)}`
+    )) return;
+
+    b.disabled = true;
+
+    const { error } = await sb.rpc('rechazar_valor_inicial_caja', {
+      p_valor_id: id,
+      p_gasto_bancario_cliente: gasto,
+      p_observaciones: observaciones.trim() || null
+    });
+
+    if (error) {
+      alert('No se pudo rechazar el valor inicial: ' + error.message);
+      b.disabled = false;
+      return;
+    }
+
+    alert('Valor inicial rechazado y cargo registrado en Cuenta Corriente.');
+
+    await cargarCarteraCheques();
+    await cargarHistorialCaja();
+    await cargarResumenCaja();
+  };
+});
 }
 
       document.getElementById('caja-agregar-valor').onclick = agregarValorCaja;

@@ -818,6 +818,49 @@
     };
     let perfil = null, vista = null;
     let filtros = { numero: '', cliente: '', estado: '', listo: '', entrega: '' };
+    // Estado de navegación para recuperar la pantalla después de una recarga
+let pedidoDepositoActivo = null;
+let pedidoDepositoEditando = false;
+let cajaPanelActivo = null;
+
+function guardarEstadoNavegacion() {
+  try {
+    sessionStorage.setItem('sgv_estado_navegacion', JSON.stringify({
+      vista,
+      depTab,
+      filtros,
+      pedidoDepositoActivo,
+      pedidoDepositoEditando,
+      cajaPanelActivo
+    }));
+  } catch (error) {
+    console.warn('No se pudo guardar el estado de navegación:', error);
+  }
+}
+
+function recuperarEstadoNavegacion() {
+  try {
+    const guardado = sessionStorage.getItem('sgv_estado_navegacion');
+    if (!guardado) return;
+
+    const estado = JSON.parse(guardado);
+
+    if (estado && typeof estado === 'object') {
+      vista = estado.vista || null;
+      depTab = estado.depTab || 'pendiente';
+
+      if (estado.filtros && typeof estado.filtros === 'object') {
+        filtros = { ...filtros, ...estado.filtros };
+      }
+
+      pedidoDepositoActivo = estado.pedidoDepositoActivo || null;
+      pedidoDepositoEditando = estado.pedidoDepositoEditando === true;
+      cajaPanelActivo = estado.cajaPanelActivo || null;
+    }
+  } catch (error) {
+    console.warn('No se pudo recuperar el estado de navegación:', error);
+  }
+}
     /* ---------- ENTRADA ---------- */
     function pantallaLogin(modo = 'entrar', aviso = null) {
       const nuevo = modo === 'crear';
@@ -932,7 +975,9 @@
       if (error || !data) { await sb.auth.signOut(); return; }
       perfil = data;
       if (!perfil.activo || perfil.rol === 'pendiente') return pantallaEspera();
-      armarSistema();
+
+recuperarEstadoNavegacion();
+armarSistema();
     }
     function cabecera() {
       return `
@@ -1002,22 +1047,30 @@
       conectarSalir();
 
       app.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-        vista = b.dataset.v;
-        armarSistema();
-      });
+  vista = b.dataset.v;
+  guardarEstadoNavegacion();
+  armarSistema();
+});
 
-      ({
-        ventas: vistaVentas,
-        deposito: vistaDeposito,
-        series: vistaSeries,
-        productos: vistaProductos,
-        stock: vistaStock,
-        usuarios: vistaUsuarios,
-        listas_precios: vistaListasPrecios,
-        clientes: vistaClientes,
-        cuentas_corrientes: vistaCuentasCorrientes,
-        caja: vistaCaja
-      })[vista]();
+     ({
+  ventas: vistaVentas,
+  deposito: vistaDeposito,
+  series: vistaSeries,
+  productos: vistaProductos,
+  stock: vistaStock,
+  usuarios: vistaUsuarios,
+  listas_precios: vistaListasPrecios,
+  clientes: vistaClientes,
+  cuentas_corrientes: vistaCuentasCorrientes,
+  caja: vistaCaja
+})[vista]();
+
+if (vista === 'deposito' && pedidoDepositoActivo) {
+  detallePedidoDeposito(
+    pedidoDepositoActivo,
+    pedidoDepositoEditando
+  );
+}
     }
 
     /* ---------- LISTAS DE PRECIOS ---------- */
@@ -3312,6 +3365,9 @@ function alternarPanelCaja(id) {
   document.getElementById('caja-panel-sesion').hidden = true;
 
   panel.hidden = !mostrar;
+
+  cajaPanelActivo = mostrar ? id : null;
+  guardarEstadoNavegacion();
 }
 
 document.getElementById('btn-mostrar-cobro').addEventListener('click', () => {
@@ -4793,6 +4849,16 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
       await cargarHistorialCaja();
       await cargarCarteraCheques();
       await cargarResumenCaja();
+      const panelesCajaPermitidos = [
+  'caja-panel-cobro',
+  'caja-panel-egreso',
+  'caja-panel-cartera',
+  'caja-panel-sesion'
+];
+
+if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
+  alternarPanelCaja(cajaPanelActivo);
+}
     }
 
     /* ---------- DEPÓSITO ---------- */
@@ -4815,7 +4881,11 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
       document.getElementById('d-numero').oninput = e => { filtros.numero = e.target.value; buscar(); };
       document.getElementById('d-cliente').oninput = e => { filtros.cliente = e.target.value; buscar(); };
       document.getElementById('d-limpiar').onclick = () => { filtros.numero = ''; filtros.cliente = ''; vistaDeposito(); };
-      c.querySelectorAll('.pill-btn').forEach(b => b.onclick = () => { depTab = b.dataset.t; vistaDeposito(); });
+      c.querySelectorAll('.pill-btn').forEach(b => b.onclick = () => {
+  depTab = b.dataset.t;
+  guardarEstadoNavegacion();
+  vistaDeposito();
+});
       suscribirPedidos();
       cargarPedidosDeposito();
     }
@@ -4845,6 +4915,9 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
     }
 
     async function detallePedidoDeposito(id, editando = false) {
+        pedidoDepositoActivo = id;
+  pedidoDepositoEditando = editando;
+  guardarEstadoNavegacion();
       const c = document.getElementById('contenido');
       c.innerHTML = '<div class="panel vacio">Cargando…</div>';
       await cargarProductos();
@@ -4935,7 +5008,12 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
   </div>`;
       const aviso = document.getElementById('aviso-dep');
       const err = m => aviso.innerHTML = `<div class="msg err">${m}</div>`;
-      document.getElementById('volver-dep').onclick = vistaDeposito;
+      document.getElementById('volver-dep').onclick = () => {
+  pedidoDepositoActivo = null;
+  pedidoDepositoEditando = false;
+  guardarEstadoNavegacion();
+  vistaDeposito();
+};
       const itemPorId = x => items.find(i => String(i.id) === String(x));
       const actualizarItem = async (itemId, campos) => {
         const { error: e } = await sb.from('pedido_items').update(campos).eq('id', itemId);

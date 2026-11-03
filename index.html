@@ -4958,9 +4958,11 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
           }
           const ser = i.series || [], falta = faltaSerie(i);
           const chips = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}${abierto ? `<button type="button" class="del-serie" data-id="${s.id}" title="Quitar" style="background:none;border:0;color:var(--rojo);cursor:pointer;padding:0 0 0 6px">✕</button>` : ''}</span>`).join('') : '<small class="series">Sin números de serie</small>';
-          return `<tr><td style="${i.padre_item_id ? 'padding-left:28px;border-left:3px solid var(--blue);' : ''}">
-        ${i.padre_item_id ? '<small style="display:block;color:var(--gris);margin-bottom:4px">↳ COMPONENTE DEL KIT</small>' : ''}
-        <b>${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
+          return `<tr><td style="${i.padre_item_id
+  ? 'padding:9px 12px 9px 36px;border-left:3px solid #cbd5e1;background:#fafbfd;color:#64748b;font-size:13px;'
+  : 'padding:12px;'}">
+  ${i.padre_item_id ? '<small style="display:block;color:#94a3b8;font-size:10px;margin-bottom:3px">↳ COMPONENTE DEL KIT</small>' : ''}
+  <b style="${i.padre_item_id ? 'font-size:13px;font-weight:500;color:#64748b' : 'font-size:16px'}">${esc(i.producto)}</b> <span class="badge-cant">x${i.cantidad}</span>
         ${abierto ? `<label class="check-serie"><input type="checkbox" class="chk-lleva" data-item-id="${i.id}" ${i.lleva_serie ? 'checked' : ''}> Lleva n.º de serie</label>` : (i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : '')}
         ${abierto ? `<div class="item-form" style="align-items:center;margin-top:6px">
           <label class="check-serie" style="margin:0"><input type="checkbox" class="chk-prep" data-item-id="${i.id}" ${completo(i) ? 'checked' : ''}> Preparado</label>
@@ -5488,16 +5490,14 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
         if (esKit) {
           const filas = [...kitRows.querySelectorAll('.kit-nuevo-producto')];
 
-          componentes = filas.map(select => {
-            const fila = select.closest('.kit-row') ||
-              select.parentElement;
-
-            return {
-              componente_producto_id: Number(select.value),
-              cantidad: Number(fila.querySelector('.kit-nueva-cantidad').value)
-            };
-          });
-
+          componentes = filas.map((select, index) => {
+  const fila = select.closest('.kit-row') || select.parentElement;
+  return {
+    componente_producto_id: Number(select.value),
+    cantidad: Number(fila.querySelector('.kit-nueva-cantidad').value),
+    orden: index + 1
+  };
+});
           if (
             !componentes.length ||
             componentes.some(c =>
@@ -5549,10 +5549,11 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
 
           if (esKit) {
             const filasComponentes = componentes.map(comp => ({
-              kit_producto_id: nuevo.id,
-              componente_producto_id: comp.componente_producto_id,
-              cantidad: comp.cantidad
-            }));
+  kit_producto_id: nuevo.id,
+  componente_producto_id: comp.componente_producto_id,
+  cantidad: comp.cantidad,
+  orden: comp.orden
+}));
 
             const { error: errorComponentes } = await sb
               .from('producto_componentes')
@@ -5624,9 +5625,10 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
         if (!kit || !fila) return;
 
         const { data: actuales, error } = await sb
-          .from('producto_componentes')
-          .select('componente_producto_id, cantidad')
-          .eq('kit_producto_id', kitId);
+  .from('producto_componentes')
+  .select('componente_producto_id, cantidad, orden')
+  .eq('kit_producto_id', kitId)
+  .order('orden', { ascending: true });
 
         if (error) {
           alert('No se pudieron cargar los componentes: ' + error.message);
@@ -5672,30 +5674,49 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
         const rows = editor.querySelector('.kit-rows');
 
         const agregarFila = (componenteId = '', cantidad = 1) => {
-          const row = document.createElement('div');
-          row.className = 'kit-row';
-          row.style.cssText =
-            'display:grid;grid-template-columns:minmax(0,1fr) 90px 36px;gap:8px;margin:8px 0';
+  const row = document.createElement('div');
+  row.className = 'kit-row';
+  row.style.cssText =
+    'display:grid;grid-template-columns:minmax(0,1fr) 75px 36px 36px 36px;gap:6px;margin:8px 0;align-items:center';
 
-          row.innerHTML = `
-        <select class="kit-producto" aria-label="Producto componente" required>
-          <option value="">Elegir producto</option>
-          ${disponibles.map(pr => `
-            <option value="${pr.id}"
-              ${Number(pr.id) === Number(componenteId) ? 'selected' : ''}>
-              ${esc(pr.nombre)}${pr.activo ? '' : ' (desactivado)'}
-            </option>
-          `).join('')}
-        </select>
-        <input class="kit-cantidad" type="number" min="1" step="1"
-          value="${cantidad}" aria-label="Cantidad por kit" required>
-        <button type="button" class="btn sec chico kit-quitar"
-          aria-label="Quitar componente">✕</button>
-      `;
+  row.innerHTML = `
+    <select class="kit-producto" aria-label="Producto componente" required>
+      <option value="">Elegir producto</option>
+      ${disponibles.map(pr => `
+        <option value="${pr.id}"
+          ${Number(pr.id) === Number(componenteId) ? 'selected' : ''}>
+          ${esc(pr.nombre)}${pr.activo ? '' : ' (desactivado)'}
+        </option>
+      `).join('')}
+    </select>
 
-          rows.appendChild(row);
-          row.querySelector('.kit-quitar').onclick = () => row.remove();
-        };
+    <input class="kit-cantidad" type="number" min="1" step="1"
+      value="${cantidad}" aria-label="Cantidad por kit" required>
+
+    <button type="button" class="btn sec chico kit-subir"
+      aria-label="Subir componente">↑</button>
+
+    <button type="button" class="btn sec chico kit-bajar"
+      aria-label="Bajar componente">↓</button>
+
+    <button type="button" class="btn sec chico kit-quitar"
+      aria-label="Quitar componente">✕</button>
+  `;
+
+  rows.appendChild(row);
+
+  row.querySelector('.kit-quitar').onclick = () => row.remove();
+
+  row.querySelector('.kit-subir').onclick = () => {
+    const anterior = row.previousElementSibling;
+    if (anterior) rows.insertBefore(row, anterior);
+  };
+
+  row.querySelector('.kit-bajar').onclick = () => {
+    const siguiente = row.nextElementSibling;
+    if (siguiente) rows.insertBefore(siguiente, row);
+  };
+};
 
         if (actuales.length) {
           actuales.forEach(c =>
@@ -5710,12 +5731,11 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
         editor.querySelector('#kit-cancelar').onclick = () => editor.remove();
 
         editor.querySelector('#kit-guardar').onclick = async () => {
-          const valores = [...rows.querySelectorAll('.kit-row')].map(row => ({
-            componente_producto_id: Number(
-              row.querySelector('.kit-producto').value
-            ),
-            cantidad: Number(row.querySelector('.kit-cantidad').value)
-          }));
+          const valores = [...rows.querySelectorAll('.kit-row')].map((row, index) => ({
+  componente_producto_id: Number(row.querySelector('.kit-producto').value),
+  cantidad: Number(row.querySelector('.kit-cantidad').value),
+  orden: index + 1
+}));
 
           if (
             !valores.length ||
@@ -5741,10 +5761,11 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
 
           try {
             const composicion = valores.map(v => ({
-              kit_producto_id: kitId,
-              componente_producto_id: v.componente_producto_id,
-              cantidad: v.cantidad
-            }));
+  kit_producto_id: kitId,
+  componente_producto_id: v.componente_producto_id,
+  cantidad: v.cantidad,
+  orden: v.orden
+}));
 
             const { error: errorGuardar } = await sb
               .from('producto_componentes')
@@ -6766,12 +6787,13 @@ mapa.set(id, opciones);
 
           if (esKit) {
             const {
-              data: componentes,
-              error: errorComponentes
-            } = await sb
-              .from('producto_componentes')
-              .select('componente_producto_id, cantidad')
-              .eq('kit_producto_id', pr.id);
+  data: componentes,
+  error: errorComponentes
+} = await sb
+  .from('producto_componentes')
+  .select('componente_producto_id, cantidad, orden')
+  .eq('kit_producto_id', pr.id)
+  .order('orden', { ascending: true });
 
             if (errorComponentes) {
               aviso.innerHTML =
@@ -7081,15 +7103,51 @@ lista_precio_id: linea.lista_precio_id,
       </div>`;
       }
       res.innerHTML = data.map(p => {
-        const itemsHtml = p.pedido_items && p.pedido_items.length ? p.pedido_items.sort((a, b) => a.id - b.id).map(i => `
-      <div class="card-item-row">
+        
+const itemsHtml = p.pedido_items && p.pedido_items.length
+  ? p.pedido_items
+      .sort((a, b) => a.id - b.id)
+      .map(i => {
+        const esComponente = !!i.padre_item_id;
+        const esKit = i.es_kit === true;
+
+        return `
+      <div class="card-item-row" style="${
+        esComponente
+          ? 'padding:5px 8px 5px 28px;background:#fafbfd;border-left:3px solid #cbd5e1;margin-left:12px;'
+          : esKit
+            ? 'padding:9px 8px;background:#f4f7fb;border-radius:7px;margin-top:5px;'
+            : ''
+      }">
         <div>
-          ${i.lleva_serie ? '<span class="badge-s-u">S/U</span>' : ''}
-          <span style="font-weight:500">${esc(i.producto)}</span>
-          ${i.series && i.series.length ? `<small class="series">N.º de serie: ${i.series.map(s => esc(s.numero_serie)).join(', ')}</small>` : ''}
+          ${
+            esComponente
+              ? '<small style="display:block;color:#94a3b8;font-size:10px;margin-bottom:2px">↳ COMPONENTE DEL KIT</small>'
+              : ''
+          }
+          ${
+            i.lleva_serie && !esComponente
+              ? '<span class="badge-s-u">S/U</span>'
+              : ''
+          }
+          <span style="${
+            esComponente
+              ? 'font-weight:500;font-size:12px;color:#64748b'
+              : esKit
+                ? 'font-weight:700;font-size:14px'
+                : 'font-weight:500'
+          }">${esc(i.producto)}</span>
+          ${
+            i.series && i.series.length
+              ? `<small class="series">N.º de serie: ${i.series.map(s => esc(s.numero_serie)).join(', ')}</small>`
+              : ''
+          }
         </div>
-        <div style="background:#F1F5F9; padding:2px 8px; border-radius:6px; font-weight:600; font-size:13px">x${i.cantidad}</div>
-      </div>`).join('') : '<div style="color:var(--gris); font-size:13px">Sin productos registrados</div>';
+        <div style="background:#F1F5F9;padding:2px 8px;border-radius:6px;font-weight:600;font-size:13px">x${i.cantidad}</div>
+      </div>`;
+      }).join('')
+  : '<div style="color:var(--gris);font-size:13px">Sin productos registrados</div>';
+
         return `
       <div class="card-pedido">
         <div class="card-pedido-header">
@@ -7913,12 +7971,34 @@ ${p.nota_deposito
       if (error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
       const puedeAnular = ['ventas', 'admin'].includes(perfil.rol) && ['pendiente', 'listo'].includes(p.estado);
       const puedeEditarNota = ['deposito', 'admin', 'supervisor'].includes(perfil.rol) && p.estado === 'listo';
-      const filas = p.pedido_items
-        .filter(i => !i.padre_item_id)
-        .sort((a, b) => a.id - b.id)
-        .map(i => `
-    <tr><td>${esc(i.producto)}${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s => esc(s.numero_serie)).join(', ')}</small>` : ''}</td>
-    <td class="num">${i.cantidad}</td></tr>`).join('');
+      const itemsOrdenados = [...p.pedido_items].sort((a, b) => a.id - b.id);
+
+const filas = itemsOrdenados
+  .filter(i => !i.padre_item_id)
+  .map(i => {
+    const componentes = itemsOrdenados.filter(
+      comp => Number(comp.padre_item_id) === Number(i.id)
+    );
+
+    return `
+      <tr>
+        <td>
+          <b>${esc(i.producto)}</b>
+          ${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s => esc(s.numero_serie)).join(', ')}</small>` : ''}
+        </td>
+        <td class="num">${i.cantidad}</td>
+      </tr>
+      ${componentes.map(comp => `
+        <tr>
+          <td style="padding:5px 12px 5px 32px;border-left:3px solid #cbd5e1;background:#fafbfd;color:#64748b;font-size:12px">
+            <small style="display:block;color:#94a3b8;font-size:10px">↳ COMPONENTE DEL KIT</small>
+            ${esc(comp.producto)}
+          </td>
+          <td class="num" style="color:#64748b;font-size:12px">${comp.cantidad}</td>
+        </tr>
+      `).join('')}
+    `;
+  }).join('');
       c.innerHTML = `<div class="panel remito">
     <div class="no-print acciones sup"><button class="btn sec chico" id="volver">← Volver</button>
       <button class="btn chico" id="imprimir">Imprimir / guardar PDF</button>

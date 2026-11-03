@@ -2365,15 +2365,16 @@ for (const m of movimientosCronologicos) {
       <form id="cc-saldo-inicial-form" class="panel">
         <label>Situación inicial del cliente</label>
         <select id="cc-saldo-inicial-tipo" required>
-          <option value="">Seleccionar…</option>
-          <option value="deuda">Tiene deuda pendiente</option>
-          <option value="favor">Tiene saldo a favor</option>
-        </select>
+  <option value="">Seleccionar…</option>
+  <option value="deuda">Tiene deuda pendiente</option>
+  <option value="favor">Tiene saldo a favor</option>
+  <option value="cero">No tiene deuda ni saldo a favor</option>
+</select>
 
         <label>Importe ($)</label>
         <input id="cc-saldo-inicial-importe"
-          type="number" min="0.01" step="0.01"
-          required placeholder="0,00">
+  type="number" min="0" step="0.01"
+  required placeholder="0,00">
 
         <label>Observaciones</label>
         <input id="cc-saldo-inicial-observaciones"
@@ -2455,15 +2456,17 @@ const comprobante = pedido
       ? `Pedido #${esc(String(m.pedido_id))}`
       : '—';
 
-const movimientoTexto = m.tipo === 'pago'
-  ? `Pago${m.medio_pago ? ' · ' + ({
-      efectivo: 'Efectivo',
-      cheque: 'Cheque',
-      echeq: 'E-cheq',
-      transferencia: 'Transferencia',
-      otro: 'Otro'
-    }[String(m.medio_pago).toLowerCase()] || m.medio_pago) : ''}`
-  : (nombresTipo[m.tipo] || m.tipo);
+const movimientoTexto = m.referencia === 'SALDO_INICIAL'
+  ? 'Saldo inicial'
+  : m.tipo === 'pago'
+    ? `Pago${m.medio_pago ? ' · ' + ({
+        efectivo: 'Efectivo',
+        cheque: 'Cheque',
+        echeq: 'E-cheq',
+        transferencia: 'Transferencia',
+        otro: 'Otro'
+      }[String(m.medio_pago).toLowerCase()] || m.medio_pago) : ''}`
+    : (nombresTipo[m.tipo] || m.tipo);
 
 return `
   <tr>
@@ -2493,6 +2496,18 @@ return `
 
   document.getElementById('cc-volver').onclick = () =>
     vistaCuentasCorrientes();
+    const tipoSaldoInicial = document.getElementById('cc-saldo-inicial-tipo');
+const importeSaldoInicial = document.getElementById('cc-saldo-inicial-importe');
+
+tipoSaldoInicial.onchange = () => {
+  if (tipoSaldoInicial.value === 'cero') {
+    importeSaldoInicial.value = '0';
+    importeSaldoInicial.disabled = true;
+  } else {
+    importeSaldoInicial.disabled = false;
+    importeSaldoInicial.value = '';
+  }
+};
 
   // Abrir el detalle del presupuesto asociado.
   c.querySelectorAll('.cc-presupuesto-link').forEach(btn => {
@@ -2544,50 +2559,60 @@ return `
   };
 
   document.getElementById('cc-saldo-inicial-form').onsubmit = async e => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const tipo = document.getElementById('cc-saldo-inicial-tipo').value;
-    const importe = Number(
-      document.getElementById('cc-saldo-inicial-importe').value
-    );
-    const observaciones = document
-      .getElementById('cc-saldo-inicial-observaciones')
-      .value.trim();
+  const tipo = document.getElementById('cc-saldo-inicial-tipo').value;
+  const importe = Number(
+    document.getElementById('cc-saldo-inicial-importe').value
+  );
+  const observaciones = document
+    .getElementById('cc-saldo-inicial-observaciones')
+    .value.trim();
 
-    if (!['deuda', 'favor'].includes(tipo)) {
-      alert('Seleccioná si el cliente tiene deuda o saldo a favor.');
-      return;
-    }
+  if (!['deuda', 'favor', 'cero'].includes(tipo)) {
+    alert('Seleccioná la situación inicial del cliente.');
+    return;
+  }
 
-    if (!(importe > 0) || !Number.isFinite(importe)) {
-      alert('Ingresá un importe mayor que cero.');
-      return;
-    }
-
-    const btn = e.submitter;
-    btn.disabled = true;
-
-    const { error } = await sb.rpc('registrar_saldo_inicial_cc', {
-      p_cuenta_corriente_id: id,
-      p_tipo_saldo: tipo,
-      p_importe: importe,
-      p_observaciones: observaciones || null
-    });
-
-    if (error) {
-      alert('No se pudo registrar el saldo inicial: ' + error.message);
-      btn.disabled = false;
-      return;
-    }
-
+  if (
+    !Number.isFinite(importe) ||
+    importe < 0 ||
+    (tipo === 'cero' ? importe !== 0 : importe <= 0)
+  ) {
     alert(
-      tipo === 'deuda'
-        ? 'Deuda inicial registrada correctamente.'
-        : 'Saldo a favor inicial registrado correctamente.'
+      tipo === 'cero'
+        ? 'Para esta opción, el importe debe ser $0.'
+        : 'Ingresá un importe mayor que cero.'
     );
+    return;
+  }
 
-    await verCuentaCorriente(id);
-  };
+  const btn = e.submitter;
+  btn.disabled = true;
+
+  const { error } = await sb.rpc('registrar_saldo_inicial_cc', {
+    p_cuenta_corriente_id: id,
+    p_tipo_saldo: tipo,
+    p_importe: importe,
+    p_observaciones: observaciones || null
+  });
+
+  if (error) {
+    alert('No se pudo registrar el saldo inicial: ' + error.message);
+    btn.disabled = false;
+    return;
+  }
+
+  alert(
+    tipo === 'deuda'
+      ? 'Deuda inicial registrada correctamente.'
+      : tipo === 'favor'
+        ? 'Saldo a favor inicial registrado correctamente.'
+        : 'Saldo inicial en cero registrado correctamente.'
+  );
+
+  await verCuentaCorriente(id);
+};
 }
 
 async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {

@@ -7989,12 +7989,25 @@ ${p.enargas_transferido !== null ? `<p><b>Series transferidas en ENARGAS:</b> ${
           await detallePedido(p.id, volver);
         };
       }
-      const a = document.getElementById('anular');
-      if (a) a.onclick = async () => {
-        if (!confirm(`¿Anular el presupuesto ${fmtRemito(p.numero_remito)}? No se puede deshacer.`)) return;
-        const { error } = await sb.from('pedidos').update({ estado: 'anulado' }).eq('id', p.id);
-        if (error) alert('No se pudo anular: ' + error.message); else detallePedido(p.id, volver);
-      };
+     const a = document.getElementById('anular');
+if (a) a.onclick = async () => {
+  if (!confirm(`¿Anular el presupuesto ${fmtRemito(p.numero_remito)}? No se puede deshacer. Las series cargadas quedarán disponibles para otros pedidos.`)) return;
+
+  a.disabled = true;
+
+  const { data, error } = await sb.rpc('anular_pedido_y_liberar_series', {
+    p_pedido_id: p.id
+  });
+
+  if (error) {
+    alert('No se pudo anular el pedido: ' + error.message);
+    a.disabled = false;
+    return;
+  }
+
+  alert(`Pedido anulado correctamente. Se liberaron ${data} número(s) de serie.`);
+  detallePedido(p.id, volver);
+};
     }
 
     /* ---------- ADMIN: USUARIOS (funcional) ---------- */

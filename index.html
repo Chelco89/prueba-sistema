@@ -2936,9 +2936,12 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
     Registrar egreso
   </button>
-  <button type="button" class="btn sec chico" id="btn-mostrar-cartera">
-    Cartera de cheques y e-cheq
-  </button>
+  <button type="button" class="btn sec chico" id="btn-mostrar-cheques">
+  Cheques
+</button>
+<button type="button" class="btn sec chico" id="btn-mostrar-echeqs">
+  E-cheqs
+</button>
   <button type="button" class="btn sec chico" id="btn-mostrar-sesion">
     Abrir / Cerrar Caja
   </button>
@@ -2948,7 +2951,8 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 <div id="caja-panel-cobro" hidden style="margin:16px 0"></div>
 <div id="caja-panel-egreso" hidden style="margin:16px 0"></div>
 <div id="caja-panel-transferencia" hidden style="margin:16px 0"></div>
-<div id="caja-panel-cartera" hidden style="margin:16px 0"></div>
+<div id="caja-panel-cheques" hidden style="margin:16px 0"></div>
+<div id="caja-panel-echeqs" hidden style="margin:16px 0"></div>
 <div id="caja-panel-sesion" hidden style="margin:16px 0"></div>
 <div id="caja-informes" class="panel" style="margin:16px 0">
   <h3>Informes de cierre de Caja</h3>
@@ -2980,6 +2984,30 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
           <div class="panel"><small>Efectivo disponible USD</small><h2 id="caja-resumen-usd">—</h2></div>
           <div class="panel"><small>Cheques disponibles</small><h2 id="caja-resumen-cheques">—</h2><div id="caja-resumen-cheques-total"></div></div>
           <div class="panel"><small>E-cheqs disponibles</small><h2 id="caja-resumen-echeqs">—</h2><div id="caja-resumen-echeqs-total"></div></div>
+          <div class="panel">
+  <small>Banco Mega · Período actual</small>
+  <h2 id="caja-resumen-banco-mega">—</h2>
+</div>
+
+<div class="panel">
+  <small>Banco Particular · Cuenta Julio</small>
+  <h2 id="caja-resumen-banco-julio">—</h2>
+</div>
+
+<div class="panel">
+  <small>Banco Particular · Cuenta Ariel</small>
+  <h2 id="caja-resumen-banco-ariel">—</h2>
+</div>
+
+<div class="panel">
+  <small>Banco Particular · Cuenta Angi</small>
+  <h2 id="caja-resumen-banco-angi">—</h2>
+</div>
+
+<div class="panel">
+  <small>Banco Particular · Cuenta Megaparte</small>
+  <h2 id="caja-resumen-banco-megaparte">—</h2>
+</div>
         </div>
             </section>
 
@@ -3039,14 +3067,8 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
 </div>
 
-      <div id="caja-cartera-contenido">
-        <h3>Cartera de cheques y e-cheqs</h3>
-        <p class="vacio">
-          Consultá los valores recibidos y administrá su estado.
-        </p>
-        <hr style="margin:20px 0;border:0;border-top:1px solid var(--linea)">
-
-<h3>Registrar cheque o e-cheq inicial</h3>
+      <div id="caja-cartera-inicial-contenido" class="panel" style="margin:16px 0">
+  <h3>Registrar cheque o e-cheq inicial</h3>
 <p class="vacio">
   Cargá manualmente los valores que ya tenías antes de utilizar SGV.
 </p>
@@ -3108,15 +3130,6 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   </button>
 
 </form>
-
-<hr style="margin:24px 0;border:0;border-top:1px solid var(--linea)">
-
-        <div id="caja-cartera-aviso" class="vacio">
-          Cargando cartera…
-        </div>
-
-        <div id="caja-cartera-valores"></div>
-      </div>
 
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
@@ -3336,13 +3349,21 @@ await cargarResumenCaja();
 
 function alternarPanelCaja(id) {
   const panel = document.getElementById(id);
+  if (!panel) return;
+
   const mostrar = panel.hidden;
 
-  document.getElementById('caja-panel-cobro').hidden = true;
-  document.getElementById('caja-panel-egreso').hidden = true;
-  document.getElementById('caja-panel-cartera').hidden = true;
-  document.getElementById('caja-panel-sesion').hidden = true;
-  document.getElementById('caja-panel-transferencia').hidden = true;
+  [
+    'caja-panel-cobro',
+    'caja-panel-egreso',
+    'caja-panel-transferencia',
+    'caja-panel-cheques',
+    'caja-panel-echeqs',
+    'caja-panel-sesion'
+  ].forEach(panelId => {
+    const otro = document.getElementById(panelId);
+    if (otro) otro.hidden = true;
+  });
 
   panel.hidden = !mostrar;
 
@@ -3353,6 +3374,7 @@ function alternarPanelCaja(id) {
 document.getElementById('btn-mostrar-cobro').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-cobro');
 });
+
 document.getElementById('btn-mostrar-transferencia').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-transferencia');
 });
@@ -3361,10 +3383,21 @@ document.getElementById('btn-mostrar-egreso').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-egreso');
 });
 
-document.getElementById('btn-mostrar-cartera').addEventListener('click', () => {
-  alternarPanelCaja('caja-panel-cartera');
+document.getElementById('btn-mostrar-cheques').addEventListener('click', async () => {
+  alternarPanelCaja('caja-panel-cheques');
+
+  if (!document.getElementById('caja-panel-cheques').hidden) {
+    await cargarCarteraCheques('cheque');
+  }
 });
 
+document.getElementById('btn-mostrar-echeqs').addEventListener('click', async () => {
+  alternarPanelCaja('caja-panel-echeqs');
+
+  if (!document.getElementById('caja-panel-echeqs').hidden) {
+    await cargarCarteraCheques('echeq');
+  }
+});
 document.getElementById('btn-mostrar-sesion').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-sesion');
 });
@@ -3460,8 +3493,18 @@ const { data: periodosTransferencia, error: errorPeriodosTransferencia } =
     .eq('estado', 'abierto');
 
 if (errorCuentasTransferencia || errorPeriodosTransferencia) {
+  const errorReal =
+    errorCuentasTransferencia?.message ||
+    errorPeriodosTransferencia?.message ||
+    'Error desconocido';
+
+  console.error('Error al cargar cuentas:', {
+    cuentas: errorCuentasTransferencia,
+    periodos: errorPeriodosTransferencia
+  });
+
   transferenciaCuenta.innerHTML =
-    '<option value="">Error al cargar cuentas bancarias</option>';
+    '<option value="">Error: ' + errorReal + '</option>';
 } else {
   const cuentasDisponibles = (cuentasTransferencia || []).filter(cuenta =>
     (periodosTransferencia || []).some(
@@ -3474,9 +3517,10 @@ if (errorCuentasTransferencia || errorPeriodosTransferencia) {
 
   cuentasDisponibles.forEach(cuenta => {
     const opcion = document.createElement('option');
-    opcion.value = cuenta.id;
-    opcion.textContent = `${cuenta.banco} - ${cuenta.nombre_cuenta}`;
-    transferenciaCuenta.appendChild(opcion);
+opcion.value = cuenta.id;
+opcion.dataset.banco = cuenta.banco;
+opcion.textContent = `${cuenta.banco} - ${cuenta.nombre_cuenta}`;
+transferenciaCuenta.appendChild(opcion);
   });
 
   if (cuentasDisponibles.length === 0) {
@@ -3500,6 +3544,8 @@ document
 
     const clienteId = Number(transferenciaCliente.value);
     const cuentaId = Number(transferenciaCuenta.value);
+    const bancoSeleccionado =
+  transferenciaCuenta.selectedOptions[0]?.dataset.banco;
     const importe = Number(
       document.getElementById('transferencia-importe').value
     );
@@ -3517,7 +3563,7 @@ document
         p_valores: [{
           medio_pago: 'transferencia',
           importe: importe,
-          banco: 'Transferencia bancaria',
+          banco: bancoSeleccionado,
           cuenta_destino_id: String(cuentaId),
           fecha_transferencia: fecha,
           referencia_transferencia: referencia
@@ -3553,11 +3599,7 @@ panelEgreso.appendChild(
 );
 
 
-const panelCartera = document.getElementById('caja-panel-cartera');
 
-panelCartera.appendChild(
-  document.getElementById('caja-cartera-contenido')
-);
       const form = document.getElementById('caja-form');
       const selectorCliente = document.getElementById('caja-cliente');
       const selectorPedido = document.getElementById('caja-pedido');
@@ -4035,8 +4077,44 @@ cargarSesionesParaInformeCaja();
           avisoResumen.innerHTML = `<div class="msg err">No se pudo consultar el resumen: ${esc(error.message)}</div>`;
           return;
         }
+        const { data: resumenBancos, error: errorBancos } =
+  await sb.rpc('resumen_bancos_caja');
+
+if (errorBancos) {
+  avisoResumen.innerHTML =
+    `<div class="msg err">No se pudo consultar el resumen bancario: ${esc(errorBancos.message)}</div>`;
+  return;
+}
+if (!Array.isArray(resumenBancos)) {
+  avisoResumen.textContent = 'No se pudo obtener el resumen de las cuentas bancarias.';
+  return;
+}
 
         const r = Array.isArray(data) ? data[0] : data;
+        const bancoMega = resumenBancos.find(c => c.cuenta_id === 1);
+
+const cuentasParticulares = resumenBancos.filter(
+  c => c.banco === 'Banco Particular'
+);
+const cuentaJulio = cuentasParticulares.find(c => c.cuenta_id === 2);
+const cuentaAriel = cuentasParticulares.find(c => c.cuenta_id === 3);
+const cuentaAngi = cuentasParticulares.find(c => c.cuenta_id === 4);
+const cuentaMegaparte = cuentasParticulares.find(c => c.cuenta_id === 5);
+
+document.getElementById('caja-resumen-banco-mega').textContent =
+  dinero(bancoMega?.total_transferido);
+
+document.getElementById('caja-resumen-banco-julio').textContent =
+  dinero(cuentaJulio?.total_transferido);
+
+document.getElementById('caja-resumen-banco-ariel').textContent =
+  dinero(cuentaAriel?.total_transferido);
+
+document.getElementById('caja-resumen-banco-angi').textContent =
+  dinero(cuentaAngi?.total_transferido);
+
+document.getElementById('caja-resumen-banco-megaparte').textContent =
+  dinero(cuentaMegaparte?.total_transferido);
         if (!r) {
           avisoResumen.textContent = 'No se recibió información del resumen.';
           return;
@@ -4282,11 +4360,12 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
       <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
         <div style="flex:1;min-width:160px">
           <label>Medio de pago</label>
-          <select class="caja-medio">
-            <option value="efectivo">Efectivo</option>
-            <option value="cheque">Cheque físico</option>
-            <option value="echeq">E-cheq</option>
-          </select>
+         <select class="caja-medio">
+  <option value="efectivo">Efectivo</option>
+  <option value="cheque">Cheque físico</option>
+  <option value="echeq">E-cheq</option>
+  <option value="transferencia">Transferencia bancaria</option>
+</select>
         </div>
         <div style="flex:1;min-width:140px">
           <label>Importe</label>
@@ -4322,8 +4401,21 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
         <label>Fecha de cobro</label>
         <input class="caja-vencimiento" type="date">
 
-        <label>Observaciones del valor (opcional)</label>
+                <label>Observaciones del valor (opcional)</label>
         <input class="caja-observaciones-valor" maxlength="300">
+      </div>
+
+      <div class="caja-datos-transferencia" hidden style="margin-top:12px">
+        <label>Cuenta bancaria de destino</label>
+        <select class="caja-cuenta-destino" required>
+          <option value="">Seleccionar cuenta</option>
+        </select>
+
+        <label>Fecha de transferencia</label>
+        <input class="caja-fecha-transferencia" type="date" required>
+
+        <label>Referencia / comprobante (opcional)</label>
+        <input class="caja-referencia-transferencia" maxlength="200">
       </div>
     `;
 
@@ -4331,20 +4423,78 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
         const datos = fila.querySelector('.caja-datos-valor');
         const contNumero = fila.querySelector('.caja-numero-contenedor');
         const contEcheq = fila.querySelector('.caja-echeq-contenedor');
+        const datosTransferencia = fila.querySelector('.caja-datos-transferencia');
+const selectorCuenta = fila.querySelector('.caja-cuenta-destino');
 
-        function actualizarCampos() {
-          const esCheque = medio.value === 'cheque';
-          const esEcheq = medio.value === 'echeq';
-          datos.hidden = !esCheque && !esEcheq;
-          contNumero.hidden = !esCheque;
-          contEcheq.hidden = !esEcheq;
-          fila.querySelector('.caja-titular').required = esCheque || esEcheq;
-          fila.querySelector('.caja-banco').required = esCheque || esEcheq;
-          fila.querySelector('.caja-vencimiento').required = esCheque || esEcheq;
-          fila.querySelector('.caja-numero-cheque').required = esCheque;
-          fila.querySelector('.caja-identificador-echeq').required = esEcheq;
-        }
+        async function actualizarCampos() {
+  const esCheque = medio.value === 'cheque';
+  const esEcheq = medio.value === 'echeq';
+  const esTransferencia = medio.value === 'transferencia';
 
+  datos.hidden = !esCheque && !esEcheq;
+  contNumero.hidden = !esCheque;
+  contEcheq.hidden = !esEcheq;
+  datosTransferencia.hidden = !esTransferencia;
+
+  fila.querySelector('.caja-titular').required = esCheque || esEcheq;
+  fila.querySelector('.caja-banco').required = esCheque || esEcheq;
+  fila.querySelector('.caja-vencimiento').required = esCheque || esEcheq;
+  fila.querySelector('.caja-numero-cheque').required = esCheque;
+  fila.querySelector('.caja-identificador-echeq').required = esEcheq;
+
+  selectorCuenta.required = esTransferencia;
+  fila.querySelector('.caja-fecha-transferencia').required = esTransferencia;
+
+  if (!esTransferencia || selectorCuenta.dataset.cargada === 'si') return;
+
+  selectorCuenta.innerHTML = '<option value="">Cargando cuentas...</option>';
+
+  const { data: cuentas, error: errorCuentas } = await sb
+    .from('bancos_cuentas')
+    .select('id,banco,nombre_cuenta')
+    .eq('activo', true)
+    .order('banco');
+
+  if (errorCuentas) {
+    selectorCuenta.innerHTML = '<option value="">Error al cargar cuentas</option>';
+    alert('No se pudieron cargar las cuentas bancarias: ' + errorCuentas.message);
+    return;
+  }
+
+  const { data: periodos, error: errorPeriodos } = await sb
+    .from('bancos_cierres')
+    .select('cuenta_id')
+    .eq('estado', 'abierto');
+
+  if (errorPeriodos) {
+    selectorCuenta.innerHTML = '<option value="">Error al consultar períodos</option>';
+    alert('No se pudieron consultar los períodos bancarios: ' + errorPeriodos.message);
+    return;
+  }
+
+  const cuentasAbiertas = new Set(
+    (periodos || []).map(p => Number(p.cuenta_id))
+  );
+
+  const disponibles = (cuentas || []).filter(
+    c => cuentasAbiertas.has(Number(c.id))
+  );
+
+  selectorCuenta.innerHTML =
+    '<option value="">Seleccionar cuenta</option>' +
+    disponibles.map(c => `
+  <option value="${Number(c.id)}" data-banco="${esc(c.banco)}">
+    ${esc(c.banco)} — ${esc(c.nombre_cuenta)}
+  </option>
+`).join('');
+
+  selectorCuenta.dataset.cargada = 'si';
+
+  if (!disponibles.length) {
+    selectorCuenta.innerHTML =
+      '<option value="">No hay cuentas con período abierto</option>';
+  }
+}
         medio.onchange = actualizarCampos;
         fila.querySelector('.caja-quitar').onclick = () => {
           fila.remove();
@@ -4360,19 +4510,49 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
         actualizarCampos();
       }
 
-async function cargarCarteraCheques() {
-  const aviso = document.getElementById('caja-cartera-aviso');
-  const contenedor = document.getElementById('caja-cartera-valores');
+async function cargarCarteraCheques(tipo = null) {
 
-  aviso.textContent = 'Consultando cheques y e-cheqs…';
+  // Si no se indica un tipo, actualizar ambas carteras.
+  if (!tipo) {
+    await Promise.all([
+      cargarCarteraCheques('cheque'),
+      cargarCarteraCheques('echeq')
+    ]);
+    return;
+  }
+
+  const esEcheq = tipo === 'echeq';
+
+  const panel = document.getElementById(
+    esEcheq ? 'caja-panel-echeqs' : 'caja-panel-cheques'
+  );
+
+  if (!panel) return;
+
+  panel.innerHTML = `
+    <h3>${esEcheq ? 'CARTERA DE E-CHEQS' : 'CARTERA DE CHEQUES'}</h3>
+    <div id="${esEcheq ? 'caja-cartera-aviso-echeqs' : 'caja-cartera-aviso-cheques'}" class="vacio">
+      Consultando ${esEcheq ? 'e-cheqs' : 'cheques'}…
+    </div>
+    <div id="${esEcheq ? 'caja-cartera-valores-echeqs' : 'caja-cartera-valores-cheques'}"></div>
+  `;
+
+  const aviso = document.getElementById(
+    esEcheq ? 'caja-cartera-aviso-echeqs' : 'caja-cartera-aviso-cheques'
+  );
+
+  const contenedor = document.getElementById(
+    esEcheq ? 'caja-cartera-valores-echeqs' : 'caja-cartera-valores-cheques'
+  );
+
+  aviso.textContent = `Consultando ${esEcheq ? 'e-cheqs' : 'cheques'}…`;
   contenedor.innerHTML = '';
-
   // Valores de cobros normales
   const { data: valoresNormales, error: errorNormales } = await sb
     .from('caja_cobro_valores')
     .select('id,cobro_id,medio_pago,importe,titular,banco,numero_cheque,identificador_echeq,fecha_vencimiento,estado,observaciones')
     .in('estado', ['recibido', 'depositado'])
-    .in('medio_pago', ['cheque', 'echeq'])
+    .eq('medio_pago', tipo)
     .order('fecha_vencimiento', { ascending: true });
 
   if (errorNormales) {
@@ -4386,7 +4566,7 @@ async function cargarCarteraCheques() {
     .from('caja_valores_iniciales')
     .select('id,cliente_id,medio_pago,importe,titular,banco,numero_cheque,identificador_echeq,fecha_cobro,estado,observaciones')
     .in('estado', ['recibido', 'depositado'])
-    .in('medio_pago', ['cheque', 'echeq'])
+    .eq('medio_pago', tipo)
     .order('fecha_cobro', { ascending: true });
 
   if (errorIniciales) {
@@ -4452,13 +4632,14 @@ async function cargarCarteraCheques() {
 
   if (!lista.length) {
     aviso.textContent =
-      'No hay cheques ni e-cheqs pendientes en cartera.';
+  esEcheq
+    ? 'No hay e-cheqs pendientes en cartera.'
+    : 'No hay cheques pendientes en cartera.';
     return;
   }
 
   aviso.textContent =
-    `${lista.length} instrumento(s) pendiente(s) en cartera.`;
-
+  `${lista.length} ${esEcheq ? 'e-cheq(s)' : 'cheque(s)'} pendiente(s) en cartera.`;
   contenedor.innerHTML = `
     <div style="overflow-x:auto">
       <table>
@@ -4505,23 +4686,33 @@ async function cargarCarteraCheques() {
                 <td class="num">${dinero(v.importe)}</td>
                 <td>${esc(v.estado)}</td>
                 <td>
-                  ${v.origen === 'normal'
-                    ? `
-                      <button type="button"
-                        class="btn sec chico caja-rechazar-valor"
-                        data-id="${Number(v.id)}">
-                        Rechazar
-                      </button>
-                    `
-                    : `
-  <button type="button"
-    class="btn sec chico caja-rechazar-inicial"
-    data-id="${Number(v.id)}">
-    Rechazar
-  </button>
-`
-                  }
-                </td>
+  ${v.origen === 'normal'
+    ? `
+      <button type="button"
+        class="btn sec chico caja-rechazar-valor"
+        data-id="${Number(v.id)}">
+        Rechazar
+      </button>
+      <button type="button"
+        class="btn chico caja-entregar-valor"
+        data-id="${Number(v.id)}">
+        Entregar
+      </button>
+    `
+    : `
+      <button type="button"
+        class="btn sec chico caja-rechazar-inicial"
+        data-id="${Number(v.id)}">
+        Rechazar
+      </button>
+      <button type="button"
+        class="btn chico caja-entregar-inicial"
+        data-id="${Number(v.id)}">
+        Entregar
+      </button>
+    `
+  }
+</td>
               </tr>
             `;
           }).join('')}
@@ -4636,6 +4827,124 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
     await cargarHistorialCaja();
     await cargarResumenCaja();
   };
+});// Entregar cheques y e-cheqs provenientes de cobros
+contenedor.querySelectorAll('.caja-entregar-valor').forEach(b => {
+  b.onclick = async () => {
+    const id = Number(b.dataset.id);
+
+    const destinatario = prompt(
+      '¿A quién se entrega el cheque o e-cheq?'
+    );
+
+    if (destinatario === null) return;
+
+    if (!destinatario.trim()) {
+      alert('Ingresá el destinatario.');
+      return;
+    }
+
+    const fechaEntrega = prompt(
+      'Fecha de entrega (AAAA-MM-DD):',
+      new Date().toLocaleDateString('en-CA')
+    );
+
+    if (fechaEntrega === null) return;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega) ||
+        Number.isNaN(Date.parse(fechaEntrega))) {
+      alert('Ingresá una fecha válida con formato AAAA-MM-DD.');
+      return;
+    }
+
+    const observaciones = prompt('Observaciones (opcional):');
+
+    if (observaciones === null) return;
+
+    if (!confirm(
+      `¿Confirmás la entrega del instrumento ${id} a ${destinatario.trim()}?`
+    )) return;
+
+    b.disabled = true;
+
+    const { error } = await sb.rpc('entregar_valor_caja', {
+      p_valor_id: id,
+      p_destinatario: destinatario.trim(),
+      p_fecha_entrega: fechaEntrega,
+      p_observaciones: observaciones.trim() || null
+    });
+
+    if (error) {
+      alert('No se pudo registrar la entrega: ' + error.message);
+      b.disabled = false;
+      return;
+    }
+
+    alert('Entrega registrada correctamente.');
+
+    await cargarCarteraCheques();
+    await cargarHistorialCaja();
+    await cargarResumenCaja();
+  };
+});
+
+// Entregar cheques y e-cheqs provenientes de cartera inicial
+contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
+  b.onclick = async () => {
+    const id = Number(b.dataset.id);
+
+    const destinatario = prompt(
+      '¿A quién se entrega el cheque o e-cheq?'
+    );
+
+    if (destinatario === null) return;
+
+    if (!destinatario.trim()) {
+      alert('Ingresá el destinatario.');
+      return;
+    }
+
+    const fechaEntrega = prompt(
+      'Fecha de entrega (AAAA-MM-DD):',
+      new Date().toLocaleDateString('en-CA')
+    );
+
+    if (fechaEntrega === null) return;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega) ||
+        Number.isNaN(Date.parse(fechaEntrega))) {
+      alert('Ingresá una fecha válida con formato AAAA-MM-DD.');
+      return;
+    }
+
+    const observaciones = prompt('Observaciones (opcional):');
+
+    if (observaciones === null) return;
+
+    if (!confirm(
+      `¿Confirmás la entrega del valor inicial ${id} a ${destinatario.trim()}?`
+    )) return;
+
+    b.disabled = true;
+
+    const { error } = await sb.rpc('entregar_valor_inicial_caja', {
+      p_valor_id: id,
+      p_destinatario: destinatario.trim(),
+      p_fecha_entrega: fechaEntrega,
+      p_observaciones: observaciones.trim() || null
+    });
+
+    if (error) {
+      alert('No se pudo registrar la entrega: ' + error.message);
+      b.disabled = false;
+      return;
+    }
+
+    alert('Entrega registrada correctamente.');
+
+    await cargarCarteraCheques();
+    await cargarHistorialCaja();
+    await cargarResumenCaja();
+  };
 });
 }
 
@@ -4687,10 +4996,10 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
       .limit(30),
 
     sb.from('caja_movimientos')
-      .select('id,fecha,importe,medio_pago,descripcion,observaciones,cobro_valor_id')
-      .eq('tipo', 'rechazo_cheque')
-      .order('fecha', { ascending: false })
-      .limit(30)
+  .select('id,fecha,importe,medio_pago,descripcion,observaciones,cobro_valor_id,valor_inicial_id,tipo,destinatario,fecha_entrega')
+  .in('tipo', ['rechazo_cheque', 'entrega_cheque_proveedor'])
+  .order('fecha', { ascending: false })
+  .limit(50)
   ]);
 
   if (errorCobros || errorRechazos) {
@@ -4740,27 +5049,33 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
       </div>
     ` : '<p class="vacio">Todavía no hay cobros registrados.</p>'}
 
-    <h3>Cheques y e-cheqs rechazados</h3>
+    <h3>Historial de cheques y e-cheqs</h3>
     ${rechazos?.length ? `
       <div style="overflow-x:auto">
         <table>
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Medio</th>
-              <th class="num">Importe</th>
-              <th>Observaciones</th>
-            </tr>
+  <th>Fecha</th>
+  <th>Movimiento</th>
+  <th>Medio</th>
+  <th class="num">Importe</th>
+  <th>Destinatario</th>
+  <th>Fecha de entrega</th>
+  <th>Observaciones</th>
+</tr>
           </thead>
           <tbody>
-            ${rechazos.map(x => `
-              <tr>
-                <td>${new Date(x.fecha).toLocaleString('es-AR')}</td>
-                <td>${esc(x.medio_pago || '—')}</td>
-                <td class="num">${dinero(x.importe)}</td>
-                <td>${esc(x.observaciones || x.descripcion || '—')}</td>
-              </tr>
-            `).join('')}
+           ${rechazos.map(x => `
+  <tr>
+    <td>${new Date(x.fecha).toLocaleString('es-AR')}</td>
+    <td>${x.tipo === 'entrega_cheque_proveedor' ? 'Entregado a proveedor' : 'Rechazado'}</td>
+    <td>${esc(x.medio_pago || '—')}</td>
+    <td class="num">${dinero(x.importe)}</td>
+    <td>${esc(x.destinatario || '—')}</td>
+    <td>${esc(x.fecha_entrega || '—')}</td>
+    <td>${esc(x.observaciones || x.descripcion || '—')}</td>
+  </tr>
+`).join('')}
           </tbody>
         </table>
       </div>
@@ -4788,23 +5103,47 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
         const filas = [...valoresContenedor.querySelectorAll('.caja-valor')];
 
         const valores = filas.map(fila => ({
-          medio_pago: fila.querySelector('.caja-medio').value,
-          importe: Number(fila.querySelector('.caja-importe').value),
-          titular: fila.querySelector('.caja-titular').value.trim() || null,
-          cuit_titular: fila.querySelector('.caja-cuit').value.trim() || null,
-          banco: fila.querySelector('.caja-banco').value.trim() || null,
-          numero_cheque: fila.querySelector('.caja-numero-cheque').value.trim() || null,
-          identificador_echeq: fila.querySelector('.caja-identificador-echeq').value.trim() || null,
-          fecha_vencimiento: fila.querySelector('.caja-vencimiento').value || null,
-          observaciones: fila.querySelector('.caja-observaciones-valor').value.trim() || null
-        }));
-
+  medio_pago: fila.querySelector('.caja-medio').value,
+  importe: Number(fila.querySelector('.caja-importe').value),
+  titular: fila.querySelector('.caja-titular').value.trim() || null,
+  cuit_titular: fila.querySelector('.caja-cuit').value.trim() || null,
+  banco: fila.querySelector('.caja-medio').value === 'transferencia'
+  ? fila.querySelector('.caja-cuenta-destino')
+      .selectedOptions[0]?.dataset.banco || null
+  : fila.querySelector('.caja-banco').value.trim() || null,
+  numero_cheque: fila.querySelector('.caja-numero-cheque').value.trim() || null,
+  identificador_echeq: fila.querySelector('.caja-identificador-echeq').value.trim() || null,
+  fecha_vencimiento: fila.querySelector('.caja-vencimiento').value || null,
+  cuenta_destino_id: fila.querySelector('.caja-cuenta-destino').value || null,
+  fecha_transferencia: fila.querySelector('.caja-fecha-transferencia').value || null,
+  referencia_transferencia:
+  fila.querySelector('.caja-referencia-transferencia').value.trim() ||
+  'Sin referencia',
+  observaciones: fila.querySelector('.caja-observaciones-valor').value.trim() || null
+}));
         if (!valores.length || valores.some(v =>
-          !Number.isFinite(v.importe) || v.importe <= 0
-        )) {
-          aviso.innerHTML = '<div class="msg err">Ingresá un importe mayor que cero para cada medio de pago.</div>';
-          return;
-        }
+  !Number.isFinite(v.importe) || v.importe <= 0
+)) {
+  aviso.innerHTML = '<div class="msg err">Ingresá un importe mayor que cero para cada medio de pago.</div>';
+  return;
+}
+
+const transferenciaInvalida = valores.some(v =>
+  v.medio_pago === 'transferencia' &&
+  (
+    !v.cuenta_destino_id ||
+    !v.fecha_transferencia ||
+    Number.isNaN(
+      Date.parse(v.fecha_transferencia + 'T12:00:00')
+    )
+  )
+);
+
+if (transferenciaInvalida) {
+  aviso.innerHTML =
+    '<div class="msg err">Para cada transferencia seleccioná una cuenta bancaria y una fecha válida.</div>';
+  return;
+}
 
         const boton = document.getElementById('caja-guardar');
         boton.disabled = true;
@@ -5011,13 +5350,22 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
      const panelesCajaPermitidos = [
   'caja-panel-cobro',
   'caja-panel-egreso',
-  'caja-panel-cartera',
+  'caja-panel-cheques',
+  'caja-panel-echeqs',
   'caja-panel-sesion',
   'caja-panel-transferencia'
 ];
 
 if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
   alternarPanelCaja(cajaPanelActivo);
+
+  if (cajaPanelActivo === 'caja-panel-cheques') {
+    await cargarCarteraCheques('cheque');
+  }
+
+  if (cajaPanelActivo === 'caja-panel-echeqs') {
+    await cargarCarteraCheques('echeq');
+  }
 }
     }
 

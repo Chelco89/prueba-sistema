@@ -2313,6 +2313,9 @@ async function verCuentaCorriente(id) {
 
   
 const saldoActual = Number(cuenta.saldo || 0);
+const tieneSaldoInicial = (movimientos || []).some(
+  m => m.referencia === 'SALDO_INICIAL'
+);
 
 // Calcula el saldo después de cada movimiento,
 // partiendo del saldo actual y recorriendo hacia atrás.
@@ -2356,61 +2359,43 @@ for (const m of movimientosCronologicos) {
 
       <h2>${etiquetaSaldo}</h2>
 
-      <h3>Registrar saldo inicial</h3>
-      <p class="vacio">
-        Registrá la situación del cliente antes de comenzar a usar
-        el sistema. Solo se puede cargar un saldo inicial por cuenta.
-      </p>
+      ${!tieneSaldoInicial ? `
+  <h3>Registrar saldo inicial</h3>
+  <p class="vacio">
+    Registrá la situación del cliente antes de comenzar a usar
+    el sistema. Solo se puede cargar un saldo inicial por cuenta.
+  </p>
 
-      <form id="cc-saldo-inicial-form" class="panel">
-        <label>Situación inicial del cliente</label>
-        <select id="cc-saldo-inicial-tipo" required>
-  <option value="">Seleccionar…</option>
-  <option value="deuda">Tiene deuda pendiente</option>
-  <option value="favor">Tiene saldo a favor</option>
-  <option value="cero">No tiene deuda ni saldo a favor</option>
-</select>
+  <form id="cc-saldo-inicial-form" class="panel">
+    <label>Situación inicial del cliente</label>
+    <select id="cc-saldo-inicial-tipo" required>
+      <option value="">Seleccionar…</option>
+      <option value="deuda">Tiene deuda pendiente</option>
+      <option value="favor">Tiene saldo a favor</option>
+      <option value="cero">No tiene deuda ni saldo a favor</option>
+    </select>
 
-        <label>Importe ($)</label>
-        <input id="cc-saldo-inicial-importe"
-  type="number" min="0" step="0.01"
-  required placeholder="0,00">
+    <label>Importe ($)</label>
+    <input id="cc-saldo-inicial-importe"
+      type="number" min="0" step="0.01"
+      required placeholder="0,00">
 
-        <label>Observaciones</label>
-        <input id="cc-saldo-inicial-observaciones"
-          maxlength="500" placeholder="Saldo anterior al sistema">
+    <label>Observaciones</label>
+    <input id="cc-saldo-inicial-observaciones"
+      maxlength="500" placeholder="Saldo anterior al sistema">
 
-        <button class="btn" type="submit">
-          Registrar saldo inicial
-        </button>
-      </form>
+    <button class="btn" type="submit">
+      Registrar saldo inicial
+    </button>
+  </form>
+` : ''}
 
-      <h3>Registrar pago o anticipo</h3>
-      <p class="vacio">
-        Podés registrar un pago superior a la deuda.
-        La diferencia quedará como saldo a favor del cliente.
-      </p>
-
-      <form id="cc-form" class="panel">
-        <label>Importe del pago</label>
-        <input id="cc-importe" type="number"
-          min="0.01" step="0.01" required placeholder="0,00">
-
-        <label>Medio de pago</label>
-        <select id="cc-medio" required>
-          <option value="">Seleccionar…</option>
-          <option value="efectivo">Efectivo</option>
-          <option value="transferencia">Transferencia</option>
-          <option value="cheque">Cheque</option>
-          <option value="otro">Otro</option>
-        </select>
-
-        <label>Observaciones</label>
-        <input id="cc-observaciones" maxlength="500"
-          placeholder="Número de operación u otra referencia">
-
-        <button class="btn" type="submit">Registrar pago</button>
-      </form>
+      <h3>Pagos y anticipos</h3>
+<p class="vacio">
+  Los pagos y anticipos de este cliente se registran exclusivamente
+  desde Caja. Una vez registrados, aparecerán automáticamente
+  en el historial de esta cuenta corriente.
+</p>
 
       <h3>Historial de movimientos</h3>
 
@@ -2496,18 +2481,20 @@ return `
 
   document.getElementById('cc-volver').onclick = () =>
     vistaCuentasCorrientes();
-    const tipoSaldoInicial = document.getElementById('cc-saldo-inicial-tipo');
-const importeSaldoInicial = document.getElementById('cc-saldo-inicial-importe');
+   if (!tieneSaldoInicial) {
+  const tipoSaldoInicial = document.getElementById('cc-saldo-inicial-tipo');
+  const importeSaldoInicial = document.getElementById('cc-saldo-inicial-importe');
 
-tipoSaldoInicial.onchange = () => {
-  if (tipoSaldoInicial.value === 'cero') {
-    importeSaldoInicial.value = '0';
-    importeSaldoInicial.disabled = true;
-  } else {
-    importeSaldoInicial.disabled = false;
-    importeSaldoInicial.value = '';
-  }
-};
+  tipoSaldoInicial.onchange = () => {
+    if (tipoSaldoInicial.value === 'cero') {
+      importeSaldoInicial.value = '0';
+      importeSaldoInicial.disabled = true;
+    } else {
+      importeSaldoInicial.disabled = false;
+      importeSaldoInicial.value = '';
+    }
+  };
+}
 
   // Abrir el detalle del presupuesto asociado.
   c.querySelectorAll('.cc-presupuesto-link').forEach(btn => {
@@ -2519,45 +2506,7 @@ tipoSaldoInicial.onchange = () => {
     };
   });
 
-  document.getElementById('cc-form').onsubmit = async e => {
-    e.preventDefault();
-
-    const importe = Number(
-      document.getElementById('cc-importe').value
-    );
-    const medio = document.getElementById('cc-medio').value;
-    const observaciones = document
-      .getElementById('cc-observaciones').value.trim();
-
-    if (!(importe > 0) || !Number.isFinite(importe)) {
-      alert('Ingresá un importe válido.');
-      return;
-    }
-
-    const btn = e.submitter;
-    btn.disabled = true;
-
-    const { error } = await sb
-      .from('cuenta_corriente_movimientos')
-      .insert({
-        cuenta_corriente_id: id,
-        tipo: 'pago',
-        importe,
-        medio_pago: medio,
-        observaciones: observaciones || null,
-        creado_por: perfil.id
-      });
-
-    if (error) {
-      alert('No se pudo registrar el pago: ' + error.message);
-      btn.disabled = false;
-      return;
-    }
-
-    alert('Pago registrado correctamente.');
-    await verCuentaCorriente(id);
-  };
-
+  if (!tieneSaldoInicial) {
   document.getElementById('cc-saldo-inicial-form').onsubmit = async e => {
   e.preventDefault();
 
@@ -2611,8 +2560,9 @@ tipoSaldoInicial.onchange = () => {
         : 'Saldo inicial en cero registrado correctamente.'
   );
 
-  await verCuentaCorriente(id);
-};
+   await verCuentaCorriente(id);
+  };
+}
 }
 
 async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
@@ -2980,6 +2930,9 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   <button type="button" class="btn sec chico" id="btn-mostrar-cobro">
     Registrar cobro
   </button>
+  <button type="button" class="btn sec chico" id="btn-mostrar-transferencia">
+  Registrar transferencia
+</button>
   <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
     Registrar egreso
   </button>
@@ -2994,6 +2947,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
 <div id="caja-panel-cobro" hidden style="margin:16px 0"></div>
 <div id="caja-panel-egreso" hidden style="margin:16px 0"></div>
+<div id="caja-panel-transferencia" hidden style="margin:16px 0"></div>
 <div id="caja-panel-cartera" hidden style="margin:16px 0"></div>
 <div id="caja-panel-sesion" hidden style="margin:16px 0"></div>
 <div id="caja-informes" class="panel" style="margin:16px 0">
@@ -3388,6 +3342,7 @@ function alternarPanelCaja(id) {
   document.getElementById('caja-panel-egreso').hidden = true;
   document.getElementById('caja-panel-cartera').hidden = true;
   document.getElementById('caja-panel-sesion').hidden = true;
+  document.getElementById('caja-panel-transferencia').hidden = true;
 
   panel.hidden = !mostrar;
 
@@ -3397,6 +3352,9 @@ function alternarPanelCaja(id) {
 
 document.getElementById('btn-mostrar-cobro').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-cobro');
+});
+document.getElementById('btn-mostrar-transferencia').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-transferencia');
 });
 
 document.getElementById('btn-mostrar-egreso').addEventListener('click', () => {
@@ -3414,11 +3372,187 @@ document.getElementById('btn-mostrar-sesion').addEventListener('click', () => {
 panelCobro.appendChild(
   document.getElementById('caja-cobro-contenido')
 );
+const panelTransferencia = document.getElementById('caja-panel-transferencia');
+// ==========================================
+// PANEL DE TRANSFERENCIAS
+// ==========================================
+
+panelTransferencia.innerHTML = `
+  <div class="panel">
+    <h3>Registrar pago por transferencia</h3>
+
+    <form id="form-transferencia-caja">
+
+      <label>Cliente</label>
+      <select id="transferencia-cliente" required>
+        <option value="">Seleccionar cliente...</option>
+      </select>
+
+      <label>Cuenta bancaria de destino</label>
+      <select id="transferencia-cuenta" required>
+        <option value="">Cargando cuentas...</option>
+      </select>
+
+      <label>Fecha de transferencia</label>
+      <input type="date" id="transferencia-fecha" required>
+
+      <label>Importe</label>
+      <input
+        type="number"
+        id="transferencia-importe"
+        min="0.01"
+        step="0.01"
+        required
+        placeholder="0.00"
+      >
+
+      <label>Referencia / número de operación</label>
+      <input
+        type="text"
+        id="transferencia-referencia"
+        required
+        maxlength="200"
+        placeholder="Número de operación bancaria"
+      >
+
+      <button type="submit" class="btn-principal">
+        Registrar transferencia
+      </button>
+
+      <div id="transferencia-mensaje"></div>
+    </form>
+  </div>
+`;
+
+const transferenciaCliente = document.getElementById('transferencia-cliente');
+const transferenciaCuenta = document.getElementById('transferencia-cuenta');
+const transferenciaFecha = document.getElementById('transferencia-fecha');
+
+const fechaHoyTransferencia = new Date();
+transferenciaFecha.value = [
+  fechaHoyTransferencia.getFullYear(),
+  String(fechaHoyTransferencia.getMonth() + 1).padStart(2, '0'),
+  String(fechaHoyTransferencia.getDate()).padStart(2, '0')
+].join('-');
+
+// Cargar clientes activos.
+clientes
+  .filter(cliente => cliente.activo)
+  .forEach(cliente => {
+    const opcion = document.createElement('option');
+    opcion.value = cliente.id;
+    opcion.textContent = cliente.nombre;
+    transferenciaCliente.appendChild(opcion);
+  });
+
+// Cargar cuentas bancarias y períodos abiertos.
+const { data: cuentasTransferencia, error: errorCuentasTransferencia } =
+  await sb
+    .from('bancos_cuentas')
+    .select('id,banco,nombre_cuenta')
+    .eq('activo', true)
+    .order('banco');
+
+const { data: periodosTransferencia, error: errorPeriodosTransferencia } =
+  await sb
+    .from('bancos_cierres')
+    .select('id,cuenta_id')
+    .eq('estado', 'abierto');
+
+if (errorCuentasTransferencia || errorPeriodosTransferencia) {
+  transferenciaCuenta.innerHTML =
+    '<option value="">Error al cargar cuentas bancarias</option>';
+} else {
+  const cuentasDisponibles = (cuentasTransferencia || []).filter(cuenta =>
+    (periodosTransferencia || []).some(
+      periodo => periodo.cuenta_id === cuenta.id
+    )
+  );
+
+  transferenciaCuenta.innerHTML =
+    '<option value="">Seleccionar cuenta...</option>';
+
+  cuentasDisponibles.forEach(cuenta => {
+    const opcion = document.createElement('option');
+    opcion.value = cuenta.id;
+    opcion.textContent = `${cuenta.banco} - ${cuenta.nombre_cuenta}`;
+    transferenciaCuenta.appendChild(opcion);
+  });
+
+  if (cuentasDisponibles.length === 0) {
+    transferenciaCuenta.innerHTML =
+      '<option value="">No hay cuentas con período abierto</option>';
+  }
+}
+
+// Registrar transferencia.
+document
+  .getElementById('form-transferencia-caja')
+  .addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    const boton = this.querySelector('button[type="submit"]');
+    const mensaje = document.getElementById('transferencia-mensaje');
+
+    boton.disabled = true;
+    boton.textContent = 'Registrando...';
+    mensaje.textContent = '';
+
+    const clienteId = Number(transferenciaCliente.value);
+    const cuentaId = Number(transferenciaCuenta.value);
+    const importe = Number(
+      document.getElementById('transferencia-importe').value
+    );
+    const fecha = transferenciaFecha.value;
+    const referencia = document
+      .getElementById('transferencia-referencia')
+      .value.trim();
+
+    try {
+      const { data, error } = await sb.rpc('registrar_cobro_caja', {
+        p_cliente_id: clienteId,
+        p_pedido_id: null,
+        p_aplicar_cuenta_corriente: false,
+        p_observaciones: 'Pago registrado por transferencia',
+        p_valores: [{
+          medio_pago: 'transferencia',
+          importe: importe,
+          banco: 'Transferencia bancaria',
+          cuenta_destino_id: String(cuentaId),
+          fecha_transferencia: fecha,
+          referencia_transferencia: referencia
+        }]
+      });
+
+      if (error) throw error;
+
+      mensaje.textContent =
+        `Transferencia registrada correctamente. Recibo: ${data}`;
+
+      this.reset();
+
+      const hoy = new Date();
+      transferenciaFecha.value = [
+        hoy.getFullYear(),
+        String(hoy.getMonth() + 1).padStart(2, '0'),
+        String(hoy.getDate()).padStart(2, '0')
+      ].join('-');
+
+    } catch (error) {
+      mensaje.textContent =
+        'No se pudo registrar la transferencia: ' + error.message;
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Registrar transferencia';
+    }
+  });
 const panelEgreso = document.getElementById('caja-panel-egreso');
 
 panelEgreso.appendChild(
   document.getElementById('caja-egreso-contenido')
 );
+
+
 const panelCartera = document.getElementById('caja-panel-cartera');
 
 panelCartera.appendChild(
@@ -4874,11 +5008,12 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
       await cargarHistorialCaja();
       await cargarCarteraCheques();
       await cargarResumenCaja();
-      const panelesCajaPermitidos = [
+     const panelesCajaPermitidos = [
   'caja-panel-cobro',
   'caja-panel-egreso',
   'caja-panel-cartera',
-  'caja-panel-sesion'
+  'caja-panel-sesion',
+  'caja-panel-transferencia'
 ];
 
 if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
@@ -6051,6 +6186,15 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
             <option value="retira">Retira el cliente</option>
             <option value="despacho">Se despacha</option>
           </select>
+          <div id="bloque-condicion-pago" hidden>
+  <label for="condicion-pago">CONDICIÓN DE PAGO</label>
+  <select id="condicion-pago">
+    <option value="">Seleccionar condición de pago</option>
+    <option value="pagado">Ya pagó</option>
+    <option value="paga_al_retirar">Paga al retirar</option>
+    <option value="retira_y_despues_paga">Retira y paga después</option>
+  </select>
+</div>
           <label style="margin-bottom:2px">PRODUCTOS</label>
           <div style="display:grid; grid-template-columns:1fr 80px 36px; gap:8px; font-size:12px; font-weight:600; color:var(--gris); margin-bottom:4px">
             <span>PRODUCTO</span><span>CANT.</span><span></span>
@@ -6417,7 +6561,27 @@ mapa.set(id, opciones);
         return true;
       }
 
+const bloqueCondicionPago = document.getElementById('bloque-condicion-pago');
+const selectorCondicionPago = document.getElementById('condicion-pago');
 
+function actualizarCondicionPago() {
+  const clienteId = Number(selectorCliente.value);
+
+  const cliente = clientesActivos.find(
+    c => Number(c.id) === clienteId
+  );
+
+  const esContado = cliente && cliente.tiene_cuenta_corriente !== true;
+
+  bloqueCondicionPago.hidden = !esContado;
+  selectorCondicionPago.required = !!esContado;
+
+  if (!esContado) {
+    selectorCondicionPago.value = '';
+  }
+}
+
+selectorCliente.addEventListener('change', actualizarCondicionPago);
       selectorCliente.addEventListener('change', cargarPreciosCliente);
 
       const actualizarAvisosStock = () => {
@@ -6964,12 +7128,25 @@ linea.origen_precio = 'excepcional_pedido';
           return;
         }
 
+        if (
+  clienteSeleccionado.tiene_cuenta_corriente !== true &&
+  !document.getElementById('condicion-pago').value
+) {
+  btn.disabled = false;
+  aviso.innerHTML =
+    '<div class="msg err">Seleccioná la condición de pago del cliente.</div>';
+  return;
+}
+
 
         const { data: p, error } = await sb.from('pedidos').insert({
           cliente: clienteSeleccionado.nombre,
           cliente_id: clienteSeleccionado.id,
           lista_precio_id: clienteSeleccionado.lista_precios_id,
           precios_pendientes: lineas.some(l => l.precio_unitario === null),
+          condicion_pago: clienteSeleccionado.tiene_cuenta_corriente === true
+  ? null
+  : document.getElementById('condicion-pago').value,
           modalidad: document.getElementById('modalidad').value,
           fecha_entrega: document.getElementById('fentrega').value || null,
           comentarios: document.getElementById('coment').value.trim() || null,

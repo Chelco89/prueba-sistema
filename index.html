@@ -9145,7 +9145,7 @@ const filas = itemsOrdenados
     return `
       <tr>
         <td>
-          <b>${esc(i.producto)}</b>
+          <b style="font-weight:700">${esc(i.producto)}</b>
           ${i.series?.length ? `<small class="series">N.º de serie: ${i.series.map(s => esc(s.numero_serie)).join(', ')}</small>` : ''}
         </td>
         <td class="num">${i.cantidad}</td>

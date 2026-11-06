@@ -2458,13 +2458,13 @@ return `
     <td>${esc(new Date(m.fecha).toLocaleString('es-AR'))}</td>
     <td>${esc(movimientoTexto)}</td>
     <td>${comprobante}</td>
-    <td class="num" style="color:#c62828;font-weight:600">
-      ${esDebe ? dinero(m.importe) : '—'}
-    </td>
-    <td class="num" style="color:#218838;font-weight:600">
-      ${esDebe ? '—' : dinero(m.importe)}
-    </td>
-    <td class="num" style="color:${Number(saldosPorMovimiento[String(m.id)] ?? 0) > 0 ? '#c62828' : '#218838'};font-weight:600">
+    <td class="num" style="color:#000;font-weight:600">
+  ${esDebe ? dinero(m.importe) : '—'}
+</td>
+<td class="num" style="color:${m.tipo === 'pago' ? '#218838' : '#000'};font-weight:600">
+  ${esDebe ? '—' : dinero(m.importe)}
+</td>
+   <td class="num" style="color:#000;font-weight:600">
   ${dinero(saldosPorMovimiento[String(m.id)] ?? 0)}
 </td>
     <td>${esc(observacionesLimpias || '—')}</td>
@@ -2930,31 +2930,245 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   <button type="button" class="btn sec chico" id="btn-mostrar-cobro">
     Registrar cobro
   </button>
-  <button type="button" class="btn sec chico" id="btn-mostrar-transferencia">
-  Registrar transferencia
-</button>
-  <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
+    <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
     Registrar egreso
   </button>
+  <button type="button" class="btn sec chico" id="btn-mostrar-efectivo">
+  Caja efectivo
+</button>
+
+<button type="button" class="btn sec chico" id="btn-mostrar-usd">
+  Caja USD
+</button>
   <button type="button" class="btn sec chico" id="btn-mostrar-cheques">
   Cheques
 </button>
 <button type="button" class="btn sec chico" id="btn-mostrar-echeqs">
   E-cheqs
 </button>
-  <button type="button" class="btn sec chico" id="btn-mostrar-sesion">
-    Abrir / Cerrar Caja
-  </button>
+<button type="button" class="btn sec chico" id="btn-mostrar-banco-mega">
+  Banco Mega
+</button>
+
+<button type="button" class="btn sec chico" id="btn-mostrar-banco-particular">
+  Banco Particular
+</button>
+ 
 </div>
 </div>
 
 <div id="caja-panel-cobro" hidden style="margin:16px 0"></div>
 <div id="caja-panel-egreso" hidden style="margin:16px 0"></div>
+<div id="caja-panel-efectivo" hidden style="margin:16px 0">
+  <section class="panel">
+    <h2>Caja efectivo (ARS)</h2>
+    <p>Libro de movimientos de efectivo.</p>
+
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Movimiento</th>
+            <th>Ingreso</th>
+            <th>Egreso</th>
+            <th>Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="caja-efectivo-filas">
+          <tr>
+            <td colspan="5">Cargando movimientos...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p id="caja-efectivo-total"></p>
+  </section>
+</div>
+<div id="caja-panel-usd" hidden style="margin:16px 0">
+  <section class="panel">
+    <h2>Caja USD</h2>
+    <p>Libro de movimientos en dólares.</p>
+
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Movimiento</th>
+            <th>Ingreso</th>
+            <th>Egreso</th>
+            <th>Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="caja-usd-filas">
+          <tr>
+            <td colspan="5">Cargando movimientos...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p id="caja-usd-total"></p>
+  </section>
+</div>
 <div id="caja-panel-transferencia" hidden style="margin:16px 0"></div>
 <div id="caja-panel-cheques" hidden style="margin:16px 0"></div>
 <div id="caja-panel-echeqs" hidden style="margin:16px 0"></div>
+<div id="caja-panel-banco-mega" hidden style="margin:16px 0">
+  <section class="panel">
+    <h2>Banco Mega</h2>
+    <p>Movimientos transferidos durante el período actual.</p>
+
+    <div class="panel">
+      <small>Total transferido en el período</small>
+      <h2 id="caja-mega-total">—</h2>
+    </div>
+
+   <p id="caja-mega-periodo">Consultando período...</p>
+
+<div class="panel" style="margin-top:16px">
+  <h3>Cierre del período</h3>
+
+  <label for="caja-mega-extracto">Saldo según extracto bancario (opcional)</label>
+  <input
+    id="caja-mega-extracto"
+    type="number"
+    min="0"
+    step="0.01"
+    placeholder="Ingresar saldo del extracto"
+  >
+
+  <label for="caja-mega-observaciones">Observaciones del cierre</label>
+  <textarea
+    id="caja-mega-observaciones"
+    rows="2"
+    maxlength="1000"
+    placeholder="Observaciones opcionales"
+  ></textarea>
+
+  <div id="caja-mega-cierre-aviso"></div>
+
+  <button
+    type="button"
+    class="btn"
+    id="caja-mega-cerrar"
+  >
+    Cerrar período de Banco Mega
+  </button>
+</div>
+
+<div id="caja-mega-informe"></div>
+
+  </section>
+</div>
+<div id="caja-panel-banco-particular" hidden style="margin:16px 0">
+  <section class="panel">
+    <h2>Banco Particular</h2>
+    <p>Resumen de las cuatro cuentas durante sus períodos actuales.</p>
+
+    <div class="grid">
+      <div class="panel">
+        <small>Cuenta Julio</small>
+        <h2 id="caja-particular-julio">—</h2>
+<small id="caja-particular-julio-periodo"></small>
+
+<div class="panel" style="margin-top:12px">
+  <h3>Cierre de Cuenta Julio</h3>
+
+  <label for="caja-julio-extracto">Saldo según extracto (opcional)</label>
+  <input id="caja-julio-extracto" type="number" min="0" step="0.01">
+
+  <label for="caja-julio-observaciones">Observaciones</label>
+  <textarea id="caja-julio-observaciones" rows="2" maxlength="1000"></textarea>
+
+  <div id="caja-julio-cierre-aviso"></div>
+
+  <button type="button" class="btn" id="caja-julio-cerrar">
+    Cerrar período
+  </button>
+</div>
+
+<div id="caja-julio-informe"></div>
+      </div>
+
+      <div class="panel">
+        <small>Cuenta Ariel</small>
+        <h2 id="caja-particular-ariel">—</h2>
+<small id="caja-particular-ariel-periodo"></small>
+
+<div class="panel" style="margin-top:12px">
+  <h3>Cierre de Cuenta Ariel</h3>
+
+  <label for="caja-ariel-extracto">Saldo según extracto (opcional)</label>
+  <input id="caja-ariel-extracto" type="number" min="0" step="0.01">
+
+  <label for="caja-ariel-observaciones">Observaciones</label>
+  <textarea id="caja-ariel-observaciones" rows="2" maxlength="1000"></textarea>
+
+  <div id="caja-ariel-cierre-aviso"></div>
+
+  <button type="button" class="btn" id="caja-ariel-cerrar">
+    Cerrar período
+  </button>
+</div>
+
+<div id="caja-ariel-informe"></div>
+      </div>
+
+      <div class="panel">
+        <small>Cuenta Angi</small>
+        <h2 id="caja-particular-angi">—</h2>
+<small id="caja-particular-angi-periodo"></small>
+
+<div class="panel" style="margin-top:12px">
+  <h3>Cierre de Cuenta Angi</h3>
+
+  <label for="caja-angi-extracto">Saldo según extracto (opcional)</label>
+  <input id="caja-angi-extracto" type="number" min="0" step="0.01">
+
+  <label for="caja-angi-observaciones">Observaciones</label>
+  <textarea id="caja-angi-observaciones" rows="2" maxlength="1000"></textarea>
+
+  <div id="caja-angi-cierre-aviso"></div>
+
+  <button type="button" class="btn" id="caja-angi-cerrar">
+    Cerrar período
+  </button>
+</div>
+
+<div id="caja-angi-informe"></div>
+      </div>
+
+      <div class="panel">
+        <small>Cuenta Megaparte</small>
+       <h2 id="caja-particular-megaparte">—</h2>
+<small id="caja-particular-megaparte-periodo"></small>
+
+<div class="panel" style="margin-top:12px">
+  <h3>Cierre de Cuenta Megaparte</h3>
+
+  <label for="caja-megaparte-extracto">Saldo según extracto (opcional)</label>
+  <input id="caja-megaparte-extracto" type="number" min="0" step="0.01">
+
+  <label for="caja-megaparte-observaciones">Observaciones</label>
+  <textarea id="caja-megaparte-observaciones" rows="2" maxlength="1000"></textarea>
+
+  <div id="caja-megaparte-cierre-aviso"></div>
+
+  <button type="button" class="btn" id="caja-megaparte-cerrar">
+    Cerrar período
+  </button>
+</div>
+
+<div id="caja-megaparte-informe"></div>
+      </div>
+    </div>
+  </section>
+</div>
 <div id="caja-panel-sesion" hidden style="margin:16px 0"></div>
-<div id="caja-informes" class="panel" style="margin:16px 0">
+<div id="caja-informes" class="panel" style="margin:16px 0" hidden>
   <h3>Informes de cierre de Caja</h3>
   <p class="vacio">Consultá e imprimí los informes de sesiones anteriores.</p>
 
@@ -2973,7 +3187,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   <div id="caja-informe-resultado" style="margin-top:16px"></div>
 </div>
 
-      <section class="panel" style="margin:16px 0;border:1px solid var(--linea)">
+      <section id="caja-panel-inicio" class="panel" style="margin:16px 0;border:1px solid var(--linea)">
         <div class="barra" style="flex-wrap:wrap">
           <h3 style="margin:0">Disponible ahora</h3>
           <button type="button" class="btn sec chico" id="caja-actualizar-resumen">Actualizar</button>
@@ -3011,7 +3225,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
         </div>
             </section>
 
-      <div id="caja-cobro-contenido">
+      <div id="caja-cobro-contenido" hidden>
 
   <p class="vacio" style="padding-top:0">
     Registro de cobros en efectivo, cheque y e-cheq.
@@ -3061,13 +3275,18 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     <div id="caja-aviso" style="margin-top:12px"></div>
 
     <button class="btn" type="submit" id="caja-guardar">
-      Registrar cobro
-    </button>
-  </form>
+  Registrar cobro
+</button>
+</form>
+
+<hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+<h3>Últimos cobros registrados</h3>
+<div id="caja-historial" class="vacio">Cargando historial…</div>
 
 </div>
 
-      <div id="caja-cartera-inicial-contenido" class="panel" style="margin:16px 0">
+      <div id="caja-cartera-inicial-contenido" class="panel" style="margin:16px 0" hidden>
   <h3>Registrar cheque o e-cheq inicial</h3>
 <p class="vacio">
   Cargá manualmente los valores que ya tenías antes de utilizar SGV.
@@ -3130,15 +3349,11 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   </button>
 
 </form>
-
-      <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
-
-      <h3>Últimos cobros registrados</h3>
-      <div id="caja-historial" class="vacio">Cargando historial…</div>
+</div>
       
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
-      <div id="caja-egreso-contenido">
+     <div id="caja-egreso-contenido" hidden>
 
   <h3>Registrar egreso</h3>
   <p class="vacio" style="padding-top:0">
@@ -3165,18 +3380,18 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
     <div id="caja-egreso-aviso" style="margin-top:12px"></div>
 
-    <button class="btn" type="submit" id="caja-egreso-guardar">
-      Registrar egreso
-    </button>
-  </form>
+      <button class="btn" type="submit" id="caja-egreso-guardar">
+    Registrar egreso
+  </button>
+</form>
 
+<hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+<h3>Últimos egresos registrados</h3>
+<div id="caja-egresos-historial" class="vacio">
+  Próximamente: historial de egresos.
 </div>
-      <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
-      <h3>Últimos egresos registrados</h3>
-      <div id="caja-egresos-historial" class="vacio">
-        Próximamente: historial de egresos.
-      </div>
 
     </div>
   `;
@@ -3346,27 +3561,127 @@ await cargarResumenCaja();
     boton.textContent = 'Guardar en cartera';
   }
 });
+async function cargarLibroCaja(moneda) {
+  const esUSD = moneda === 'USD';
+  const filasId = esUSD ? 'caja-usd-filas' : 'caja-efectivo-filas';
+  const totalId = esUSD ? 'caja-usd-total' : 'caja-efectivo-total';
 
+  const filas = document.getElementById(filasId);
+  const total = document.getElementById(totalId);
+
+  if (!filas || !total) return;
+
+  filas.innerHTML = '<tr><td colspan="5">Cargando movimientos...</td></tr>';
+  total.textContent = '';
+
+  const { data, error } = await sb
+    .from('caja_movimientos')
+    .select('id, fecha, tipo, moneda, importe, medio_pago, descripcion, observaciones')
+    .eq('moneda', moneda)
+    .order('fecha', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) {
+    filas.innerHTML = `<tr><td colspan="5">No se pudieron cargar los movimientos: ${esc(error.message)}</td></tr>`;
+    return;
+  }
+
+  const movimientos = (data || []).filter(m =>
+    m.tipo === 'saldo_inicial' ||
+    (m.tipo === 'cobro' && (moneda === 'USD' || m.medio_pago === 'efectivo')) ||
+    ['egreso', 'retiro', 'gasto_entre_sesiones'].includes(m.tipo)
+  );
+
+  let saldo = 0;
+
+  if (!movimientos.length) {
+    filas.innerHTML = '<tr><td colspan="5">Todavía no hay movimientos.</td></tr>';
+    total.textContent = `Saldo actual: ${moneda} 0,00`;
+    return;
+  }
+
+  const filasHTML = movimientos.map(m => {
+    const ingreso = ['saldo_inicial', 'cobro'].includes(m.tipo) ? Number(m.importe) : 0;
+    const egreso = ['egreso', 'retiro', 'gasto_entre_sesiones'].includes(m.tipo) ? Number(m.importe) : 0;
+
+    saldo += ingreso - egreso;
+
+    let movimiento = m.descripcion || m.tipo;
+
+    if (m.tipo === 'saldo_inicial') movimiento = 'Saldo inicial';
+    if (m.tipo === 'cobro') movimiento = 'Cobro en efectivo';
+    if (m.tipo === 'egreso') movimiento = 'Egreso de Caja';
+    if (m.tipo === 'retiro') movimiento = 'Retiro de Caja';
+    if (m.tipo === 'gasto_entre_sesiones') movimiento = 'Gasto entre sesiones';
+
+    if (m.observaciones) movimiento += ` - ${m.observaciones}`;
+
+    const fecha = new Date(m.fecha).toLocaleString('es-AR');
+
+    return `
+      <tr>
+        <td>${esc(fecha)}</td>
+        <td>${esc(movimiento)}</td>
+        <td>${ingreso ? ingreso.toLocaleString('es-AR', { minimumFractionDigits: 2 }) : '—'}</td>
+        <td>${egreso ? egreso.toLocaleString('es-AR', { minimumFractionDigits: 2 }) : '—'}</td>
+        <td>${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `;
+  }).join('');
+    filas.innerHTML = movimientos.length
+    ? filasHTML.split('</tr>').filter(Boolean).reverse().map(fila => fila + '</tr>').join('')
+    : '';
+
+  total.textContent = `Saldo actual: ${moneda} ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+}
 function alternarPanelCaja(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
 
   const mostrar = panel.hidden;
+  const panelInicio = document.getElementById('caja-panel-inicio');
 
   [
     'caja-panel-cobro',
     'caja-panel-egreso',
+      'caja-panel-efectivo',
+  'caja-panel-usd',
     'caja-panel-transferencia',
     'caja-panel-cheques',
     'caja-panel-echeqs',
+    'caja-panel-banco-mega',
+    'caja-panel-banco-particular',
     'caja-panel-sesion'
   ].forEach(panelId => {
     const otro = document.getElementById(panelId);
     if (otro) otro.hidden = true;
   });
 
-  panel.hidden = !mostrar;
+    panel.hidden = !mostrar;
 
+  const formularioInicial = document.getElementById('caja-cartera-inicial-contenido');
+
+  if (formularioInicial) {
+    const mostrarFormularioInicial =
+      mostrar &&
+      (id === 'caja-panel-cheques' || id === 'caja-panel-echeqs');
+
+    formularioInicial.hidden = !mostrarFormularioInicial;
+
+    if (mostrarFormularioInicial) {
+      tipoInicial.value = id === 'caja-panel-echeqs' ? 'echeq' : 'cheque';
+      actualizarCamposValorInicial();
+      const opcionCheque = tipoInicial.querySelector('option[value="cheque"]');
+const opcionEcheq = tipoInicial.querySelector('option[value="echeq"]');
+
+if (opcionCheque) opcionCheque.hidden = id !== 'caja-panel-cheques';
+if (opcionEcheq) opcionEcheq.hidden = id !== 'caja-panel-echeqs';
+    }
+  }
+
+  if (panelInicio) {
+    panelInicio.hidden = !!mostrar;
+  }
   cajaPanelActivo = mostrar ? id : null;
   guardarEstadoNavegacion();
 }
@@ -3375,12 +3690,23 @@ document.getElementById('btn-mostrar-cobro').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-cobro');
 });
 
-document.getElementById('btn-mostrar-transferencia').addEventListener('click', () => {
-  alternarPanelCaja('caja-panel-transferencia');
-});
 
 document.getElementById('btn-mostrar-egreso').addEventListener('click', () => {
   alternarPanelCaja('caja-panel-egreso');
+});
+document.getElementById('btn-mostrar-efectivo').addEventListener('click', async () => {
+  alternarPanelCaja('caja-panel-efectivo');
+
+  if (!document.getElementById('caja-panel-efectivo').hidden) {
+    await cargarLibroCaja('ARS');
+  }
+});
+document.getElementById('btn-mostrar-usd').addEventListener('click', async () => {
+  alternarPanelCaja('caja-panel-usd');
+
+  if (!document.getElementById('caja-panel-usd').hidden) {
+    await cargarLibroCaja('USD');
+  }
 });
 
 document.getElementById('btn-mostrar-cheques').addEventListener('click', async () => {
@@ -3398,13 +3724,20 @@ document.getElementById('btn-mostrar-echeqs').addEventListener('click', async ()
     await cargarCarteraCheques('echeq');
   }
 });
-document.getElementById('btn-mostrar-sesion').addEventListener('click', () => {
-  alternarPanelCaja('caja-panel-sesion');
+document.getElementById('btn-mostrar-banco-mega').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-banco-mega');
 });
 
-panelCobro.appendChild(
-  document.getElementById('caja-cobro-contenido')
-);
+document.getElementById('btn-mostrar-banco-particular').addEventListener('click', () => {
+  alternarPanelCaja('caja-panel-banco-particular');
+});
+
+
+const contenidoCobro = document.getElementById('caja-cobro-contenido');
+
+panelCobro.appendChild(contenidoCobro);
+contenidoCobro.hidden = false;
+const contenidoEgreso = document.getElementById('caja-egreso-contenido');
 const panelTransferencia = document.getElementById('caja-panel-transferencia');
 // ==========================================
 // PANEL DE TRANSFERENCIAS
@@ -3594,9 +3927,8 @@ document
   });
 const panelEgreso = document.getElementById('caja-panel-egreso');
 
-panelEgreso.appendChild(
-  document.getElementById('caja-egreso-contenido')
-);
+panelEgreso.appendChild(contenidoEgreso);
+contenidoEgreso.hidden = false;
 
 
 
@@ -4103,6 +4435,13 @@ const cuentaMegaparte = cuentasParticulares.find(c => c.cuenta_id === 5);
 
 document.getElementById('caja-resumen-banco-mega').textContent =
   dinero(bancoMega?.total_transferido);
+  document.getElementById('caja-mega-total').textContent =
+  dinero(bancoMega?.total_transferido);
+
+document.getElementById('caja-mega-periodo').textContent =
+  bancoMega?.fecha_inicio
+    ? `Período iniciado el ${new Date(bancoMega.fecha_inicio).toLocaleDateString('es-AR')}`
+    : 'No hay un período bancario abierto.';
 
 document.getElementById('caja-resumen-banco-julio').textContent =
   dinero(cuentaJulio?.total_transferido);
@@ -4115,6 +4454,33 @@ document.getElementById('caja-resumen-banco-angi').textContent =
 
 document.getElementById('caja-resumen-banco-megaparte').textContent =
   dinero(cuentaMegaparte?.total_transferido);
+  document.getElementById('caja-particular-julio').textContent =
+  dinero(cuentaJulio?.total_transferido);
+  document.getElementById('caja-particular-julio-periodo').textContent =
+  cuentaJulio?.fecha_inicio
+    ? `Período iniciado el ${new Date(cuentaJulio.fecha_inicio).toLocaleDateString('es-AR')}`
+    : 'No hay un período bancario abierto.';
+
+document.getElementById('caja-particular-ariel').textContent =
+  dinero(cuentaAriel?.total_transferido);
+  document.getElementById('caja-particular-ariel-periodo').textContent =
+  cuentaAriel?.fecha_inicio
+    ? `Período iniciado el ${new Date(cuentaAriel.fecha_inicio).toLocaleDateString('es-AR')}`
+    : 'No hay un período bancario abierto.';
+
+document.getElementById('caja-particular-angi').textContent =
+  dinero(cuentaAngi?.total_transferido);
+  document.getElementById('caja-particular-angi-periodo').textContent =
+  cuentaAngi?.fecha_inicio
+    ? `Período iniciado el ${new Date(cuentaAngi.fecha_inicio).toLocaleDateString('es-AR')}`
+    : 'No hay un período bancario abierto.';
+
+document.getElementById('caja-particular-megaparte').textContent =
+  dinero(cuentaMegaparte?.total_transferido);
+  document.getElementById('caja-particular-megaparte-periodo').textContent =
+  cuentaMegaparte?.fecha_inicio
+    ? `Período iniciado el ${new Date(cuentaMegaparte.fecha_inicio).toLocaleDateString('es-AR')}`
+    : 'No hay un período bancario abierto.';
         if (!r) {
           avisoResumen.textContent = 'No se recibió información del resumen.';
           return;
@@ -4128,6 +4494,158 @@ document.getElementById('caja-resumen-banco-megaparte').textContent =
         document.getElementById('caja-resumen-echeqs-total').textContent = dinero(r.echeqs_importe);
 
         if (r.sesion_abierta) {
+          // CIERRES BANCARIOS INDEPENDIENTES
+const cierresBancarios = [
+  {
+    id: 1,
+    boton: 'caja-mega-cerrar',
+    extracto: 'caja-mega-extracto',
+    observaciones: 'caja-mega-observaciones',
+    aviso: 'caja-mega-cierre-aviso',
+    informe: 'caja-mega-informe',
+    nombre: 'Banco Mega'
+  },
+  {
+    id: 2,
+    boton: 'caja-julio-cerrar',
+    extracto: 'caja-julio-extracto',
+    observaciones: 'caja-julio-observaciones',
+    aviso: 'caja-julio-cierre-aviso',
+    informe: 'caja-julio-informe',
+    nombre: 'Cuenta Julio'
+  },
+  {
+    id: 3,
+    boton: 'caja-ariel-cerrar',
+    extracto: 'caja-ariel-extracto',
+    observaciones: 'caja-ariel-observaciones',
+    aviso: 'caja-ariel-cierre-aviso',
+    informe: 'caja-ariel-informe',
+    nombre: 'Cuenta Ariel'
+  },
+  {
+    id: 4,
+    boton: 'caja-angi-cerrar',
+    extracto: 'caja-angi-extracto',
+    observaciones: 'caja-angi-observaciones',
+    aviso: 'caja-angi-cierre-aviso',
+    informe: 'caja-angi-informe',
+    nombre: 'Cuenta Angi'
+  },
+  {
+    id: 5,
+    boton: 'caja-megaparte-cerrar',
+    extracto: 'caja-megaparte-extracto',
+    observaciones: 'caja-megaparte-observaciones',
+    aviso: 'caja-megaparte-cierre-aviso',
+    informe: 'caja-megaparte-informe',
+    nombre: 'Cuenta Megaparte'
+  }
+];
+
+cierresBancarios.forEach(cuenta => {
+  const boton = document.getElementById(cuenta.boton);
+  if (!boton) return;
+
+  boton.onclick = async () => {
+    const extractoTexto =
+      document.getElementById(cuenta.extracto).value.trim();
+
+    const extracto = extractoTexto === ''
+      ? null
+      : Number(extractoTexto);
+
+    const observaciones =
+      document.getElementById(cuenta.observaciones).value.trim();
+
+    const aviso = document.getElementById(cuenta.aviso);
+    const informe = document.getElementById(cuenta.informe);
+
+    if (
+      extracto !== null &&
+      (!Number.isFinite(extracto) || extracto < 0)
+    ) {
+      aviso.innerHTML =
+        '<div class="msg err">El saldo del extracto debe ser cero o mayor.</div>';
+      return;
+    }
+
+    if (!confirm(
+      `¿Confirmás el cierre del período de ${cuenta.nombre}?`
+    )) return;
+
+    boton.disabled = true;
+    aviso.textContent = 'Cerrando período bancario…';
+
+    const { data, error } = await sb.rpc('cerrar_periodo_bancario', {
+      p_cuenta_id: cuenta.id,
+      p_saldo_extracto: extracto,
+      p_observaciones: observaciones || null
+    });
+
+    if (error) {
+      aviso.innerHTML =
+        `<div class="msg err">No se pudo cerrar el período: ${esc(error.message)}</div>`;
+      boton.disabled = false;
+      return;
+    }
+
+    const { data: cierre, error: errorInforme } = await sb
+      .from('bancos_cierres')
+      .select('id,fecha_inicio,fecha_fin,saldo_calculado,saldo_extracto,diferencia,observaciones,informe')
+      .eq('cuenta_id', cuenta.id)
+      .eq('estado', 'cerrado')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (errorInforme) {
+      aviso.innerHTML =
+        `<div class="msg err">El período se cerró, pero no se pudo cargar el informe: ${esc(errorInforme.message)}</div>`;
+      boton.disabled = false;
+      await cargarResumenCaja();
+      return;
+    }
+
+    aviso.innerHTML =
+      '<div class="msg ok">Período cerrado correctamente. Se inició un nuevo período.</div>';
+
+    if (cierre) {
+      const movimientos = Array.isArray(cierre.informe)
+        ? cierre.informe
+        : [];
+
+      informe.innerHTML = `
+        <section class="panel" style="margin-top:12px">
+          <h3>Informe del cierre · ${esc(cuenta.nombre)}</h3>
+          <p>Período: ${esc(cierre.fecha_inicio || '—')} al ${esc(cierre.fecha_fin || '—')}</p>
+          <p>Saldo calculado: ${dinero(cierre.saldo_calculado)}</p>
+          <p>Saldo según extracto: ${cierre.saldo_extracto === null ? 'No informado' : dinero(cierre.saldo_extracto)}</p>
+          <p>Diferencia: ${cierre.diferencia === null ? 'No calculada' : dinero(cierre.diferencia)}</p>
+          <p>Observaciones: ${esc(cierre.observaciones || 'Sin observaciones')}</p>
+          <h4>Transferencias del período (${movimientos.length})</h4>
+          ${
+            movimientos.length
+              ? movimientos.map(m => `
+                  <div class="panel">
+                    <b>${esc(m.cliente || 'Sin cliente')}</b>
+                    <p>${esc(m.fecha || '')} · ${dinero(m.importe)}</p>
+                    <small>${esc(m.referencia || 'Sin referencia')}</small>
+                  </div>
+                `).join('')
+              : '<p class="vacio">No hubo transferencias en este período.</p>'
+          }
+        </section>
+      `;
+    }
+
+    document.getElementById(cuenta.extracto).value = '';
+    document.getElementById(cuenta.observaciones).value = '';
+
+    boton.disabled = false;
+    await cargarResumenCaja();
+  };
+});
           avisoResumen.textContent = `Caja abierta · Sesión ${r.sesion_id}`;
           accionesSesion.innerHTML = `
             <form id="caja-cerrar-sesion" class="panel" style="background:var(--fondo)">
@@ -4529,13 +5047,18 @@ async function cargarCarteraCheques(tipo = null) {
 
   if (!panel) return;
 
-  panel.innerHTML = `
+    panel.innerHTML = `
     <h3>${esEcheq ? 'CARTERA DE E-CHEQS' : 'CARTERA DE CHEQUES'}</h3>
+
     <div id="${esEcheq ? 'caja-cartera-aviso-echeqs' : 'caja-cartera-aviso-cheques'}" class="vacio">
       Consultando ${esEcheq ? 'e-cheqs' : 'cheques'}…
     </div>
+
     <div id="${esEcheq ? 'caja-cartera-valores-echeqs' : 'caja-cartera-valores-cheques'}"></div>
-  `;
+
+    `;
+
+     // El formulario inicial permanece en su ubicación original.
 
   const aviso = document.getElementById(
     esEcheq ? 'caja-cartera-aviso-echeqs' : 'caja-cartera-aviso-cheques'
@@ -4555,11 +5078,14 @@ async function cargarCarteraCheques(tipo = null) {
     .eq('medio_pago', tipo)
     .order('fecha_vencimiento', { ascending: true });
 
-  if (errorNormales) {
+    if (errorNormales) {
+    console.error('Error al cargar cheques/e-cheqs:', errorNormales);
     aviso.innerHTML =
-      `<div class="msg err">${esc(errorNormales.message)}</div>`;
+      `<div class="msg err">Error al consultar la cartera: ${esc(errorNormales.message)}</div>`;
     return;
   }
+
+  console.log('Valores normales cargados:', valoresNormales);
 
   // Valores iniciales
   const { data: valoresIniciales, error: errorIniciales } = await sb
@@ -4950,7 +5476,7 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
 
       document.getElementById('caja-agregar-valor').onclick = agregarValorCaja;
       agregarValorCaja();
-
+      
       selectorCliente.onchange = async () => {
         selectorPedido.innerHTML = '<option value="">Sin pedido asociado</option>';
       
@@ -5347,11 +5873,13 @@ if (transferenciaInvalida) {
       await cargarHistorialCaja();
       await cargarCarteraCheques();
       await cargarResumenCaja();
-     const panelesCajaPermitidos = [
+    const panelesCajaPermitidos = [
   'caja-panel-cobro',
   'caja-panel-egreso',
   'caja-panel-cheques',
   'caja-panel-echeqs',
+  'caja-panel-banco-mega',
+  'caja-panel-banco-particular',
   'caja-panel-sesion',
   'caja-panel-transferencia'
 ];
@@ -5366,6 +5894,12 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
   if (cajaPanelActivo === 'caja-panel-echeqs') {
     await cargarCarteraCheques('echeq');
   }
+  if (
+  cajaPanelActivo === 'caja-panel-banco-mega' ||
+  cajaPanelActivo === 'caja-panel-banco-particular'
+) {
+  await cargarResumenCaja();
+}
 }
     }
 

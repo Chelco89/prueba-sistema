@@ -8055,29 +8055,26 @@ document.getElementById('stock-agregar-producto').onclick =
       <p><b>${esc(unidad.productos?.nombre || 'Producto')}</b></p>
 
       <label>Código exterior</label>
-      <p style="color:red">
-  DEBUG: Código exterior = ${esc(unidad.codigo_exterior || 'VACÍO')}
-</p>
 
-      ${unidad.codigo_exterior
-        ? `<p>${esc(unidad.codigo_exterior)}</p>
-           <small>Este código ya está registrado y no se puede modificar.</small>`
-        : `
-  <div style="display:flex;gap:8px;align-items:center">
-    <input
-      id="stock-unidad-nuevo-codigo"
-      placeholder="Código exterior (opcional)"
-      style="flex:1;min-width:0">
+<div style="display:flex;gap:8px;align-items:center">
+  <input
+    id="stock-unidad-nuevo-codigo"
+    placeholder="Código exterior (opcional)"
+    value="${esc(unidad.codigo_exterior || '')}"
+    style="flex:1;min-width:0"
+    ${unidad.codigo_exterior ? 'disabled' : ''}>
 
-    <button
-      type="button"
-      class="btn sec chico"
-      id="stock-unidad-escanear-exterior">
-      <span>📷 Escanear</span>
-    </button>
-  </div>
-`
-      }
+  <button
+    type="button"
+    class="btn sec chico"
+    id="stock-unidad-escanear-exterior">
+    📷 Escanear
+  </button>
+</div>
+
+${unidad.codigo_exterior
+  ? '<small>Este código ya está registrado y no se puede modificar.</small>'
+  : ''}
 
       <label>Números internos registrados</label>
 

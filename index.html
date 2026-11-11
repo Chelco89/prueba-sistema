@@ -8055,6 +8055,9 @@ document.getElementById('stock-agregar-producto').onclick =
       <p><b>${esc(unidad.productos?.nombre || 'Producto')}</b></p>
 
       <label>Código exterior</label>
+      <p style="color:red">
+  DEBUG: Código exterior = ${esc(unidad.codigo_exterior || 'VACÍO')}
+</p>
 
       ${unidad.codigo_exterior
         ? `<p>${esc(unidad.codigo_exterior)}</p>

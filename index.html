@@ -822,6 +822,7 @@
 let pedidoDepositoActivo = null;
 let pedidoDepositoEditando = false;
 let cajaPanelActivo = null;
+let cuentaCorrienteActiva = null;
 
 function guardarEstadoNavegacion() {
   try {
@@ -830,8 +831,9 @@ function guardarEstadoNavegacion() {
       depTab,
       filtros,
       pedidoDepositoActivo,
-      pedidoDepositoEditando,
-      cajaPanelActivo
+            pedidoDepositoEditando,
+      cajaPanelActivo,
+      cuentaCorrienteActiva
     }));
   } catch (error) {
     console.warn('No se pudo guardar el estado de navegación:', error);
@@ -856,6 +858,7 @@ function recuperarEstadoNavegacion() {
       pedidoDepositoActivo = estado.pedidoDepositoActivo || null;
       pedidoDepositoEditando = estado.pedidoDepositoEditando === true;
       cajaPanelActivo = estado.cajaPanelActivo || null;
+      cuentaCorrienteActiva = estado.cuentaCorrienteActiva || null;
     }
   } catch (error) {
     console.warn('No se pudo recuperar el estado de navegación:', error);
@@ -1061,7 +1064,13 @@ armarSistema();
   usuarios: vistaUsuarios,
   listas_precios: vistaListasPrecios,
   clientes: vistaClientes,
-  cuentas_corrientes: vistaCuentasCorrientes,
+  cuentas_corrientes: () => {
+  if (cuentaCorrienteActiva) {
+    verCuentaCorriente(cuentaCorrienteActiva);
+  } else {
+    vistaCuentasCorrientes();
+  }
+},
   caja: vistaCaja
 })[vista]();
 
@@ -2246,6 +2255,8 @@ if (vista === 'deposito' && pedidoDepositoActivo) {
     
 async function verCuentaCorriente(id) {
   const c = document.getElementById('contenido');
+    cuentaCorrienteActiva = id;
+  guardarEstadoNavegacion();
   c.innerHTML = '<div class="panel">Cargando movimientos…</div>';
 
   const { data: cuenta, error: errorCuenta } = await sb
@@ -2479,8 +2490,11 @@ return `
     </div>
   `;
 
-  document.getElementById('cc-volver').onclick = () =>
-    vistaCuentasCorrientes();
+ document.getElementById('cc-volver').onclick = () => {
+  cuentaCorrienteActiva = null;
+  guardarEstadoNavegacion();
+  vistaCuentasCorrientes();
+};
    if (!tieneSaldoInicial) {
   const tipoSaldoInicial = document.getElementById('cc-saldo-inicial-tipo');
   const importeSaldoInicial = document.getElementById('cc-saldo-inicial-importe');
@@ -3060,6 +3074,11 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 </div>
 
 <div id="caja-mega-informe"></div>
+<hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+<div id="caja-mega-historial">
+  <p class="vacio">Los períodos anteriores aparecerán aquí.</p>
+</div>
 
   </section>
 </div>
@@ -3286,8 +3305,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
 </div>
 
-      <div id="caja-cartera-inicial-contenido" class="panel" style="margin:16px 0" hidden>
-  <h3>Registrar cheque o e-cheq inicial</h3>
+  <div id="caja-cartera-inicial-contenido" class="panel" style="margin:16px 0" hidden>
 <p class="vacio">
   Cargá manualmente los valores que ya tenías antes de utilizar SGV.
 </p>
@@ -3316,6 +3334,12 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
   <label for="caja-inicial-banco">Banco</label>
   <input id="caja-inicial-banco" type="text" maxlength="100" required>
+  <label for="caja-inicial-cuenta-titular">
+  Número de cuenta del titular
+</label>
+<input id="caja-inicial-cuenta-titular"
+  type="text" maxlength="100"
+  placeholder="Número de cuenta bancaria">
 
   <div id="caja-inicial-numero-contenedor">
     <label for="caja-inicial-numero">Número de cheque</label>
@@ -3349,6 +3373,25 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   </button>
 
 </form>
+
+<hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+<div id="caja-seccion-historial-cheques">
+  <h3>Historial de cheques</h3>
+  <div id="caja-historial-cheques" class="vacio">
+    Cargando historial…
+  </div>
+</div>
+
+<hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+<div id="caja-seccion-historial-echeqs">
+  <h3>Historial de e-cheqs</h3>
+  <div id="caja-historial-echeqs" class="vacio">
+    Cargando historial…
+  </div>
+</div>
+
 </div>
       
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
@@ -3399,6 +3442,7 @@ const panelCobro = document.getElementById('caja-panel-cobro');
 const tipoInicial = document.getElementById('caja-inicial-tipo');
 const numeroInicial = document.getElementById('caja-inicial-numero');
 const identificadorInicial = document.getElementById('caja-inicial-identificador');
+const cuentaTitularInicial = document.getElementById('caja-inicial-cuenta-titular');
 
 function actualizarCamposValorInicial() {
   const esCheque = tipoInicial.value === 'cheque';
@@ -3515,18 +3559,19 @@ formularioInicial.addEventListener('submit', async (e) => {
   const importe = Number(document.getElementById('caja-inicial-importe').value);
 
   const datos = {
-    p_cliente_id: Number(document.getElementById('caja-inicial-cliente').value),
-    p_medio_pago: tipo,
-    p_importe: importe,
-    p_titular: document.getElementById('caja-inicial-titular').value.trim(),
-    p_cuit_titular: document.getElementById('caja-inicial-cuit').value.trim() || null,
-    p_banco: document.getElementById('caja-inicial-banco').value.trim(),
-    p_numero_cheque: tipo === 'cheque' ? numeroInicial.value.trim() : null,
-    p_identificador_echeq: tipo === 'echeq' ? identificadorInicial.value.trim() : null,
-    p_fecha_emision: document.getElementById('caja-inicial-emision').value || null,
-    p_fecha_cobro: document.getElementById('caja-inicial-cobro').value,
-    p_observaciones: document.getElementById('caja-inicial-observaciones').value.trim() || null
-  };
+  p_cliente_id: Number(document.getElementById('caja-inicial-cliente').value),
+  p_medio_pago: tipo,
+  p_importe: importe,
+  p_titular: document.getElementById('caja-inicial-titular').value.trim(),
+  p_cuit_titular: document.getElementById('caja-inicial-cuit').value.trim() || null,
+  p_banco: document.getElementById('caja-inicial-banco').value.trim(),
+  p_numero_cuenta_titular: cuentaTitularInicial.value.trim() || null,
+  p_numero_cheque: tipo === 'cheque' ? numeroInicial.value.trim() : null,
+  p_identificador_echeq: tipo === 'echeq' ? identificadorInicial.value.trim() : null,
+  p_fecha_emision: document.getElementById('caja-inicial-emision').value || null,
+  p_fecha_cobro: document.getElementById('caja-inicial-cobro').value,
+  p_observaciones: document.getElementById('caja-inicial-observaciones').value.trim() || null
+};
 
   if (!datos.p_cliente_id || !Number.isFinite(importe) || importe <= 0) {
     aviso.textContent = 'Seleccioná un cliente e ingresá un importe válido.';
@@ -3671,6 +3716,11 @@ function alternarPanelCaja(id) {
     if (mostrarFormularioInicial) {
       tipoInicial.value = id === 'caja-panel-echeqs' ? 'echeq' : 'cheque';
       actualizarCamposValorInicial();
+       document.getElementById('caja-seccion-historial-cheques').hidden =
+  id !== 'caja-panel-cheques';
+
+document.getElementById('caja-seccion-historial-echeqs').hidden =
+  id !== 'caja-panel-echeqs';
       const opcionCheque = tipoInicial.querySelector('option[value="cheque"]');
 const opcionEcheq = tipoInicial.querySelector('option[value="echeq"]');
 
@@ -3714,6 +3764,7 @@ document.getElementById('btn-mostrar-cheques').addEventListener('click', async (
 
   if (!document.getElementById('caja-panel-cheques').hidden) {
     await cargarCarteraCheques('cheque');
+    await cargarHistorialCheques('cheque');
   }
 });
 
@@ -4618,8 +4669,12 @@ cierresBancarios.forEach(cuenta => {
       informe.innerHTML = `
         <section class="panel" style="margin-top:12px">
           <h3>Informe del cierre · ${esc(cuenta.nombre)}</h3>
-          <p>Período: ${esc(cierre.fecha_inicio || '—')} al ${esc(cierre.fecha_fin || '—')}</p>
-          <p>Saldo calculado: ${dinero(cierre.saldo_calculado)}</p>
+          <b>Período ${esc(cierre.fecha_inicio || '—')} al ${esc(cierre.fecha_fin || '—')}</b>
+<p>Saldo calculado: ${dinero(cierre.saldo_calculado)}</p>
+<small>
+  Recibo / Observaciones:
+  <b>${esc(cierre.observaciones || 'Sin observaciones')}</b>
+</small>
           <p>Saldo según extracto: ${cierre.saldo_extracto === null ? 'No informado' : dinero(cierre.saldo_extracto)}</p>
           <p>Diferencia: ${cierre.diferencia === null ? 'No calculada' : dinero(cierre.diferencia)}</p>
           <p>Observaciones: ${esc(cierre.observaciones || 'Sin observaciones')}</p>
@@ -4860,6 +4915,82 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
 
       }
 
+      
+async function cargarHistorialBanco(cuentaId, contenedorId, nombreCuenta) {
+  const contenedor = document.getElementById(contenedorId);
+  if (!contenedor) return;
+
+  contenedor.innerHTML = '<p class="vacio">Cargando períodos anteriores…</p>';
+
+  const { data, error } = await sb
+    .from('bancos_cierres')
+    .select('id, fecha_inicio, fecha_fin, estado, saldo_calculado, saldo_extracto, diferencia, observaciones, informe')
+    .eq('cuenta_id', cuentaId)
+    .eq('estado', 'cerrado')
+    .order('id', { ascending: false });
+
+  if (error) {
+    contenedor.innerHTML =
+      `<div class="msg err">No se pudo cargar el historial: ${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!data || !data.length) {
+    contenedor.innerHTML = '<p class="vacio">Todavía no hay períodos cerrados.</p>';
+    return;
+  }
+
+  contenedor.innerHTML = `
+    <h3>Historial de períodos · ${esc(nombreCuenta)}</h3>
+    ${data.map(cierre => {
+      const movimientos = Array.isArray(cierre.informe) ? cierre.informe : [];
+
+      return `
+        <details class="panel" style="margin-top:12px">
+         <summary style="cursor:pointer">
+  <b>Período ${esc(cierre.fecha_inicio || '—')} al ${esc(cierre.fecha_fin || '—')}</b>
+  <p>Saldo calculado: ${dinero(cierre.saldo_calculado)}</p>
+  <p>
+    <small>Recibo / Observaciones:
+      <b>${esc(cierre.observaciones || 'Sin observaciones')}</b>
+    </small>
+  </p>
+</summary>
+
+          <p>Saldo según extracto: ${
+            cierre.saldo_extracto === null
+              ? 'No informado'
+              : dinero(cierre.saldo_extracto)
+          }</p>
+
+          <p>Diferencia: ${
+            cierre.diferencia === null
+              ? 'No calculada'
+              : dinero(cierre.diferencia)
+          }</p>
+
+          <p>Observaciones: ${esc(cierre.observaciones || 'Sin observaciones')}</p>
+
+          <h4>Transferencias del período (${movimientos.length})</h4>
+
+          ${
+            movimientos.length
+              ? movimientos.map(m => `
+                  <div style="border-top:1px solid var(--borde,#ddd);padding:8px 0">
+                    <b>${esc(m.cliente || 'Sin cliente')}</b>
+                    <p>${esc(m.fecha || '')} · ${dinero(m.importe)}</p>
+                    <small>${esc(m.referencia || 'Sin referencia')}</small>
+                  </div>
+                `).join('')
+              : '<p class="vacio">No hubo transferencias en este período.</p>'
+          }
+        </details>
+      `;
+    }).join('')}
+  `;
+}
+
+
       document.getElementById('caja-actualizar-resumen').onclick = cargarResumenCaja;
 
       function actualizarTotalCaja() {
@@ -4899,9 +5030,13 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
           placeholder="Nombre del titular">
 
         <label>CUIT/CUIL del titular (opcional)</label>
-        <input class="caja-cuit" maxlength="20" placeholder="CUIT/CUIL">
+<input class="caja-cuit" maxlength="20" placeholder="CUIT/CUIL">
 
-        <label>Banco</label>
+<label>Número de cuenta del titular (opcional)</label>
+<input class="caja-cuenta-titular" maxlength="100"
+  placeholder="Número de cuenta bancaria">
+
+<label>Banco</label>
         <input class="caja-banco" maxlength="120" placeholder="Banco emisor">
 
         <div class="caja-numero-contenedor">
@@ -5032,12 +5167,18 @@ async function cargarCarteraCheques(tipo = null) {
 
   // Si no se indica un tipo, actualizar ambas carteras.
   if (!tipo) {
-    await Promise.all([
-      cargarCarteraCheques('cheque'),
-      cargarCarteraCheques('echeq')
-    ]);
-    return;
-  }
+  await Promise.all([
+    cargarCarteraCheques('cheque'),
+    cargarCarteraCheques('echeq')
+  ]);
+
+  await Promise.all([
+    cargarHistorialCheques('cheque'),
+    cargarHistorialCheques('echeq')
+  ]);
+
+  return;
+}
 
   const esEcheq = tipo === 'echeq';
 
@@ -5055,6 +5196,7 @@ async function cargarCarteraCheques(tipo = null) {
     </div>
 
     <div id="${esEcheq ? 'caja-cartera-valores-echeqs' : 'caja-cartera-valores-cheques'}"></div>
+   
 
     `;
 
@@ -5116,6 +5258,7 @@ async function cargarCarteraCheques(tipo = null) {
       .from('caja_cobros')
       .select('id,cliente_id')
       .in('id', cobroIds);
+      console.log('HISTORIAL: cobrosMap listo', cobrosMap.size);
 
     if (errorCobros) {
       aviso.innerHTML =
@@ -5128,9 +5271,14 @@ async function cargarCarteraCheques(tipo = null) {
     );
   }
 
-  const nombres = new Map(
-    (clientes || []).map(c => [Number(c.id), c.nombre])
-  );
+  const listaClientes =
+  typeof clientes !== 'undefined' && Array.isArray(clientes)
+    ? clientes
+    : [];
+
+const nombres = new Map(
+  listaClientes.map(c => [Number(c.id), c.nombre])
+);
 
   // Unificar ambas fuentes solo para mostrarlas
   const lista = [
@@ -5473,6 +5621,331 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
   };
 });
 }
+async function cargarHistorialCheques(tipo) {
+  const esEcheq = tipo === 'echeq';
+
+  const historial = document.getElementById(
+    esEcheq ? 'caja-historial-echeqs' : 'caja-historial-cheques'
+  );
+
+  if (!historial) return;
+
+  historial.innerHTML = '<p class="vacio">Paso 1: iniciando consulta…</p>';
+console.log('HISTORIAL: inicio', tipo);
+
+  const { data: normales, error: errorNormales } = await sb
+    .from('caja_cobro_valores')
+    .select(`
+      id,cobro_id,medio_pago,importe,titular,banco,
+      numero_cheque,identificador_echeq,fecha_vencimiento,estado
+    `)
+    .eq('medio_pago', tipo)
+    .order('id', { ascending: false });
+
+  if (errorNormales) {
+    historial.innerHTML =
+      `<div class="msg err">${esc(errorNormales.message)}</div>`;
+    return;
+  }
+  console.log('HISTORIAL: consulta valores normales', {
+  error: errorNormales,
+  cantidad: normales?.length
+});
+
+  const { data: iniciales, error: errorIniciales } = await sb
+    .from('caja_valores_iniciales')
+    .select(`
+      id,cliente_id,medio_pago,importe,titular,banco,
+      numero_cheque,identificador_echeq,fecha_cobro,estado
+    `)
+    .eq('medio_pago', tipo)
+    .order('id', { ascending: false });
+
+  if (errorIniciales) {
+    historial.innerHTML =
+      `<div class="msg err">${esc(errorIniciales.message)}</div>`;
+    return;
+  }
+  console.log('HISTORIAL: consulta valores iniciales', {
+  error: errorIniciales,
+  cantidad: iniciales?.length
+});
+
+  const lista = [
+    ...(normales || []).map(v => ({
+      ...v,
+      origen: 'normal',
+      fecha_lista: v.fecha_vencimiento
+    })),
+    ...(iniciales || []).map(v => ({
+      ...v,
+      origen: 'inicial',
+      fecha_lista: v.fecha_cobro
+    }))
+  ];
+
+  if (!lista.length) {
+    historial.innerHTML =
+      '<p class="vacio">Todavía no hay instrumentos registrados.</p>';
+    return;
+  }
+
+  const cobroIds = [
+    ...new Set(
+      lista
+        .filter(v => v.origen === 'normal')
+        .map(v => Number(v.cobro_id))
+    )
+  ];
+
+  let cobrosMap = new Map();
+
+  if (cobroIds.length) {
+    const { data: cobros, error } = await sb
+      .from('caja_cobros')
+      .select('id,cliente_id')
+      .in('id', cobroIds);
+
+    if (error) {
+      historial.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    cobrosMap = new Map(
+      (cobros || []).map(c => [Number(c.id), c])
+    );
+    console.log('HISTORIAL: cobrosMap listo', cobrosMap.size);
+  }
+
+ const listaClientes =
+  typeof clientes !== 'undefined' && Array.isArray(clientes)
+    ? clientes
+    : [];
+
+const nombres = new Map(
+  listaClientes.map(c => [Number(c.id), c.nombre])
+);
+
+  const idsNormales = lista
+    .filter(v => v.origen === 'normal')
+    .map(v => Number(v.id));
+
+  const idsIniciales = lista
+    .filter(v => v.origen === 'inicial')
+    .map(v => Number(v.id));
+
+  let movimientos = [];
+
+  if (idsNormales.length) {
+    const { data, error } = await sb
+      .from('caja_movimientos')
+      .select(`
+        id,tipo,fecha,importe,medio_pago,destinatario,
+        fecha_entrega,descripcion,observaciones,cobro_valor_id
+      `)
+      .in('cobro_valor_id', idsNormales);
+
+    if (error) {
+      historial.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    movimientos.push(...(data || []));
+  }
+
+  if (idsIniciales.length) {
+    const { data, error } = await sb
+      .from('caja_movimientos')
+      .select(`
+        id,tipo,fecha,importe,medio_pago,destinatario,
+        fecha_entrega,descripcion,observaciones,valor_inicial_id
+      `)
+      .in('valor_inicial_id', idsIniciales);
+
+    if (error) {
+      historial.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+      return;
+    }
+
+    movimientos.push(...(data || []));
+  }
+console.log('HISTORIAL: movimientos listos', movimientos.length);
+  const formatoFecha = fecha =>
+    fecha ? new Date(fecha).toLocaleDateString('es-AR') : '—';
+
+  console.log('HISTORIAL: preparando tabla', {
+  tipo,
+  cantidadInstrumentos: lista.length,
+  cantidadMovimientos: movimientos.length,
+  cobrosMap: cobrosMap.size
+});
+console.log('HISTORIAL: funciones disponibles', {
+  esc: typeof esc,
+  dinero: typeof dinero,
+  historialExiste: !!historial,
+  cobrosMap: cobrosMap.size
+});
+
+try {
+    historial.innerHTML = `
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Origen</th>
+            <th>Cliente</th>
+            <th>Número / ID</th>
+            <th>Banco</th>
+            <th>Importe</th>
+            <th>Estado</th>
+            <th>Movimientos</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lista.map(v => {
+            const cobro = v.origen === 'normal'
+              ? cobrosMap.get(Number(v.cobro_id))
+              : null;
+
+            const clienteId = v.origen === 'normal'
+              ? cobro?.cliente_id
+              : v.cliente_id;
+
+            const cliente =
+              nombres.get(Number(clienteId)) || 'Cliente';
+
+            const idCampo = v.origen === 'normal'
+              ? 'cobro_valor_id'
+              : 'valor_inicial_id';
+
+            const historialValor = movimientos
+              .filter(m => Number(m[idCampo]) === Number(v.id))
+              .sort((a, b) =>
+                String(a.fecha).localeCompare(String(b.fecha))
+              );
+
+            return `
+              <tr>
+                <td>${v.origen === 'inicial' ? 'Inicial' : 'Cobro SGV'}</td>
+                <td>${esc(cliente)}</td>
+                <td>${esc(v.numero_cheque || v.identificador_echeq || '—')}</td>
+                <td>${esc(v.banco || '—')}</td>
+                <td class="num">${dinero(v.importe)}</td>
+                <td>${esc(v.estado)}</td>
+                <td>
+                  ${
+                    historialValor.length
+                      ? historialValor.map(m => `
+                          <div style="padding:5px 0;border-bottom:1px solid #ddd">
+                            <strong>${esc(
+                              m.tipo === 'entrega_cheque_proveedor'
+  ? 'Entregado'
+  : m.tipo === 'rechazo_cheque'
+    ? 'Rechazado'
+    : m.tipo === 'cobro'
+      ? 'Recibido'
+      : m.tipo
+                            )}</strong>
+                            · ${formatoFecha(m.fecha)}
+                            · ${dinero(m.importe)}
+                            ${m.destinatario
+                              ? `<br>Destinatario: ${esc(m.destinatario)}`
+                              : ''}
+                            ${m.observaciones
+                              ? `<br>${esc(m.observaciones)}`
+                              : ''}
+                          </div>
+                        `).join('')
+                      : '<span class="vacio">Sin movimientos</span>'
+                  }
+                </td>
+                <td>
+  ${
+    ['recibido', 'depositado', 'entregado'].includes(v.estado)
+      ? `<button type="button"
+          class="btn sec chico caja-historial-rechazar"
+          data-id="${Number(v.id)}"
+          data-origen="${v.origen}">
+          Rechazar
+        </button>`
+      : '—'
+  }
+</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  historial.querySelectorAll('.caja-historial-rechazar').forEach(b => {
+  b.onclick = async () => {
+    const id = Number(b.dataset.id);
+    const origen = b.dataset.origen;
+
+    const observaciones = prompt(
+      'Observaciones del rechazo:',
+      'Cheque rechazado por el banco.'
+    );
+
+    if (observaciones === null) return;
+
+    const gastoTexto = prompt(
+      '¿Qué gasto bancario adicional querés cobrarle al cliente? Ingresá 0 si no corresponde.',
+      '0'
+    );
+
+    if (gastoTexto === null) return;
+
+    const gasto = Number(gastoTexto.replace(',', '.'));
+
+    if (!Number.isFinite(gasto) || gasto < 0 ||
+        Math.round(gasto * 100) !== gasto * 100) {
+      alert('Ingresá un gasto válido, con hasta dos decimales.');
+      return;
+    }
+
+    if (!confirm(
+      `¿Confirmás el rechazo del instrumento ${id}?\n\n` +
+      `Gasto bancario adicional al cliente: ${dinero(gasto)}`
+    )) return;
+
+    b.disabled = true;
+
+    const funcion = origen === 'inicial'
+      ? 'rechazar_valor_inicial_caja'
+      : 'rechazar_valor_caja';
+
+    const { error } = await sb.rpc(funcion, {
+      p_valor_id: id,
+      p_gasto_bancario_cliente: gasto,
+      p_observaciones: observaciones.trim() || null
+    });
+
+    if (error) {
+      alert('No se pudo rechazar el instrumento: ' + error.message);
+      b.disabled = false;
+      return;
+    }
+
+    alert('Instrumento rechazado correctamente.');
+
+    await cargarCarteraCheques();
+    await cargarHistorialCaja();
+    await cargarResumenCaja();
+  };
+});
+  console.log('HISTORIAL: tabla asignada', tipo, historial.innerHTML.length);
+  } catch (error) {
+  console.error('ERROR AL ARMAR HISTORIAL:', error);
+  historial.innerHTML =
+    `<div class="msg err">Error al mostrar historial: ${esc(error.message)}</div>`;
+}
+}
 
       document.getElementById('caja-agregar-valor').onclick = agregarValorCaja;
       agregarValorCaja();
@@ -5633,6 +6106,8 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
   importe: Number(fila.querySelector('.caja-importe').value),
   titular: fila.querySelector('.caja-titular').value.trim() || null,
   cuit_titular: fila.querySelector('.caja-cuit').value.trim() || null,
+  numero_cuenta_titular:
+  fila.querySelector('.caja-cuenta-titular')?.value.trim() || null,
   banco: fila.querySelector('.caja-medio').value === 'transferencia'
   ? fila.querySelector('.caja-cuenta-destino')
       .selectedOptions[0]?.dataset.banco || null
@@ -5888,17 +6363,27 @@ if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
   alternarPanelCaja(cajaPanelActivo);
 
   if (cajaPanelActivo === 'caja-panel-cheques') {
-    await cargarCarteraCheques('cheque');
-  }
+  await cargarCarteraCheques('cheque');
+  await cargarHistorialCheques('cheque');
+}
 
-  if (cajaPanelActivo === 'caja-panel-echeqs') {
-    await cargarCarteraCheques('echeq');
-  }
-  if (
+if (cajaPanelActivo === 'caja-panel-echeqs') {
+  await cargarCarteraCheques('echeq');
+  await cargarHistorialCheques('echeq');
+}
+if (
   cajaPanelActivo === 'caja-panel-banco-mega' ||
   cajaPanelActivo === 'caja-panel-banco-particular'
 ) {
   await cargarResumenCaja();
+
+  if (cajaPanelActivo === 'caja-panel-banco-mega') {
+    await cargarHistorialBanco(
+      1,
+      'caja-mega-historial',
+      'Banco Mega'
+    );
+  }
 }
 }
     }
@@ -6931,59 +7416,266 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
       const c = document.getElementById('contenido');
 
       c.innerHTML = `
-    <div class="panel">
-      <div class="barra">
-        <h2>Stock de productos</h2>
-        <button class="btn chico sec" id="stock-actualizar">
-          Actualizar
-        </button>
-      </div>
+  <div class="panel">
+    <div class="barra">
+      <h2>Stock</h2>
+      <button class="btn chico sec" id="stock-actualizar">
+        Actualizar
+      </button>
+    </div>
 
-      <p class="vacio">
-        Consultá las existencias y registrá ingresos o ajustes de mercadería.
-      </p>
+    <p class="vacio">
+      Consultá las existencias y registrá ingresos o ajustes de mercadería.
+    </p>
 
-      <div id="stock-aviso"></div>
+    <div id="stock-aviso"></div>
 
-      <form id="stock-form">
-        <label for="stock-producto">Producto</label>
-        <select id="stock-producto" required>
-          <option value="">Cargando productos...</option>
-        </select>
+    <div style="display:flex;gap:10px;margin:18px 0;flex-wrap:wrap">
 
-        <label for="stock-tipo">Movimiento</label>
-        <select id="stock-tipo" required>
-          <option value="inicial">Cargar stock inicial</option>
-          <option value="entrada">Ingreso de mercadería</option>
-          <option value="ajuste">Ajustar stock actual</option>
-        </select>
+  <button type="button" class="btn chico" id="stock-tab-ingreso">
+    Ingreso de mercadería
+  </button>
 
-        <label for="stock-cantidad">Cantidad de unidades</label>
-        <input id="stock-cantidad" type="number" min="0"
-          step="1" required placeholder="Ej.: 25">
+  <button type="button" class="btn chico sec" id="stock-tab-productos">
+    Stock de productos
+  </button>
 
-        <label for="stock-observacion">Observación</label>
-        <input id="stock-observacion"
-          placeholder="Ej.: Compra recibida o recuento de depósito">
+  <button type="button" class="btn chico sec" id="stock-tab-historial">
+    Historial de movimientos
+  </button>
 
-        <button class="btn" type="submit">
-          Registrar movimiento
-        </button>
-      </form>
+</div>
+
+<div id="stock-panel-ingreso">
+  <div class="panel" style="margin-top:20px">
+    <h3>Ingreso de mercadería</h3>
+    <p class="vacio">
+      Registrá la mercadería recibida. Podés completar el remito más adelante.
+    </p>
+
+    <div id="stock-ingreso-items"></div>
+
+    <button type="button" class="btn sec chico"
+      id="stock-agregar-producto">
+      + Agregar producto
+    </button>
+
+    <label for="stock-ingreso-proveedor">Proveedor (opcional)</label>
+    <input id="stock-ingreso-proveedor"
+      placeholder="Nombre del proveedor">
+
+    <label for="stock-ingreso-numero-remito">
+      Número de remito (opcional)
+    </label>
+    <input id="stock-ingreso-numero-remito"
+      placeholder="Se puede completar después">
+
+    <label for="stock-ingreso-fecha-remito">
+      Fecha del remito (opcional)
+    </label>
+    <input id="stock-ingreso-fecha-remito" type="date">
+
+    <label for="stock-ingreso-observaciones">Observaciones</label>
+    <textarea id="stock-ingreso-observaciones"
+      placeholder="Observaciones del ingreso"></textarea>
+
+    <button type="button" class="btn"
+      id="stock-registrar-ingreso">
+      Registrar ingreso de mercadería
+    </button>
+    </div>
+</div>
+
+<div id="stock-panel-productos">
+
+     <div id="stock-formularios">
+
+  <form id="stock-form">
+    <label for="stock-producto">Producto</label>
+    <select id="stock-producto" required>
+      <option value="">Cargando productos...</option>
+    </select>
+
+    <label for="stock-tipo">Movimiento</label>
+    <select id="stock-tipo" required>
+      <option value="inicial">Cargar stock inicial</option>
+      <option value="ajuste">Ajustar stock actual</option>
+    </select>
+
+    <label for="stock-cantidad">Cantidad de unidades</label>
+    <input id="stock-cantidad" type="number" min="0"
+      step="1" required placeholder="Ej.: 25">
+
+    <label for="stock-observacion">Observación</label>
+    <input id="stock-observacion"
+      placeholder="Ej.: Recuento de depósito">
+
+    <button class="btn" type="submit">
+      Registrar movimiento
+    </button>
+  </form>
+
+  
+
+</div>
 
       <h3 style="margin-top:28px">Existencias actuales</h3>
       <div id="stock-lista" class="vacio">Cargando...</div>
 
-      <h3 style="margin-top:28px">Historial de movimientos</h3>
-      <div id="stock-historial" class="vacio">Cargando...</div>
     </div>
-  `;
+
+    <div id="stock-panel-historial" style="display:none">
+
+      <h3>Historial de movimientos</h3>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
+        <div style="flex:1;min-width:140px">
+          <label for="stock-fecha-dia">Día específico</label>
+          <input type="date" id="stock-fecha-dia">
+        </div>
+
+        <div style="flex:1;min-width:140px">
+          <label for="stock-fecha-desde">Desde</label>
+          <input type="date" id="stock-fecha-desde">
+        </div>
+
+        <div style="flex:1;min-width:140px">
+          <label for="stock-fecha-hasta">Hasta</label>
+          <input type="date" id="stock-fecha-hasta">
+        </div>
+      </div>
+
+      <div style="margin:12px 0">
+        <label for="stock-filtro-producto">Producto</label>
+        <select id="stock-filtro-producto">
+          <option value="">Todos los productos</option>
+        </select>
+      </div>
+      <div style="margin:12px 0">
+  <label for="stock-filtro-remito">Número de remito</label>
+  <input
+    type="text"
+    id="stock-filtro-remito"
+    placeholder="Buscar por número de remito"
+  >
+</div>
+
+<div style="margin:12px 0">
+  <label for="stock-filtro-pendientes">
+    Estado del remito
+  </label>
+  <select id="stock-filtro-pendientes">
+    <option value="">Todos los ingresos</option>
+    <option value="pendientes">Pendientes de completar remito</option>
+    <option value="completos">Con remito cargado</option>
+  </select>
+</div>
+
+      <button type="button" class="btn sec chico" id="stock-limpiar-filtros">
+        Limpiar filtros
+      </button>
+
+      <div id="stock-historial" class="vacio" style="margin-top:12px">
+        Cargando...
+      </div>
+
+    </div>
+  </div>
+`;
 
       const aviso = document.getElementById('stock-aviso');
       const selector = document.getElementById('stock-producto');
       const form = document.getElementById('stock-form');
       const tipo = document.getElementById('stock-tipo');
       const cantidad = document.getElementById('stock-cantidad');
+      const panelIngreso = document.getElementById('stock-panel-ingreso');
+const panelProductos = document.getElementById('stock-panel-productos');
+const panelHistorial = document.getElementById('stock-panel-historial');
+
+const tabIngreso = document.getElementById('stock-tab-ingreso');
+const tabProductos = document.getElementById('stock-tab-productos');
+const tabHistorial = document.getElementById('stock-tab-historial');
+
+     function mostrarSolapaStock(solapa) {
+  const verIngreso = solapa === 'ingreso';
+  const verProductos = solapa === 'productos';
+
+  panelIngreso.style.display = verIngreso ? '' : 'none';
+  panelProductos.style.display = verProductos ? '' : 'none';
+  panelHistorial.style.display =
+    (!verIngreso && !verProductos) ? '' : 'none';
+
+  tabIngreso.className = verIngreso
+    ? 'btn chico'
+    : 'btn chico sec';
+
+  tabProductos.className = verProductos
+    ? 'btn chico'
+    : 'btn chico sec';
+
+  tabHistorial.className =
+    (!verIngreso && !verProductos)
+      ? 'btn chico'
+      : 'btn chico sec';
+}
+
+            async function volverAlHistorialStock() {
+        await vistaStock();
+        document.getElementById('stock-tab-historial')?.click();
+      }
+
+      tabIngreso.onclick = () => mostrarSolapaStock('ingreso');
+tabProductos.onclick = () => mostrarSolapaStock('productos');
+tabHistorial.onclick = () => mostrarSolapaStock('historial');
+
+// Al entrar a Stock, mostrar primero Ingreso de mercadería.
+mostrarSolapaStock('ingreso');
+
+function agregarFilaIngresoStock() {
+  const contenedor = document.getElementById('stock-ingreso-items');
+
+  const fila = document.createElement('div');
+  fila.className = 'panel stock-ingreso-fila';
+  fila.style.marginBottom = '10px';
+
+  fila.innerHTML = `
+    <label>Producto</label>
+    <select class="stock-ingreso-producto" required>
+      <option value="">Seleccionar producto</option>
+      ${[...selector.options]
+        .filter(op => op.value)
+        .map(op => `
+          <option value="${op.value}">
+            ${esc(op.textContent.split(' — Stock:')[0])}
+          </option>
+        `).join('')}
+    </select>
+
+    <label>Cantidad de unidades</label>
+    <input
+      type="number"
+      class="stock-ingreso-cantidad"
+      min="1"
+      step="1"
+      required
+      placeholder="Ej.: 10"
+    >
+
+    <button type="button"
+      class="btn chico sec stock-ingreso-quitar">
+      Quitar producto
+    </button>
+  `;
+
+  contenedor.appendChild(fila);
+
+  fila.querySelector('.stock-ingreso-quitar').onclick = () => {
+    fila.remove();
+  };
+}
+
+document.getElementById('stock-agregar-producto').onclick =
+  agregarFilaIngresoStock;
 
       async function cargarPantallaStock() {
         const { data: productos, error } = await sb
@@ -7001,6 +7693,21 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
         selector.innerHTML = productos.map(p =>
           `<option value="${p.id}">${esc(p.nombre)} — Stock: ${p.stock}</option>`
         ).join('');
+        const itemsIngreso = document.getElementById('stock-ingreso-items');
+
+if (!itemsIngreso.children.length && productos.length) {
+  agregarFilaIngresoStock();
+}
+        const filtroProducto = document.getElementById('stock-filtro-producto');
+const productoSeleccionado = filtroProducto.value;
+
+filtroProducto.innerHTML =
+  '<option value="">Todos los productos</option>' +
+  productos.map(p =>
+    `<option value="${p.id}">${esc(p.nombre)}</option>`
+  ).join('');
+
+filtroProducto.value = productoSeleccionado;
 
         document.getElementById('stock-lista').innerHTML =
           productos.length ? productos.map(p => `
@@ -7010,11 +7717,84 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
         </div>
       `).join('') : '<p>No hay productos activos.</p>';
 
-        const { data: movimientos, error: errorMov } = await sb
-          .from('stock_movimientos')
-          .select('*, productos(nombre)')
-          .order('creado_en', { ascending: false })
-          .limit(100);
+        const fechaDia = document.getElementById('stock-fecha-dia').value;
+const fechaDesde = document.getElementById('stock-fecha-desde').value;
+const fechaHasta = document.getElementById('stock-fecha-hasta').value;
+const productoFiltro = document.getElementById('stock-filtro-producto').value;
+const remitoFiltro =
+  document.getElementById('stock-filtro-remito').value.trim();
+
+const estadoRemitoFiltro =
+  document.getElementById('stock-filtro-pendientes').value;
+
+let consultaMovimientos = sb
+  .from('stock_movimientos')
+.select(`
+  *,
+  productos(nombre),
+  stock_remitos${(remitoFiltro || estadoRemitoFiltro) ? '!inner' : ''}(
+    id,
+    numero_remito,
+    fecha_remito,
+    proveedor
+  )
+`)
+  .order('creado_en', { ascending: false });
+
+if (fechaDia) {
+  const inicio = new Date(`${fechaDia}T00:00:00-03:00`).toISOString();
+  const fin = new Date(`${fechaDia}T00:00:00-03:00`);
+  fin.setDate(fin.getDate() + 1);
+
+  consultaMovimientos = consultaMovimientos
+    .gte('creado_en', inicio)
+    .lt('creado_en', fin.toISOString());
+} else {
+  if (fechaDesde) {
+    consultaMovimientos = consultaMovimientos.gte(
+      'creado_en',
+      new Date(`${fechaDesde}T00:00:00-03:00`).toISOString()
+    );
+  }
+
+  if (fechaHasta) {
+    const fin = new Date(`${fechaHasta}T00:00:00-03:00`);
+    fin.setDate(fin.getDate() + 1);
+
+    consultaMovimientos = consultaMovimientos.lt(
+      'creado_en',
+      fin.toISOString()
+    );
+  }
+}
+
+if (productoFiltro) {
+  consultaMovimientos = consultaMovimientos.eq(
+    'producto_id',
+    Number(productoFiltro)
+  );
+}
+if (remitoFiltro) {
+  consultaMovimientos = consultaMovimientos.ilike(
+    'stock_remitos.numero_remito',
+    `%${remitoFiltro}%`
+  );
+}
+
+if (estadoRemitoFiltro === 'pendientes') {
+  consultaMovimientos = consultaMovimientos
+    .not('remito_id', 'is', null)
+    .is('stock_remitos.numero_remito', null);
+}
+
+if (estadoRemitoFiltro === 'completos') {
+  consultaMovimientos = consultaMovimientos
+    .not('remito_id', 'is', null)
+    .not('stock_remitos.numero_remito', 'is', null);
+}
+
+const { data: movimientos, error: errorMov } =
+  await consultaMovimientos.limit(100);
 
         if (errorMov) {
           document.getElementById('stock-historial').innerHTML =
@@ -7023,19 +7803,108 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
         }
 
         document.getElementById('stock-historial').innerHTML =
-          movimientos.length ? movimientos.map(m => `
-        <div class="fila">
-          <div class="dato">
-            <b>${esc(m.productos?.nombre || 'Producto')}</b>
-            <small>${new Date(m.creado_en).toLocaleString('es-AR')}</small>
-            <small>${esc(m.observacion || '')}</small>
-          </div>
-          <div>
-            ${esc(m.tipo)}: ${m.cantidad}<br>
-            <small>${m.stock_anterior} → ${m.stock_nuevo}</small>
-          </div>
-        </div>
-      `).join('') : '<p>Todavía no hay movimientos registrados.</p>';
+  movimientos.length ? movimientos.map(m => `
+    <div class="fila">
+      <div class="dato">
+        <b>${esc(m.productos?.nombre || 'Producto')}</b>
+        <small>${new Date(m.creado_en).toLocaleString('es-AR')}</small>
+<small>${esc(m.observacion || '')}</small>
+
+${m.remito_id ? `
+  <small>
+    <b>Remito:</b>
+    ${esc(m.stock_remitos?.numero_remito || 'Pendiente de completar')}
+  </small>
+  ${m.stock_remitos?.fecha_remito ? `
+    <small>Fecha del remito: ${esc(m.stock_remitos.fecha_remito)}</small>
+  ` : ''}
+  ${m.stock_remitos?.proveedor ? `
+    <small>Proveedor: ${esc(m.stock_remitos.proveedor)}</small>
+  ` : ''}
+  ${!m.stock_remitos?.numero_remito ? `
+  <button
+    type="button"
+    class="btn chico sec stock-completar-remito"
+    data-remito-id="${m.remito_id}"
+    style="margin-top:6px">
+    Completar remito
+  </button>
+` : ''}
+` : ''}
+      </div>
+
+      <div>
+        ${esc(m.tipo)}: ${m.cantidad}<br>
+        <small>${m.stock_anterior} → ${m.stock_nuevo}</small>
+
+        ${m.tipo === 'salida' && m.pedido_id ? `
+          <button
+            type="button"
+            class="btn chico sec stock-ver-presupuesto"
+            data-pedido-id="${m.pedido_id}"
+            style="margin-top:6px">
+            Ver presupuesto
+          </button>
+        ` : ''}
+      </div>
+    </div>
+  `).join('') : '<p>Todavía no hay movimientos registrados.</p>';
+
+document.querySelectorAll('.stock-ver-presupuesto').forEach(btn => {
+  btn.onclick = () => {
+    detallePedido(btn.dataset.pedidoId, volverAlHistorialStock);
+  };
+});
+document.querySelectorAll('.stock-completar-remito').forEach(btn => {
+  btn.onclick = async () => {
+    const numero = prompt('Ingresá el número de remito:');
+    if (numero === null) return;
+
+    const fecha = prompt('Ingresá la fecha del remito (AAAA-MM-DD):');
+    if (fecha === null) return;
+
+   const fechaIngresada = fecha.trim();
+const partesFecha = fechaIngresada.split('-');
+
+const fechaValida =
+  partesFecha.length === 3 &&
+  /^\d{4}-\d{2}-\d{2}$/.test(fechaIngresada) &&
+  (() => {
+    const [anio, mes, dia] = partesFecha.map(Number);
+    const fecha = new Date(anio, mes - 1, dia);
+
+    return (
+      fecha.getFullYear() === anio &&
+      fecha.getMonth() === mes - 1 &&
+      fecha.getDate() === dia
+    );
+  })();
+
+if (!numero.trim() || !fechaValida) {
+  alert('Ingresá un número y una fecha real válida (AAAA-MM-DD).');
+  return;
+}
+
+    btn.disabled = true;
+
+    try {
+      const { error } = await sb.rpc('completar_datos_remito', {
+        p_remito_id: Number(btn.dataset.remitoId),
+        p_numero_remito: numero.trim(),
+        p_fecha_remito: fechaIngresada
+      });
+
+      if (error) throw error;
+
+      alert('Remito completado correctamente.');
+      await cargarPantallaStock();
+
+    } catch (error) {
+      alert(error.message || 'No se pudo completar el remito.');
+      btn.disabled = false;
+    }
+  };
+});
       }
 
       tipo.onchange = () => {
@@ -7046,8 +7915,103 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
           : 'Cantidad de unidades';
       };
 
-      document.getElementById('stock-actualizar').onclick =
-        cargarPantallaStock;
+      document.getElementById('stock-registrar-ingreso').onclick =
+  async () => {
+    aviso.innerHTML = '';
+
+    const filas = [
+      ...document.querySelectorAll('.stock-ingreso-fila')
+    ];
+
+    const items = filas.map(fila => ({
+      producto_id: Number(
+        fila.querySelector('.stock-ingreso-producto').value
+      ),
+      cantidad: Number(
+        fila.querySelector('.stock-ingreso-cantidad').value
+      )
+    }));
+
+    if (
+      !items.length ||
+      items.some(item =>
+        !item.producto_id ||
+        !Number.isInteger(item.cantidad) ||
+        item.cantidad <= 0
+      )
+    ) {
+      aviso.innerHTML =
+        '<div class="msg err">Revisá los productos y las cantidades.</div>';
+      return;
+    }
+
+    const numeroRemito =
+      document.getElementById('stock-ingreso-numero-remito').value.trim();
+
+    const fechaRemito =
+      document.getElementById('stock-ingreso-fecha-remito').value;
+
+    if (Boolean(numeroRemito) !== Boolean(fechaRemito)) {
+      aviso.innerHTML =
+        '<div class="msg err">Si cargás el número de remito, también tenés que ingresar su fecha.</div>';
+      return;
+    }
+
+    const boton = document.getElementById('stock-registrar-ingreso');
+    boton.disabled = true;
+
+    try {
+      const { data: remitoId, error } = await sb.rpc(
+        'registrar_ingreso_remito',
+        {
+          p_proveedor:
+            document.getElementById('stock-ingreso-proveedor').value.trim() || null,
+          p_observaciones:
+            document.getElementById('stock-ingreso-observaciones').value.trim() || null,
+          p_items: items
+        }
+      );
+
+      if (error) throw error;
+
+      if (numeroRemito && fechaRemito) {
+        const { error: errorRemito } = await sb.rpc(
+          'completar_datos_remito',
+          {
+            p_remito_id: remitoId,
+            p_numero_remito: numeroRemito,
+            p_fecha_remito: fechaRemito
+          }
+        );
+
+        if (errorRemito) {
+          throw new Error(
+            'El stock se ingresó correctamente, pero no se pudieron guardar los datos del remito: ' +
+            errorRemito.message
+          );
+        }
+      }
+
+      aviso.innerHTML =
+        '<div class="msg ok">Ingreso de mercadería registrado correctamente.</div>';
+
+      document.getElementById('stock-ingreso-items').innerHTML = '';
+      document.getElementById('stock-ingreso-proveedor').value = '';
+      document.getElementById('stock-ingreso-numero-remito').value = '';
+      document.getElementById('stock-ingreso-fecha-remito').value = '';
+      document.getElementById('stock-ingreso-observaciones').value = '';
+
+      agregarFilaIngresoStock();
+
+      await cargarPantallaStock();
+
+    } catch (error) {
+      aviso.innerHTML =
+        `<div class="msg err">${esc(error.message || 'Ocurrió un error.')}</div>`;
+    } finally {
+      boton.disabled = false;
+    }
+  };
 
       form.onsubmit = async e => {
         e.preventDefault();
@@ -7107,7 +8071,33 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
           boton.disabled = false;
         }
       };
+document.getElementById('stock-fecha-dia').onchange =
+  cargarPantallaStock;
 
+document.getElementById('stock-fecha-desde').onchange =
+  cargarPantallaStock;
+
+document.getElementById('stock-fecha-hasta').onchange =
+  cargarPantallaStock;
+
+document.getElementById('stock-filtro-producto').onchange =
+  cargarPantallaStock;
+  document.getElementById('stock-filtro-remito').oninput =
+  cargarPantallaStock;
+
+document.getElementById('stock-filtro-pendientes').onchange =
+  cargarPantallaStock;
+
+document.getElementById('stock-limpiar-filtros').onclick = async () => {
+  document.getElementById('stock-fecha-dia').value = '';
+  document.getElementById('stock-fecha-desde').value = '';
+  document.getElementById('stock-fecha-hasta').value = '';
+  document.getElementById('stock-filtro-producto').value = '';
+  document.getElementById('stock-filtro-remito').value = '';
+document.getElementById('stock-filtro-pendientes').value = '';
+
+  await cargarPantallaStock();
+};
       await cargarPantallaStock();
     }
 

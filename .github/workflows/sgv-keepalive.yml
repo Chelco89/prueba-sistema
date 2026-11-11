@@ -1,0 +1,29 @@
+
+name: SGV - Actividad Supabase
+
+on:
+  schedule:
+    - cron: '17 9,15,21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mantener-activo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Consultar Supabase
+        env:
+          SGV_PROJECT_URL: ${{ secrets.SGV_PROJECT_URL }}
+          SGV_PUBLIC_KEY: ${{ secrets.SGV_PUBLIC_KEY }}
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            "$SGV_PROJECT_URL/rest/v1/rpc/sgv_keepalive" \
+            --header "apikey: $SGV_PUBLIC_KEY" \
+            --header "Authorization: Bearer $SGV_PUBLIC_KEY" \
+            --header "Content-Type: application/json" \
+            --data '{}'

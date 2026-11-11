@@ -738,6 +738,7 @@
 <body>
   <div id="app"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="config.js"></script>
   <script>
     const cfg = window.SGV_CONFIG;
@@ -808,6 +809,110 @@
         alert("No se pudieron activar las notificaciones. Revisá la consola para ver el error.");
       }
     }
+    let escanerStock = null;
+
+async function escanearCodigoStock(callback) {
+  if (typeof Html5Qrcode === 'undefined') {
+    alert('No se pudo cargar el lector de códigos.');
+    return;
+  }
+
+  const modal = document.createElement('div');
+
+  modal.id = 'stock-escaner-modal';
+  modal.style.cssText = `
+    position:fixed;
+    inset:0;
+    z-index:99999;
+    background:rgba(0,0,0,.85);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:15px;
+  `;
+
+  modal.innerHTML = `
+    <div style="
+      background:white;
+      padding:18px;
+      border-radius:12px;
+      width:100%;
+      max-width:450px;
+    ">
+      <h3>Escanear código</h3>
+
+      <div id="stock-escaner-camara"></div>
+
+      <p id="stock-escaner-aviso" class="vacio">
+        Apuntá la cámara al código.
+      </p>
+
+      <button
+        type="button"
+        class="btn sec"
+        id="stock-escaner-cerrar">
+        Cerrar cámara
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const cerrar = async () => {
+    if (escanerStock) {
+      try {
+        if (escanerStock.isScanning) {
+          await escanerStock.stop();
+        }
+        await escanerStock.clear();
+      } catch (error) {
+        console.warn('Error al cerrar escáner:', error);
+      }
+
+      escanerStock = null;
+    }
+
+    modal.remove();
+  };
+
+  modal.querySelector('#stock-escaner-cerrar').onclick = cerrar;
+
+  try {
+    escanerStock = new Html5Qrcode('stock-escaner-camara');
+
+    const camaras = await Html5Qrcode.getCameras();
+
+    if (!camaras.length) {
+      throw new Error('No se encontró ninguna cámara.');
+    }
+
+    const camaraTrasera =
+      camaras.find(c =>
+        /back|rear|environment|trasera|posterior/i.test(c.label)
+      ) || camaras[camaras.length - 1];
+
+    await escanerStock.start(
+      camaraTrasera.id,
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 150 }
+      },
+      async codigo => {
+        const valor = codigo.trim().toUpperCase();
+
+        if (!valor) return;
+
+        await cerrar();
+        callback(valor);
+      },
+      () => {}
+    );
+
+  } catch (error) {
+    modal.querySelector('#stock-escaner-aviso').innerHTML =
+      `<span style="color:red">${esc(error.message || 'No se pudo iniciar la cámara.')}</span>`;
+  }
+}
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const ROLES = {
       admin: 'Administrador',
@@ -7649,6 +7754,21 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
 <div id="stock-unidades-lista" class="vacio">
   Cargando...
 </div>
+<div class="panel" style="margin-top:15px">
+  <h3>Identificar unidades existentes</h3>
+
+  <p class="vacio">
+    Registrá los códigos de unidades que ya tenés físicamente
+    en stock, sin modificar las cantidades.
+  </p>
+
+  <button
+    type="button"
+    class="btn"
+    id="stock-unidades-agregar-existentes">
+    + Identificar stock existente
+  </button>
+</div>
 <div
   id="stock-unidades-formulario"
   style="display:none;margin-top:20px">
@@ -7714,6 +7834,9 @@ tabUnidades.onclick = async () => {
   mostrarSolapaStock('unidades');
   await cargarUnidadesSerializadas();
 };
+document.getElementById(
+  'stock-unidades-agregar-existentes'
+).onclick = abrirFormularioStockExistente;
 document.getElementById(
   'stock-unidades-filtro-producto'
 ).onchange = cargarUnidadesSerializadas;
@@ -7936,9 +8059,21 @@ document.getElementById('stock-agregar-producto').onclick =
       ${unidad.codigo_exterior
         ? `<p>${esc(unidad.codigo_exterior)}</p>
            <small>Este código ya está registrado y no se puede modificar.</small>`
-        : `<input
-             id="stock-unidad-nuevo-codigo"
-             placeholder="Código exterior (opcional)">`
+        : `
+  <div style="display:flex;gap:8px;align-items:center">
+    <input
+      id="stock-unidad-nuevo-codigo"
+      placeholder="Código exterior (opcional)"
+      style="flex:1;min-width:0">
+
+    <button
+      type="button"
+      class="btn sec chico"
+      id="stock-unidad-escanear-exterior">
+      <span>📷 Escanear</span>
+    </button>
+  </div>
+`
       }
 
       <label>Números internos registrados</label>
@@ -8014,6 +8149,19 @@ document.getElementById('stock-agregar-producto').onclick =
   formulario.querySelector(
     '#stock-unidad-agregar-serie'
   ).onclick = agregarCampoSerie;
+  const botonEscanearExterior = formulario.querySelector(
+  '#stock-unidad-escanear-exterior'
+);
+
+if (botonEscanearExterior) {
+  botonEscanearExterior.onclick = () => {
+    escanearCodigoStock(codigo => {
+      formulario.querySelector(
+        '#stock-unidad-nuevo-codigo'
+      ).value = codigo;
+    });
+  };
+}
 
   formulario.querySelector(
     '#stock-unidad-cancelar'
@@ -8083,7 +8231,274 @@ document.getElementById('stock-agregar-producto').onclick =
     formulario.innerHTML = '';
   };
 }
-  async function cargarUnidadesSerializadas() {
+
+async function abrirFormularioStockExistente() {
+  const formulario = document.getElementById(
+    'stock-unidades-formulario'
+  );
+
+  formulario.style.display = '';
+  formulario.innerHTML =
+    '<div class="panel vacio">Cargando productos...</div>';
+
+  const { data: productos, error } = await sb
+    .from('productos')
+    .select('id,nombre,stock')
+    .eq('activo', true)
+    .eq('lleva_serie', true)
+    .gt('stock', 0)
+    .order('nombre');
+
+  if (error) {
+    formulario.innerHTML =
+      `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!productos.length) {
+    formulario.innerHTML =
+      '<div class="msg">No hay productos con stock disponible para identificar.</div>';
+    return;
+  }
+
+  formulario.innerHTML = `
+    <div class="panel">
+      <h3>Identificar stock existente</h3>
+
+      <label>Producto</label>
+      <select id="stock-existente-producto">
+        <option value="">Seleccionar producto...</option>
+        ${productos.map(p => `
+          <option value="${p.id}" data-stock="${p.stock}">
+            ${esc(p.nombre)} — Stock: ${p.stock}
+          </option>
+        `).join('')}
+      </select>
+
+      <div id="stock-existente-detalle" style="margin-top:15px"></div>
+
+      <button type="button" class="btn sec" id="stock-existente-cancelar">
+        Cancelar
+      </button>
+    </div>
+  `;
+
+  const selectorProducto = formulario.querySelector(
+    '#stock-existente-producto'
+  );
+
+  const detalle = formulario.querySelector(
+    '#stock-existente-detalle'
+  );
+
+  formulario.querySelector(
+    '#stock-existente-cancelar'
+  ).onclick = () => {
+    formulario.style.display = 'none';
+    formulario.innerHTML = '';
+  };
+
+  selectorProducto.onchange = () => {
+    const opcion = selectorProducto.selectedOptions[0];
+
+    if (!selectorProducto.value) {
+      detalle.innerHTML = '';
+      return;
+    }
+
+    const stock = Number(opcion.dataset.stock);
+
+    detalle.innerHTML = `
+      <p><b>Stock disponible:</b> ${stock}</p>
+
+      <label>Cantidad de unidades a identificar</label>
+      <input
+        type="number"
+        id="stock-existente-cantidad"
+        min="1"
+        max="${stock}"
+        step="1"
+        placeholder="Cantidad"
+        style="max-width:180px">
+
+      <div id="stock-existente-unidades"></div>
+    `;
+  };
+
+  detalle.addEventListener('change', (e) => {
+    if (e.target.id !== 'stock-existente-cantidad') return;
+
+    const cantidad = Number(e.target.value);
+    const opcion = selectorProducto.selectedOptions[0];
+    const stock = Number(opcion.dataset.stock);
+
+    const contenedor = detalle.querySelector(
+      '#stock-existente-unidades'
+    );
+
+    if (
+      !Number.isInteger(cantidad) ||
+      cantidad < 1 ||
+      cantidad > stock
+    ) {
+      contenedor.innerHTML =
+        '<div class="msg err">Ingresá una cantidad válida dentro del stock disponible.</div>';
+      return;
+    }
+
+    contenedor.innerHTML = Array.from(
+      { length: cantidad },
+      (_, i) => `
+        <div class="panel" style="margin-top:12px">
+          <h4>Unidad física ${i + 1}</h4>
+
+          <label>Código exterior (opcional)</label>
+          <input
+            type="text"
+            class="stock-existente-codigo"
+            placeholder="Código exterior">
+
+          <label>Números internos (opcional)</label>
+          <div class="stock-existente-series"></div>
+
+          <button
+            type="button"
+            class="btn sec chico stock-existente-agregar-serie">
+            + Agregar número interno
+          </button>
+        </div>
+      `
+    ).join('');
+
+    contenedor.querySelectorAll(
+      '.stock-existente-agregar-serie'
+    ).forEach(boton => {
+      boton.onclick = () => {
+        const lista = boton.parentElement.querySelector(
+          '.stock-existente-series'
+        );
+
+        const fila = document.createElement('div');
+        fila.style.display = 'flex';
+        fila.style.gap = '8px';
+        fila.style.marginBottom = '8px';
+
+        fila.innerHTML = `
+  <input
+    type="text"
+    class="stock-unidad-nueva-serie"
+    placeholder="Número interno"
+    style="flex:1;min-width:0">
+
+  <button
+    type="button"
+    class="btn sec chico stock-escanear-serie">
+    📷
+  </button>
+
+  <button
+    type="button"
+    class="btn sec chico">
+    Quitar
+  </button>
+`;
+
+fila.querySelector('.stock-escanear-serie').onclick = () => {
+  const input = fila.querySelector(
+    '.stock-unidad-nueva-serie'
+  );
+
+  escanearCodigoStock(codigo => {
+    input.value = codigo;
+  });
+};
+
+        fila.querySelector('button').onclick = () => fila.remove();
+        lista.appendChild(fila);
+      };
+    });
+
+    contenedor.insertAdjacentHTML(
+      'beforeend',
+      `
+        <button
+          type="button"
+          class="btn"
+          id="stock-existente-guardar"
+          style="margin-top:15px">
+          Guardar identificaciones
+        </button>
+
+        <div id="stock-existente-aviso"></div>
+      `
+    );
+  });
+
+  detalle.addEventListener('click', async (e) => {
+    if (e.target.id !== 'stock-existente-guardar') return;
+
+    const boton = e.target;
+    const aviso = detalle.querySelector(
+      '#stock-existente-aviso'
+    );
+
+    const unidades = [
+      ...detalle.querySelectorAll(
+        '#stock-existente-unidades .panel'
+      )
+    ].map(panel => ({
+      codigo_exterior:
+        panel.querySelector(
+          '.stock-existente-codigo'
+        ).value.trim().toUpperCase() || null,
+
+      series: [
+        ...panel.querySelectorAll(
+          '.stock-existente-serie'
+        )
+      ]
+        .map(input => input.value.trim().toUpperCase())
+        .filter(Boolean)
+    }));
+
+    if (!unidades.some(
+      u => u.codigo_exterior || u.series.length
+    )) {
+      aviso.innerHTML =
+        '<div class="msg err">Ingresá al menos un código exterior o número interno.</div>';
+      return;
+    }
+
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    const { error } = await sb.rpc(
+      'registrar_identificacion_stock_existente',
+      {
+        p_producto_id: Number(selectorProducto.value),
+        p_unidades: unidades
+      }
+    );
+
+    if (error) {
+      aviso.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+
+      boton.disabled = false;
+      boton.textContent = 'Guardar identificaciones';
+      return;
+    }
+
+    aviso.innerHTML =
+      '<div class="msg">Identificaciones guardadas correctamente.</div>';
+
+    await cargarUnidadesSerializadas();
+
+    formulario.style.display = 'none';
+    formulario.innerHTML = '';
+  });
+}
+ async function cargarUnidadesSerializadas() {
   const contenedor =
     document.getElementById('stock-unidades-lista');
 
@@ -8239,18 +8654,15 @@ const { data, error } = await consulta;
 if (!itemsIngreso.children.length && productos.length) {
   agregarFilaIngresoStock();
 }
-        const filtroProducto = document.getElementById('stock-filtro-producto');
-const productoSeleccionado = filtroProducto.value;
+       const filtroProducto = document.getElementById('stock-filtro-producto');
 
-const productoAnterior = filtroProducto.value;
+const productoSeleccionado = filtroProducto.value;
 
 filtroProducto.innerHTML =
   '<option value="">Todos los productos</option>' +
-  productosFiltro.map(p => `
+  productos.map(p => `
     <option value="${p.id}">${esc(p.nombre)}</option>
   `).join('');
-
-filtroProducto.value = productoAnterior;
 
 filtroProducto.value = productoSeleccionado;
 

@@ -8362,10 +8362,20 @@ async function abrirFormularioStockExistente() {
           <h4>Unidad física ${i + 1}</h4>
 
           <label>Código exterior (opcional)</label>
-          <input
-            type="text"
-            class="stock-existente-codigo"
-            placeholder="Código exterior">
+
+<div style="display:flex;gap:8px;align-items:center">
+  <input
+    type="text"
+    class="stock-existente-codigo"
+    placeholder="Código exterior"
+    style="flex:1;min-width:0">
+
+  <button
+    type="button"
+    class="btn sec chico stock-existente-escanear-codigo">
+    📷 Escanear
+  </button>
+</div>
 
           <label>Números internos (opcional)</label>
           <div class="stock-existente-series"></div>
@@ -8378,6 +8388,21 @@ async function abrirFormularioStockExistente() {
         </div>
       `
     ).join('');
+    contenedor.querySelectorAll(
+  '.stock-existente-escanear-codigo'
+).forEach(boton => {
+  boton.onclick = () => {
+    const panel = boton.closest('.panel');
+
+    const input = panel.querySelector(
+      '.stock-existente-codigo'
+    );
+
+    escanearCodigoStock(codigo => {
+      input.value = codigo;
+    });
+  };
+});
 
     contenedor.querySelectorAll(
       '.stock-existente-agregar-serie'
@@ -8422,7 +8447,7 @@ fila.querySelector('.stock-escanear-serie').onclick = () => {
   });
 };
 
-        fila.querySelector('button').onclick = () => fila.remove();
+        fila.querySelectorAll('button')[1].onclick = () => fila.remove();
         lista.appendChild(fila);
       };
     });

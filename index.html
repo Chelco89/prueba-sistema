@@ -823,6 +823,8 @@ let pedidoDepositoActivo = null;
 let pedidoDepositoEditando = false;
 let cajaPanelActivo = null;
 let cuentaCorrienteActiva = null;
+let stockTabActiva = 'ingreso';
+let stockScroll = 0;
 
 function guardarEstadoNavegacion() {
   try {
@@ -832,8 +834,10 @@ function guardarEstadoNavegacion() {
       filtros,
       pedidoDepositoActivo,
             pedidoDepositoEditando,
-      cajaPanelActivo,
-      cuentaCorrienteActiva
+     cajaPanelActivo,
+cuentaCorrienteActiva,
+stockTabActiva,
+stockScroll: window.scrollY
     }));
   } catch (error) {
     console.warn('No se pudo guardar el estado de navegación:', error);
@@ -859,11 +863,26 @@ function recuperarEstadoNavegacion() {
       pedidoDepositoEditando = estado.pedidoDepositoEditando === true;
       cajaPanelActivo = estado.cajaPanelActivo || null;
       cuentaCorrienteActiva = estado.cuentaCorrienteActiva || null;
+      stockTabActiva = estado.stockTabActiva || 'ingreso';
+stockScroll = Number(estado.stockScroll) || 0;
     }
   } catch (error) {
     console.warn('No se pudo recuperar el estado de navegación:', error);
   }
 }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    guardarEstadoNavegacion();
+  } else {
+    requestAnimationFrame(() => {
+      window.scrollTo(0, stockScroll);
+    });
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  guardarEstadoNavegacion();
+});
     /* ---------- ENTRADA ---------- */
     function pantallaLogin(modo = 'entrar', aviso = null) {
       const nuevo = modo === 'crear';
@@ -7443,6 +7462,9 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
   <button type="button" class="btn chico sec" id="stock-tab-historial">
     Historial de movimientos
   </button>
+  <button type="button" class="btn chico sec" id="stock-tab-unidades">
+  Identificación de unidades
+</button>
 
 </div>
 
@@ -7580,6 +7602,59 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
       </div>
 
     </div>
+    <div id="stock-panel-unidades" style="display:none">
+
+  <h3>Identificación de unidades</h3>
+
+  <p class="vacio">
+    Consultá las unidades físicas registradas y completá sus códigos
+    exteriores y números internos.
+  </p>
+
+ <div style="display:flex;gap:12px;flex-wrap:wrap;margin:15px 0">
+
+  <div style="flex:1;min-width:200px">
+    <label for="stock-unidades-filtro-producto">
+      Producto
+    </label>
+
+    <select id="stock-unidades-filtro-producto">
+      <option value="">Todos los productos</option>
+    </select>
+  </div>
+
+  <div style="flex:1;min-width:160px">
+    <label for="stock-unidades-filtro-estado">
+      Estado
+    </label>
+
+    <select id="stock-unidades-filtro-estado">
+      <option value="">Todos</option>
+      <option value="disponible">Disponibles</option>
+      <option value="asignada">Asignadas</option>
+    </select>
+  </div>
+
+  <div style="display:flex;align-items:end">
+    <button
+      type="button"
+      class="btn sec chico"
+      id="stock-unidades-limpiar">
+      Limpiar filtros
+    </button>
+  </div>
+
+</div>
+
+<div id="stock-unidades-lista" class="vacio">
+  Cargando...
+</div>
+<div
+  id="stock-unidades-formulario"
+  style="display:none;margin-top:20px">
+</div>
+
+</div>
   </div>
 `;
 
@@ -7591,19 +7666,24 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
       const panelIngreso = document.getElementById('stock-panel-ingreso');
 const panelProductos = document.getElementById('stock-panel-productos');
 const panelHistorial = document.getElementById('stock-panel-historial');
+const panelUnidades = document.getElementById('stock-panel-unidades');
 
 const tabIngreso = document.getElementById('stock-tab-ingreso');
 const tabProductos = document.getElementById('stock-tab-productos');
 const tabHistorial = document.getElementById('stock-tab-historial');
+const tabUnidades = document.getElementById('stock-tab-unidades');
 
      function mostrarSolapaStock(solapa) {
+      stockTabActiva = solapa;
   const verIngreso = solapa === 'ingreso';
   const verProductos = solapa === 'productos';
+  const verHistorial = solapa === 'historial';
+  const verUnidades = solapa === 'unidades';
 
   panelIngreso.style.display = verIngreso ? '' : 'none';
   panelProductos.style.display = verProductos ? '' : 'none';
-  panelHistorial.style.display =
-    (!verIngreso && !verProductos) ? '' : 'none';
+  panelHistorial.style.display = verHistorial ? '' : 'none';
+  panelUnidades.style.display = verUnidades ? '' : 'none';
 
   tabIngreso.className = verIngreso
     ? 'btn chico'
@@ -7613,10 +7693,13 @@ const tabHistorial = document.getElementById('stock-tab-historial');
     ? 'btn chico'
     : 'btn chico sec';
 
-  tabHistorial.className =
-    (!verIngreso && !verProductos)
-      ? 'btn chico'
-      : 'btn chico sec';
+  tabHistorial.className = verHistorial
+    ? 'btn chico'
+    : 'btn chico sec';
+
+  tabUnidades.className = verUnidades
+    ? 'btn chico'
+    : 'btn chico sec';
 }
 
             async function volverAlHistorialStock() {
@@ -7627,9 +7710,38 @@ const tabHistorial = document.getElementById('stock-tab-historial');
       tabIngreso.onclick = () => mostrarSolapaStock('ingreso');
 tabProductos.onclick = () => mostrarSolapaStock('productos');
 tabHistorial.onclick = () => mostrarSolapaStock('historial');
+tabUnidades.onclick = async () => {
+  mostrarSolapaStock('unidades');
+  await cargarUnidadesSerializadas();
+};
+document.getElementById(
+  'stock-unidades-filtro-producto'
+).onchange = cargarUnidadesSerializadas;
+
+document.getElementById(
+  'stock-unidades-filtro-estado'
+).onchange = cargarUnidadesSerializadas;
+
+document.getElementById(
+  'stock-unidades-limpiar'
+).onclick = async () => {
+  document.getElementById(
+    'stock-unidades-filtro-producto'
+  ).value = '';
+
+  document.getElementById(
+    'stock-unidades-filtro-estado'
+  ).value = '';
+
+  await cargarUnidadesSerializadas();
+};
 
 // Al entrar a Stock, mostrar primero Ingreso de mercadería.
-mostrarSolapaStock('ingreso');
+mostrarSolapaStock(stockTabActiva);
+
+if (stockTabActiva === 'unidades') {
+  cargarUnidadesSerializadas();
+}
 
 function agregarFilaIngresoStock() {
   const contenedor = document.getElementById('stock-ingreso-items');
@@ -7645,7 +7757,9 @@ function agregarFilaIngresoStock() {
       ${[...selector.options]
         .filter(op => op.value)
         .map(op => `
-          <option value="${op.value}">
+          <option
+            value="${op.value}"
+            data-lleva-serie="${op.dataset.llevaSerie}">
             ${esc(op.textContent.split(' — Stock:')[0])}
           </option>
         `).join('')}
@@ -7661,6 +7775,15 @@ function agregarFilaIngresoStock() {
       placeholder="Ej.: 10"
     >
 
+    <div class="stock-ingreso-series" style="display:none;margin-top:12px">
+      <p><b>Identificación de unidades</b></p>
+      <p class="vacio">
+        Completá el código exterior y los números internos de cada unidad.
+        Podés agregar tantos números internos como necesites.
+      </p>
+      <div class="stock-ingreso-unidades"></div>
+    </div>
+
     <button type="button"
       class="btn chico sec stock-ingreso-quitar">
       Quitar producto
@@ -7669,6 +7792,98 @@ function agregarFilaIngresoStock() {
 
   contenedor.appendChild(fila);
 
+  const productoSelect = fila.querySelector('.stock-ingreso-producto');
+  const cantidadInput = fila.querySelector('.stock-ingreso-cantidad');
+
+  function actualizarUnidadesSerializadas() {
+    const requiereSerie =
+      productoSelect.selectedOptions[0]?.dataset.llevaSerie === 'true';
+
+    const panelSeries = fila.querySelector('.stock-ingreso-series');
+    const unidadesContenedor =
+      fila.querySelector('.stock-ingreso-unidades');
+
+    panelSeries.style.display = requiereSerie ? '' : 'none';
+
+    unidadesContenedor.innerHTML = '';
+
+    if (!requiereSerie) return;
+
+    const cantidad = Number(cantidadInput.value);
+
+    if (!Number.isInteger(cantidad) || cantidad <= 0) return;
+
+    for (let i = 0; i < cantidad; i++) {
+      const unidad = document.createElement('div');
+      unidad.className = 'stock-ingreso-unidad';
+      unidad.style.border = '1px solid #ddd';
+      unidad.style.borderRadius = '8px';
+      unidad.style.padding = '10px';
+      unidad.style.margin = '10px 0';
+
+      unidad.innerHTML = `
+        <b>Unidad ${i + 1}</b>
+
+        <label>Código exterior (opcional)</label>
+        <input
+          type="text"
+          class="stock-unidad-codigo-exterior"
+          placeholder="Escanear o escribir código exterior"
+        >
+
+        <div class="stock-unidad-series"></div>
+
+        <button type="button"
+          class="btn chico sec stock-agregar-serie-interna">
+          + Agregar número interno
+        </button>
+      `;
+
+      unidadesContenedor.appendChild(unidad);
+
+      const seriesContenedor =
+        unidad.querySelector('.stock-unidad-series');
+
+      function agregarSerieInterna() {
+        const campo = document.createElement('div');
+        campo.style.display = 'flex';
+        campo.style.gap = '8px';
+        campo.style.alignItems = 'end';
+        campo.style.marginTop = '8px';
+
+        campo.innerHTML = `
+          <div style="flex:1">
+            <label>Número de serie interno</label>
+            <input
+              type="text"
+              class="stock-unidad-numero-serie"
+              placeholder="Escanear o escribir número"
+            >
+          </div>
+
+          <button type="button"
+            class="btn chico sec stock-quitar-serie-interna">
+            Quitar
+          </button>
+        `;
+
+        seriesContenedor.appendChild(campo);
+
+        campo.querySelector('.stock-quitar-serie-interna').onclick =
+          () => campo.remove();
+      }
+
+      unidad.querySelector('.stock-agregar-serie-interna').onclick =
+        agregarSerieInterna;
+
+      // Comenzamos con un campo interno, pero se pueden agregar más.
+      agregarSerieInterna();
+    }
+  }
+
+  productoSelect.onchange = actualizarUnidadesSerializadas;
+  cantidadInput.onchange = actualizarUnidadesSerializadas;
+
   fila.querySelector('.stock-ingreso-quitar').onclick = () => {
     fila.remove();
   };
@@ -7676,11 +7891,333 @@ function agregarFilaIngresoStock() {
 
 document.getElementById('stock-agregar-producto').onclick =
   agregarFilaIngresoStock;
+  async function abrirFormularioIdentificacionUnidad(id) {
+  const formulario = document.getElementById(
+    'stock-unidades-formulario'
+  );
+
+  formulario.style.display = '';
+  formulario.innerHTML =
+    '<div class="panel vacio">Cargando unidad...</div>';
+
+  const { data: unidad, error } = await sb
+    .from('stock_unidades_serializadas')
+    .select(`
+      id,
+      codigo_exterior,
+      estado,
+      productos(nombre),
+      stock_unidades_series(numero_serie)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    formulario.innerHTML =
+      `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (unidad.estado !== 'disponible') {
+    formulario.innerHTML =
+      '<div class="msg err">Esta unidad ya está asignada.</div>';
+    return;
+  }
+
+  formulario.innerHTML = `
+    <div class="panel">
+
+      <h3>Identificar unidad #${unidad.id}</h3>
+
+      <p><b>${esc(unidad.productos?.nombre || 'Producto')}</b></p>
+
+      <label>Código exterior</label>
+
+      ${unidad.codigo_exterior
+        ? `<p>${esc(unidad.codigo_exterior)}</p>
+           <small>Este código ya está registrado y no se puede modificar.</small>`
+        : `<input
+             id="stock-unidad-nuevo-codigo"
+             placeholder="Código exterior (opcional)">`
+      }
+
+      <label>Números internos registrados</label>
+
+      <p>
+        ${unidad.stock_unidades_series?.length
+          ? unidad.stock_unidades_series
+              .map(s => esc(s.numero_serie)).join(' · ')
+          : 'Todavía no hay números internos.'}
+      </p>
+
+      <label>Agregar números internos</label>
+
+      <div id="stock-unidad-nuevas-series"></div>
+
+      <button
+        type="button"
+        class="btn sec chico"
+        id="stock-unidad-agregar-serie">
+        + Agregar número interno
+      </button>
+
+      <div style="display:flex;gap:10px;margin-top:15px">
+        <button
+          type="button"
+          class="btn sec"
+          id="stock-unidad-cancelar">
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          class="btn"
+          id="stock-unidad-guardar">
+          Guardar identificación
+        </button>
+      </div>
+
+      <div id="stock-unidad-aviso"></div>
+
+    </div>
+  `;
+    const nuevasSeries = formulario.querySelector(
+    '#stock-unidad-nuevas-series'
+  );
+
+  function agregarCampoSerie() {
+    const fila = document.createElement('div');
+
+    fila.style.display = 'flex';
+    fila.style.gap = '8px';
+    fila.style.marginBottom = '8px';
+
+    fila.innerHTML = `
+      <input
+        type="text"
+        class="stock-unidad-nueva-serie"
+        placeholder="Número interno"
+        style="flex:1">
+
+      <button
+        type="button"
+        class="btn sec chico">
+        Quitar
+      </button>
+    `;
+
+    fila.querySelector('button').onclick = () => fila.remove();
+
+    nuevasSeries.appendChild(fila);
+  }
+
+  formulario.querySelector(
+    '#stock-unidad-agregar-serie'
+  ).onclick = agregarCampoSerie;
+
+  formulario.querySelector(
+    '#stock-unidad-cancelar'
+  ).onclick = () => {
+    formulario.style.display = 'none';
+    formulario.innerHTML = '';
+  };
+
+  agregarCampoSerie();
+    formulario.querySelector(
+    '#stock-unidad-guardar'
+  ).onclick = async () => {
+    const aviso = formulario.querySelector(
+      '#stock-unidad-aviso'
+    );
+
+    const codigoExterior =
+      formulario.querySelector(
+        '#stock-unidad-nuevo-codigo'
+      )?.value.trim().toUpperCase() || null;
+
+    const series = [
+      ...formulario.querySelectorAll(
+        '.stock-unidad-nueva-serie'
+      )
+    ]
+      .map(input => input.value.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (!codigoExterior && !series.length) {
+      aviso.innerHTML =
+        '<div class="msg err">Ingresá al menos un identificador nuevo.</div>';
+      return;
+    }
+
+    const boton = formulario.querySelector(
+      '#stock-unidad-guardar'
+    );
+
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    const { error } = await sb.rpc(
+      'completar_identificacion_unidad',
+      {
+        p_unidad_id: unidad.id,
+        p_codigo_exterior: codigoExterior,
+        p_series: series
+      }
+    );
+
+    if (error) {
+      aviso.innerHTML =
+        `<div class="msg err">${esc(error.message)}</div>`;
+
+      boton.disabled = false;
+      boton.textContent = 'Guardar identificación';
+      return;
+    }
+
+    aviso.innerHTML =
+      '<div class="msg ok">Identificación guardada correctamente.</div>';
+
+    await cargarUnidadesSerializadas();
+
+    formulario.style.display = 'none';
+    formulario.innerHTML = '';
+  };
+}
+  async function cargarUnidadesSerializadas() {
+  const contenedor =
+    document.getElementById('stock-unidades-lista');
+
+  contenedor.innerHTML =
+    '<p class="vacio">Cargando unidades...</p>';
+    const filtroProducto = document.getElementById(
+  'stock-unidades-filtro-producto'
+);
+
+const { data: productosFiltro, error: errorProductos } =
+  await sb
+    .from('productos')
+    .select('id,nombre')
+    .eq('activo', true)
+    .eq('lleva_serie', true)
+    .order('nombre');
+
+if (errorProductos) {
+  contenedor.innerHTML =
+    `<div class="msg err">${esc(errorProductos.message)}</div>`;
+  return;
+}
+
+filtroProducto.innerHTML =
+  '<option value="">Todos los productos</option>' +
+  productosFiltro.map(p => `
+    <option value="${p.id}">${esc(p.nombre)}</option>
+  `).join('');
+
+  let consulta = sb
+  .from('stock_unidades_serializadas')
+  .select(`
+    id,
+    producto_id,
+    codigo_exterior,
+    estado,
+    pedido_id,
+    creado_en,
+    productos(nombre),
+    stock_unidades_series(
+      id,
+      numero_serie
+    )
+  `)
+  .order('id', { ascending: false })
+  .range(0, 49);
+
+const productoSeleccionado =
+  document.getElementById(
+    'stock-unidades-filtro-producto'
+  ).value;
+
+const estadoSeleccionado =
+  document.getElementById(
+    'stock-unidades-filtro-estado'
+  ).value;
+
+if (productoSeleccionado) {
+  consulta = consulta.eq(
+    'producto_id',
+    Number(productoSeleccionado)
+  );
+}
+
+if (estadoSeleccionado) {
+  consulta = consulta.eq(
+    'estado',
+    estadoSeleccionado
+  );
+}
+
+const { data, error } = await consulta;
+
+  if (error) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!data.length) {
+    contenedor.innerHTML =
+      '<p class="vacio">Todavía no hay unidades físicas identificadas.</p>';
+    return;
+  }
+
+  contenedor.innerHTML = data.map(unidad => `
+    <div class="fila">
+      <div class="dato">
+        <b>${esc(unidad.productos?.nombre || 'Producto')}</b>
+
+        <small>Unidad: ${unidad.id}</small>
+
+        <small>
+          Código exterior:
+          ${esc(unidad.codigo_exterior || 'Sin identificar')}
+        </small>
+
+        <small>
+          Números internos:
+          ${unidad.stock_unidades_series?.length
+            ? unidad.stock_unidades_series
+                .map(s => esc(s.numero_serie)).join(' · ')
+            : 'Sin identificar'}
+        </small>
+
+        <small>
+          Estado: ${esc(unidad.estado)}
+        </small>
+        ${unidad.estado === 'disponible' ? `
+  <button
+    type="button"
+    class="btn sec chico stock-unidad-identificar"
+    data-id="${unidad.id}">
+    Identificar / completar
+  </button>
+` : ''}
+      </div>
+    </div>
+  `).join('');
+  contenedor.querySelectorAll(
+  '.stock-unidad-identificar'
+).forEach(btn => {
+  btn.onclick = () => {
+    abrirFormularioIdentificacionUnidad(
+      Number(btn.dataset.id)
+    );
+  };
+});
+}
 
       async function cargarPantallaStock() {
         const { data: productos, error } = await sb
           .from('productos')
-          .select('id,nombre,stock,activo')
+          .select('id,nombre,stock,activo,lleva_serie')
           .eq('activo', true)
           .order('nombre');
 
@@ -7691,8 +8228,12 @@ document.getElementById('stock-agregar-producto').onclick =
         }
 
         selector.innerHTML = productos.map(p =>
-          `<option value="${p.id}">${esc(p.nombre)} — Stock: ${p.stock}</option>`
-        ).join('');
+  `<option
+    value="${p.id}"
+    data-lleva-serie="${p.lleva_serie}">
+    ${esc(p.nombre)} — Stock: ${p.stock}
+  </option>`
+).join('');
         const itemsIngreso = document.getElementById('stock-ingreso-items');
 
 if (!itemsIngreso.children.length && productos.length) {
@@ -7701,11 +8242,15 @@ if (!itemsIngreso.children.length && productos.length) {
         const filtroProducto = document.getElementById('stock-filtro-producto');
 const productoSeleccionado = filtroProducto.value;
 
+const productoAnterior = filtroProducto.value;
+
 filtroProducto.innerHTML =
   '<option value="">Todos los productos</option>' +
-  productos.map(p =>
-    `<option value="${p.id}">${esc(p.nombre)}</option>`
-  ).join('');
+  productosFiltro.map(p => `
+    <option value="${p.id}">${esc(p.nombre)}</option>
+  `).join('');
+
+filtroProducto.value = productoAnterior;
 
 filtroProducto.value = productoSeleccionado;
 
@@ -7923,27 +8468,52 @@ if (!numero.trim() || !fechaValida) {
       ...document.querySelectorAll('.stock-ingreso-fila')
     ];
 
-    const items = filas.map(fila => ({
-      producto_id: Number(
-        fila.querySelector('.stock-ingreso-producto').value
-      ),
-      cantidad: Number(
-        fila.querySelector('.stock-ingreso-cantidad').value
-      )
-    }));
+    const items = filas.map(fila => {
+  const productoSelect = fila.querySelector('.stock-ingreso-producto');
 
-    if (
-      !items.length ||
-      items.some(item =>
-        !item.producto_id ||
-        !Number.isInteger(item.cantidad) ||
-        item.cantidad <= 0
-      )
-    ) {
-      aviso.innerHTML =
-        '<div class="msg err">Revisá los productos y las cantidades.</div>';
-      return;
-    }
+  const llevaSerie =
+    productoSelect.selectedOptions[0]?.dataset.llevaSerie === 'true';
+
+  const item = {
+    producto_id: Number(productoSelect.value),
+    cantidad: Number(fila.querySelector('.stock-ingreso-cantidad').value)
+  };
+
+ if (llevaSerie) {
+  item.unidades = [
+    ...fila.querySelectorAll('.stock-ingreso-unidad')
+  ]
+    .map(unidad => ({
+      codigo_exterior:
+        unidad.querySelector('.stock-unidad-codigo-exterior')
+          .value.trim().toUpperCase() || null,
+
+      series: [
+        ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+      ]
+        .map(input => input.value.trim().toUpperCase())
+        .filter(Boolean)
+    }))
+    .filter(unidad =>
+      unidad.codigo_exterior || unidad.series.length > 0
+    );
+}
+
+  return item;
+});
+
+  if (
+  !items.length ||
+  items.some(item =>
+    !item.producto_id ||
+    !Number.isInteger(item.cantidad) ||
+    item.cantidad <= 0
+  )
+) {
+  aviso.innerHTML =
+    '<div class="msg err">Revisá los productos y las cantidades ingresadas.</div>';
+  return;
+}
 
     const numeroRemito =
       document.getElementById('stock-ingreso-numero-remito').value.trim();

@@ -6638,7 +6638,7 @@ const productoUnidadEspecial = i => {
           <label style="margin:0;font-size:14px">¿Cuántos n.º de serie cargar?</label>
           <input type="number" class="inp-req" data-item-id="${i.id}" min="0" step="1" value="${req(i)}" style="width:80px;padding:6px"></div>` : ''}
         <div class="lista-series">${chips}</div>
-        ${abierto && unidadEspecial ? `
+        ${abierto && i.lleva_serie && !unidadEspecial ? `
   <div class="item-form" style="margin-top:10px;gap:8px;flex-wrap:wrap">
     <input
       type="text"
@@ -6682,7 +6682,23 @@ const productoUnidadEspecial = i => {
   <input class="serie-cantidad" type="number" min="1" max="${falta}" placeholder="Cantidad" style="font-size:14px;padding:8px;width:90px">
   <button type="button" class="btn sec chico btn-generar-series" data-item-id="${i.id}">Generar</button>
 </div>
-          ${Array.from({ length: falta }, (_, k) => `<input class="input-serie" data-item-id="${i.id}" placeholder="N.º de serie ${ser.length + k + 1} de ${req(i)}" style="font-size:14px;padding:8px;margin-top:6px">`).join('')}
+          ${Array.from({ length: falta }, (_, k) => `
+  <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+    <input
+      class="input-serie"
+      data-item-id="${i.id}"
+      placeholder="N.º de serie ${k + 1}"
+      style="flex:1;min-width:0">
+
+    <button
+      type="button"
+      class="btn sec chico btn-escanear-serie"
+      data-item-id="${i.id}"
+      data-serie-index="${k}">
+      📷
+    </button>
+  </div>
+`).join('')}
           <button type="button" class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:8px">Guardar números de serie</button></div>` : ''}
       </td></tr>`;
         }).join('');
@@ -6854,6 +6870,28 @@ c.querySelectorAll('.btn-escanear-unidad').forEach(btn => {
 
       if (!numeros || numeros.length === 0) {
         return err('Unidad encontrada, pero todavía no tiene números internos cargados.');
+      }
+    });
+  };
+});
+// Escanear números de serie de productos sueltos.
+c.querySelectorAll('.btn-escanear-serie').forEach(btn => {
+  btn.onclick = () => {
+    escanearCodigoStock(codigo => {
+      const itemId = btn.dataset.itemId;
+      const indice = Number(btn.dataset.serieIndex);
+
+      const campos = [
+        ...c.querySelectorAll(
+          `.input-serie[data-item-id="${itemId}"]`
+        )
+      ];
+
+      if (campos[indice]) {
+        campos[indice].value = codigo;
+        campos[indice].dispatchEvent(
+          new Event('input', { bubbles: true })
+        );
       }
     });
   };

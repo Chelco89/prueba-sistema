@@ -878,7 +878,21 @@ async function escanearCodigoStock(callback) {
   modal.querySelector('#stock-escaner-cerrar').onclick = cerrar;
 
   try {
-    escanerStock = new Html5Qrcode('stock-escaner-camara');
+    escanerStock = new Html5Qrcode(
+  'stock-escaner-camara',
+  {
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.QR_CODE
+    ],
+    verbose: false
+  }
+);
 
     const camaras = await Html5Qrcode.getCameras();
 
@@ -6587,7 +6601,13 @@ if (
       const prep = i => Math.min(Number(i.cantidad_preparada || 0), Number(i.cantidad));
       const completo = i =>
         i.es_kit === true || prep(i) >= Number(i.cantidad);
-      const req = i => i.series_requeridas ?? Math.ceil(i.cantidad);
+     const req = i => i.series_requeridas ?? (
+  productoUnidadEspecial(i)
+    ? Math.ceil(i.cantidad) * (
+        i.producto.trim().toUpperCase() === 'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2
+      )
+    : Math.ceil(i.cantidad)
+);
 const faltaSerie = i => i.lleva_serie ? Math.max(0, req(i) - (i.series || []).length) : 0;
 
 const productoUnidadEspecial = i => {
@@ -6658,28 +6678,53 @@ const productoUnidadEspecial = i => {
     </button>
   </div>
 
-  <div class="unidad-series" data-item-id="${i.id}">
-    ${Array.from({
-      length: i.producto.trim().toUpperCase() === 'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2
-    }, (_, k) => `
+ <div class="unidad-series" data-item-id="${i.id}">
+  ${Array.from({
+    length: i.producto.trim().toUpperCase() === 'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2
+  }, (_, k) => `
+    <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+
+      <select
+        class="unidad-serie-prefijo"
+        data-item-id="${i.id}"
+        data-serie-index="${k}"
+        style="padding:8px">
+        <option value="">Prefijo...</option>
+        <option value="MG22">MG22</option>
+        <option value="MG33">MG33</option>
+        <option value="MG31">MG31</option>
+        <option value="TT18">TT18</option>
+        <option value="otro">Otro</option>
+      </select>
+
       <input
         type="text"
         class="unidad-serie-interna"
         data-item-id="${i.id}"
+        data-serie-index="${k}"
         placeholder="Número interno ${k + 1}"
-        style="width:100%;padding:9px;margin-top:6px">
-    `).join('')}
+        style="flex:1;min-width:0;padding:9px">
 
-    <button
-      type="button"
-      class="btn chico btn-reservar-unidad"
-      data-item-id="${i.id}"
-      style="margin-top:8px">
-      Guardar y reservar unidad
-    </button>
-  </div>
+      <button
+        type="button"
+        class="btn sec chico btn-escanear-unidad-serie"
+        data-item-id="${i.id}"
+        data-serie-index="${k}">
+        📷
+      </button>
+    </div>
+  `).join('')}
+
+  <button
+    type="button"
+    class="btn chico btn-reservar-unidad"
+    data-item-id="${i.id}"
+    style="margin-top:8px">
+    Guardar y reservar unidad
+  </button>
+</div>
 ` : ''}
-        ${abierto && falta > 0 ? `<div class="casillas" data-item-id="${i.id}">
+       ${abierto && falta > 0 && !unidadEspecial ?`<div class="casillas" data-item-id="${i.id}">
         <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
 
   <select class="serie-prefijo" data-item-id="${i.id}"
@@ -6975,6 +7020,45 @@ c.querySelectorAll('.btn-escanear-serie').forEach(btn => {
     });
   };
 });
+// Escanear números internos de unidades especiales
+c.querySelectorAll('.btn-escanear-unidad-serie').forEach(btn => {
+  btn.onclick = () => {
+    const itemId = btn.dataset.itemId;
+    const indice = Number(btn.dataset.serieIndex);
+
+    escanearCodigoStock(codigo => {
+      const campo = c.querySelector(
+        `.unidad-serie-interna[data-item-id="${itemId}"][data-serie-index="${indice}"]`
+      );
+
+      const selector = c.querySelector(
+        `.unidad-serie-prefijo[data-item-id="${itemId}"][data-serie-index="${indice}"]`
+      );
+
+      if (!campo) return;
+
+      let numero = String(codigo || '').trim().toUpperCase();
+
+      if (!/^[A-Z0-9]+-.+/.test(numero)) {
+        let prefijo = selector?.value || '';
+
+        if (!prefijo) {
+          return err('Seleccioná el prefijo antes de escanear.');
+        }
+
+        if (prefijo === 'otro') {
+          prefijo = prompt('Ingresá el prefijo del número interno:');
+          if (!prefijo) return;
+          prefijo = prefijo.trim().toUpperCase();
+        }
+
+        numero = prefijo + '-' + numero;
+      }
+
+      campo.value = numero;
+    });
+  };
+});
 // Guardar identificación y reservar unidad física.
 c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
   btn.onclick = async () => {
@@ -6984,11 +7068,13 @@ c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
       `.unidad-codigo-exterior[data-item-id="${itemId}"]`
     )?.value.trim().toUpperCase() || null;
 
-    const series = [
+    const campos = [
       ...c.querySelectorAll(
         `.unidad-serie-interna[data-item-id="${itemId}"]`
       )
-    ].map(x => x.value.trim().toUpperCase());
+    ];
+
+    const series = campos.map(x => x.value.trim().toUpperCase());
 
     if (!codigo && series.every(x => !x)) {
       return err('Escaneá el código exterior o ingresá los números internos.');
@@ -6996,6 +7082,30 @@ c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
 
     if (series.some(x => !x)) {
       return err('Completá todos los números internos de la unidad.');
+    }
+
+    for (let k = 0; k < series.length; k++) {
+      if (!/^[A-Z0-9]+-.+/.test(series[k])) {
+        const selector = c.querySelector(
+          `.unidad-serie-prefijo[data-item-id="${itemId}"][data-serie-index="${k}"]`
+        );
+
+        let prefijo = selector?.value || '';
+
+        if (!prefijo) {
+          return err('Seleccioná el prefijo del número interno ' + (k + 1) + '.');
+        }
+
+        if (prefijo === 'otro') {
+          prefijo = prompt('Ingresá el prefijo del número interno ' + (k + 1) + ':');
+
+          if (!prefijo || !prefijo.trim()) return;
+
+          prefijo = prefijo.trim().toUpperCase();
+        }
+
+        series[k] = prefijo + '-' + series[k];
+      }
     }
 
     btn.disabled = true;

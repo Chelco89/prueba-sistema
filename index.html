@@ -8500,14 +8500,17 @@ console.log(
 function agregarCampoSerie() {
   const fila = document.createElement('div');
 
-  fila.style.display = 'flex';
-  fila.style.gap = '8px';
-  fila.style.marginBottom = '8px';
+  fila.style.display = 'grid';
+fila.style.gridTemplateColumns = '95px minmax(0, 1fr) auto auto';
+fila.style.gap = '8px';
+fila.style.marginBottom = '8px';
+fila.style.width = '100%';
+fila.style.alignItems = 'center';
 
  fila.innerHTML = `
   <select
     class="stock-unidad-prefijo"
-    style="padding:8px">
+    style="width:100%;min-width:0;box-sizing:border-box;padding:8px 4px"
     <option value="">Prefijo...</option>
     <option value="MG22">MG22</option>
     <option value="MG33">MG33</option>
@@ -8517,10 +8520,10 @@ function agregarCampoSerie() {
   </select>
 
   <input
-    type="text"
-    class="stock-unidad-nueva-serie"
-    placeholder="Número interno"
-    style="flex:1;min-width:0">
+  type="text"
+  class="stock-unidad-nueva-serie"
+  placeholder="Número interno"
+  style="width:100%;min-width:0;box-sizing:border-box;padding:8px">
 
   <button
     type="button"
@@ -8876,16 +8879,15 @@ formulario.addEventListener('change', (e) => {
         );
 
         const fila = document.createElement('div');
-        fila.style.display = 'grid';
-fila.style.gridTemplateColumns = '85px minmax(0, 1fr) auto auto';
-fila.style.gap = '8px';
-fila.style.marginBottom = '8px';
-fila.style.width = '100%';
+fila.style.cssText =
+  'display:flex;gap:8px;margin-bottom:8px;width:100%;align-items:center';
 
-   fila.innerHTML = `
+
+
+fila.innerHTML = `
   <select
     class="stock-unidad-prefijo"
-    style="width:85px;flex:0 0 85px;padding:8px 4px">
+    style="width:100%;min-width:0;box-sizing:border-box;padding:8px 4px">
     <option value="">Prefijo</option>
     <option value="MG22">MG22</option>
     <option value="MG33">MG33</option>
@@ -8898,11 +8900,12 @@ fila.style.width = '100%';
     type="text"
     class="stock-unidad-nueva-serie"
     placeholder="Sufijo"
-    style="flex:1;width:0;min-width:120px;padding:8px">
+    style="width:100%;min-width:0;box-sizing:border-box;padding:8px">
 
   <button type="button" class="btn sec chico stock-escanear-serie">📷</button>
   <button type="button" class="btn sec chico">Quitar</button>
 `;
+
 const inputSerie = fila.querySelector('.stock-unidad-nueva-serie');
 
 inputSerie.addEventListener('input', () => {

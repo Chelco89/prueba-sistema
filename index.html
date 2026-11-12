@@ -8876,9 +8876,11 @@ formulario.addEventListener('change', (e) => {
         );
 
         const fila = document.createElement('div');
-        fila.style.display = 'flex';
-        fila.style.gap = '8px';
-        fila.style.marginBottom = '8px';
+        fila.style.display = 'grid';
+fila.style.gridTemplateColumns = '85px minmax(0, 1fr) auto auto';
+fila.style.gap = '8px';
+fila.style.marginBottom = '8px';
+fila.style.width = '100%';
 
    fila.innerHTML = `
   <select

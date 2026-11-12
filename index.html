@@ -8499,33 +8499,67 @@ function agregarCampoSerie() {
   fila.style.gap = '8px';
   fila.style.marginBottom = '8px';
 
-  fila.innerHTML = `
-    <input
-      type="text"
-      class="stock-unidad-nueva-serie"
-      placeholder="Número interno"
-      style="flex:1;min-width:0">
+ fila.innerHTML = `
+  <select
+    class="stock-unidad-prefijo"
+    style="padding:8px">
+    <option value="">Prefijo...</option>
+    <option value="MG22">MG22</option>
+    <option value="MG33">MG33</option>
+    <option value="MG31">MG31</option>
+    <option value="TT18">TT18</option>
+    <option value="otro">Otro</option>
+  </select>
 
-    <button
-      type="button"
-      class="btn sec chico stock-escanear-serie">
-      📷
-    </button>
+  <input
+    type="text"
+    class="stock-unidad-nueva-serie"
+    placeholder="Número interno"
+    style="flex:1;min-width:0">
 
-    <button
-      type="button"
-      class="btn sec chico">
-      Quitar
-    </button>
-  `;
+  <button
+    type="button"
+    class="btn sec chico stock-escanear-serie">
+    📷
+  </button>
+
+  <button
+    type="button"
+    class="btn sec chico">
+    Quitar
+  </button>
+`;
 
   fila.querySelector('.stock-escanear-serie').onclick = () => {
-    const input = fila.querySelector('.stock-unidad-nueva-serie');
+  const input = fila.querySelector('.stock-unidad-nueva-serie');
+  const selector = fila.querySelector('.stock-unidad-prefijo');
 
-    escanearCodigoStock(codigo => {
-      input.value = codigo;
-    });
-  };
+  escanearCodigoStock(codigo => {
+    let numero = codigo.trim().toUpperCase();
+
+    // Si ya viene completo, conservarlo.
+    if (/^[A-Z0-9]+-.+/.test(numero)) {
+      input.value = numero;
+      return;
+    }
+
+    let prefijo = selector.value;
+
+    if (!prefijo) {
+      return err('Seleccioná el prefijo antes de escanear.');
+    }
+
+    if (prefijo === 'otro') {
+      prefijo = prompt('Ingresá el prefijo:');
+
+      if (!prefijo || !prefijo.trim()) return;
+
+      prefijo = prefijo.trim().toUpperCase();
+    }
+
+    input.value = prefijo + '-' + numero;
+  });
+};
 
   fila.querySelectorAll('button')[1].onclick = () => fila.remove();
 
@@ -8795,24 +8829,24 @@ async function abrirFormularioStockExistente() {
         fila.style.gap = '8px';
         fila.style.marginBottom = '8px';
 
-        fila.innerHTML = `
+     fila.innerHTML = `
+  <select class="stock-unidad-prefijo" style="padding:8px">
+    <option value="">Prefijo...</option>
+    <option value="MG22">MG22</option>
+    <option value="MG33">MG33</option>
+    <option value="MG31">MG31</option>
+    <option value="TT18">TT18</option>
+    <option value="otro">Otro</option>
+  </select>
+
   <input
     type="text"
     class="stock-unidad-nueva-serie"
     placeholder="Número interno"
     style="flex:1;min-width:0">
 
-  <button
-    type="button"
-    class="btn sec chico stock-escanear-serie">
-    📷
-  </button>
-
-  <button
-    type="button"
-    class="btn sec chico">
-    Quitar
-  </button>
+  <button type="button" class="btn sec chico stock-escanear-serie">📷</button>
+  <button type="button" class="btn sec chico">Quitar</button>
 `;
 
 fila.querySelector('.stock-escanear-serie').onclick = () => {
@@ -8853,7 +8887,7 @@ fila.querySelector('.stock-escanear-serie').onclick = () => {
     const aviso = detalle.querySelector(
       '#stock-existente-aviso'
     );
-
+let errorPrefijo = false;
     const unidades = [
       ...detalle.querySelectorAll(
         '#stock-existente-unidades .panel'
@@ -8864,15 +8898,44 @@ fila.querySelector('.stock-escanear-serie').onclick = () => {
           '.stock-existente-codigo'
         ).value.trim().toUpperCase() || null,
 
-      series: [
-        ...panel.querySelectorAll(
-          '.stock-existente-serie'
-        )
-      ]
-        .map(input => input.value.trim().toUpperCase())
-        .filter(Boolean)
-    }));
+   series: [
+  ...panel.querySelectorAll('.stock-unidad-nueva-serie')
+]
+.map(input => {
+  let numero = input.value.trim().toUpperCase();
 
+  if (!numero) return null;
+
+  if (/^[A-Z0-9]+-.+/.test(numero)) {
+    return numero;
+  }
+
+  const fila = input.parentElement;
+  let prefijo = fila.querySelector('.stock-unidad-prefijo')?.value || '';
+
+ if (!prefijo) {
+  errorPrefijo = true;
+  aviso.innerHTML =
+    '<div class="msg err">Seleccioná el prefijo de cada número interno.</div>';
+  return null;
+}
+
+  if (prefijo === 'otro') {
+    prefijo = prompt('Ingresá el prefijo:');
+  if (!prefijo || !prefijo.trim()) {
+  errorPrefijo = true;
+  return null;
+}
+    prefijo = prefijo.trim().toUpperCase();
+  }
+
+  return prefijo + '-' + numero;
+})
+.filter(Boolean)
+    }));
+if (errorPrefijo) {
+  return;
+}
     if (!unidades.some(
       u => u.codigo_exterior || u.series.length
     )) {

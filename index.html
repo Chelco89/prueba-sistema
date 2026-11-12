@@ -979,10 +979,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     guardarEstadoNavegacion();
   } else {
-    requestAnimationFrame(() => {
-      window.scrollTo(0, stockScroll);
-    });
-  }
+  requestAnimationFrame(() => {
+    window.scrollTo(0, stockScroll);
+
+   
+  });
+}
 });
 
 window.addEventListener('pagehide', () => {
@@ -7899,6 +7901,7 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
     }
     /* ---------- STOCK ---------- */
     async function vistaStock() {
+      
       const c = document.getElementById('contenido');
 
       c.innerHTML = `
@@ -8157,6 +8160,7 @@ const tabUnidades = document.getElementById('stock-tab-unidades');
 
      function mostrarSolapaStock(solapa) {
       stockTabActiva = solapa;
+      guardarEstadoNavegacion();
   const verIngreso = solapa === 'ingreso';
   const verProductos = solapa === 'productos';
   const verHistorial = solapa === 'historial';
@@ -8645,7 +8649,8 @@ if (botonEscanearExterior) {
 
     aviso.innerHTML =
       '<div class="msg ok">Identificación guardada correctamente.</div>';
-
+      formulario.dataset.guardado = 'true';
+sessionStorage.removeItem('sgv_stock_identificacion_borrador');
     await cargarUnidadesSerializadas();
 
     formulario.style.display = 'none';
@@ -8711,13 +8716,57 @@ async function abrirFormularioStockExistente() {
   const detalle = formulario.querySelector(
     '#stock-existente-detalle'
   );
+const guardarBorradorStockExistente = () => {
+  if (formulario.dataset.guardado === 'true') return;
+if (!selectorProducto.value) return;
+  const unidades = [
+    ...detalle.querySelectorAll(
+      '#stock-existente-unidades > .panel'
+    )
+  ].map(panel => ({
+    codigo_exterior:
+      panel.querySelector('.stock-existente-codigo')?.value || '',
 
-  formulario.querySelector(
-    '#stock-existente-cancelar'
-  ).onclick = () => {
-    formulario.style.display = 'none';
-    formulario.innerHTML = '';
+    series: [
+      ...panel.querySelectorAll('.stock-unidad-nueva-serie')
+    ].map(input => ({
+      prefijo:
+        input.parentElement.querySelector('.stock-unidad-prefijo')?.value || '',
+      numero: input.value || ''
+    }))
+  }));
+
+  const borrador = {
+    producto_id: selectorProducto.value,
+    cantidad:
+      detalle.querySelector('#stock-existente-cantidad')?.value || '',
+    unidades
   };
+
+  sessionStorage.setItem(
+    'sgv_stock_identificacion_borrador',
+    JSON.stringify(borrador)
+  );
+};
+formulario.addEventListener('input', (e) => {
+  if (!formulario.dataset.guardado) {
+    guardarBorradorStockExistente();
+  }
+});
+
+formulario.addEventListener('change', (e) => {
+  if (!formulario.dataset.guardado) {
+    guardarBorradorStockExistente();
+  }
+});
+ formulario.querySelector(
+  '#stock-existente-cancelar'
+).onclick = () => {
+  sessionStorage.removeItem('sgv_stock_identificacion_borrador');
+  formulario.style.display = 'none';
+  formulario.innerHTML = '';
+};
+
 
   selectorProducto.onchange = () => {
     const opcion = selectorProducto.selectedOptions[0];
@@ -8811,8 +8860,9 @@ async function abrirFormularioStockExistente() {
     );
 
     escanearCodigoStock(codigo => {
-      input.value = codigo;
-    });
+  input.value = codigo;
+  guardarBorradorStockExistente();
+});
   };
 });
 
@@ -8829,9 +8879,11 @@ async function abrirFormularioStockExistente() {
         fila.style.gap = '8px';
         fila.style.marginBottom = '8px';
 
-     fila.innerHTML = `
-  <select class="stock-unidad-prefijo" style="padding:8px">
-    <option value="">Prefijo...</option>
+   fila.innerHTML = `
+  <select
+    class="stock-unidad-prefijo"
+    style="width:85px;flex:0 0 85px;padding:8px 4px">
+    <option value="">Prefijo</option>
     <option value="MG22">MG22</option>
     <option value="MG33">MG33</option>
     <option value="MG31">MG31</option>
@@ -8842,25 +8894,38 @@ async function abrirFormularioStockExistente() {
   <input
     type="text"
     class="stock-unidad-nueva-serie"
-    placeholder="Número interno"
-    style="flex:1;min-width:0">
+    placeholder="Sufijo"
+    style="flex:1;width:0;min-width:120px;padding:8px">
 
   <button type="button" class="btn sec chico stock-escanear-serie">📷</button>
   <button type="button" class="btn sec chico">Quitar</button>
 `;
+const inputSerie = fila.querySelector('.stock-unidad-nueva-serie');
 
+inputSerie.addEventListener('input', () => {
+  const inicio = inputSerie.selectionStart;
+  const fin = inputSerie.selectionEnd;
+
+  inputSerie.value = inputSerie.value.toUpperCase();
+
+  inputSerie.setSelectionRange(inicio, fin);
+});
 fila.querySelector('.stock-escanear-serie').onclick = () => {
-  const input = fila.querySelector(
-    '.stock-unidad-nueva-serie'
-  );
+  const input = fila.querySelector('.stock-unidad-nueva-serie');
 
   escanearCodigoStock(codigo => {
-    input.value = codigo;
+    input.value = codigo.toUpperCase();
+    guardarBorradorStockExistente();
   });
 };
 
-        fila.querySelectorAll('button')[1].onclick = () => fila.remove();
-        lista.appendChild(fila);
+      fila.querySelectorAll('button')[1].onclick = () => {
+  fila.remove();
+  guardarBorradorStockExistente();
+};
+
+lista.appendChild(fila);
+guardarBorradorStockExistente();
       };
     });
 
@@ -8966,12 +9031,66 @@ if (errorPrefijo) {
 
     aviso.innerHTML =
       '<div class="msg">Identificaciones guardadas correctamente.</div>';
+      
+sessionStorage.removeItem('sgv_stock_identificacion_borrador');
 
     await cargarUnidadesSerializadas();
 
     formulario.style.display = 'none';
     formulario.innerHTML = '';
   });
+  // Recuperar borrador de identificación de stock
+try {
+  const borrador = JSON.parse(
+    sessionStorage.getItem('sgv_stock_identificacion_borrador') || 'null'
+  );
+
+  if (borrador && borrador.producto_id) {
+    selectorProducto.value = borrador.producto_id;
+    selectorProducto.onchange();
+
+    const cantidadInput = detalle.querySelector(
+      '#stock-existente-cantidad'
+    );
+
+    if (cantidadInput && borrador.cantidad) {
+      cantidadInput.value = borrador.cantidad;
+      cantidadInput.dispatchEvent(
+        new Event('change', { bubbles: true })
+      );
+
+      const paneles = [
+        ...detalle.querySelectorAll('#stock-existente-unidades > .panel')
+      ];
+
+      (borrador.unidades || []).forEach((unidad, i) => {
+        const panel = paneles[i];
+        if (!panel) return;
+
+        panel.querySelector('.stock-existente-codigo').value =
+          unidad.codigo_exterior || '';
+
+        (unidad.series || []).forEach(serie => {
+          panel.querySelector('.stock-existente-agregar-serie').click();
+
+          const filas = panel.querySelectorAll(
+            '.stock-unidad-nueva-serie'
+          );
+
+          const input = filas[filas.length - 1];
+          const fila = input.parentElement;
+
+          fila.querySelector('.stock-unidad-prefijo').value =
+            serie.prefijo || '';
+
+          input.value = serie.numero || '';
+        });
+      });
+    }
+  }
+} catch (error) {
+  console.error('Error recuperando borrador de stock:', error);
+}
 }
  async function cargarUnidadesSerializadas() {
   const contenedor =

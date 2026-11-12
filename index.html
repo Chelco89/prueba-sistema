@@ -5044,6 +5044,7 @@ document.getElementById('caja-cerrar-sesion').onsubmit = async e => {
       
 async function cargarHistorialBanco(cuentaId, contenedorId, nombreCuenta) {
   const contenedor = document.getElementById(contenedorId);
+ 
   if (!contenedor) return;
 
   contenedor.innerHTML = '<p class="vacio">Cargando períodos anteriores…</p>';

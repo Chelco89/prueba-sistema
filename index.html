@@ -6638,7 +6638,7 @@ const productoUnidadEspecial = i => {
           <label style="margin:0;font-size:14px">¿Cuántos n.º de serie cargar?</label>
           <input type="number" class="inp-req" data-item-id="${i.id}" min="0" step="1" value="${req(i)}" style="width:80px;padding:6px"></div>` : ''}
         <div class="lista-series">${chips}</div>
-        ${abierto && i.lleva_serie && !unidadEspecial ? `
+        ${abierto && unidadEspecial ? `
   <div class="item-form" style="margin-top:10px;gap:8px;flex-wrap:wrap">
     <input
       type="text"
@@ -6677,31 +6677,86 @@ const productoUnidadEspecial = i => {
   </div>
 ` : ''}
         ${abierto && falta > 0 ? `<div class="casillas" data-item-id="${i.id}">
-          <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
-  <input class="serie-inicio" data-item-id="${i.id}" placeholder="Primer n.º de serie" style="font-size:14px;padding:8px;min-width:0;flex:1">
-  <input class="serie-cantidad" type="number" min="1" max="${falta}" placeholder="Cantidad" style="font-size:14px;padding:8px;width:90px">
-  <button type="button" class="btn sec chico btn-generar-series" data-item-id="${i.id}">Generar</button>
-</div>
-          ${Array.from({ length: falta }, (_, k) => `
-  <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
-    <input
-      class="input-serie"
-      data-item-id="${i.id}"
-      placeholder="N.º de serie ${k + 1}"
-      style="flex:1;min-width:0">
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
 
-    <button
-      type="button"
-      class="btn sec chico btn-escanear-serie"
-      data-item-id="${i.id}"
-      data-serie-index="${k}">
-      📷
-    </button>
-  </div>
+  <select class="serie-prefijo" data-item-id="${i.id}"
+    style="font-size:14px;padding:8px">
+    <option value="">Prefijo...</option>
+    <option value="MG22">MG22</option>
+    <option value="MG33">MG33</option>
+    <option value="MG31">MG31</option>
+    <option value="TT18">TT18</option>
+    <option value="otro">Otro</option>
+  </select>
+
+  <input class="serie-inicio" data-item-id="${i.id}"
+    placeholder="Sufijo inicial (ej. SRME0392)"
+    style="font-size:14px;padding:8px;min-width:0;flex:1">
+
+  <input class="serie-cantidad" type="number" min="1"
+    max="${falta}" placeholder="Cantidad"
+    style="font-size:14px;padding:8px;width:90px">
+
+  <button type="button" class="btn sec chico btn-generar-series"
+    data-item-id="${i.id}">Generar</button>
+</div>
+         ${Array.from({ length: falta }, (_, k) => `
+  <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+
+  <select
+    class="serie-prefijo-individual"
+    data-item-id="${i.id}"
+    data-serie-index="${k}"
+    style="font-size:13px;padding:7px">
+    <option value="">Prefijo...</option>
+    <option value="MG22">MG22</option>
+    <option value="MG33">MG33</option>
+    <option value="MG31">MG31</option>
+    <option value="TT18">TT18</option>
+    <option value="otro">Otro</option>
+  </select>
+
+  <input
+    class="input-serie"
+    data-item-id="${i.id}"
+    placeholder="N.º de serie ${k + 1}"
+    style="flex:1;min-width:0">
+
+  <button
+    type="button"
+    class="btn sec chico btn-escanear-serie"
+    data-item-id="${i.id}"
+    data-serie-index="${k}">
+    📷
+  </button>
+</div>
 `).join('')}
-          <button type="button" class="btn chico btn-add-serie" data-item-id="${i.id}" style="margin-top:8px">Guardar números de serie</button></div>` : ''}
-      </td></tr>`;
-        }).join('');
+
+<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+
+  <select
+    class="serie-prefijo-individual"
+    data-item-id="${i.id}"
+    style="font-size:14px;padding:8px">
+    <option value="">Prefijo...</option>
+    <option value="MG22">MG22</option>
+    <option value="MG33">MG33</option>
+    <option value="MG31">MG31</option>
+    <option value="TT18">TT18</option>
+    <option value="otro">Otro</option>
+  </select>
+
+  <button
+    type="button"
+    class="btn chico btn-add-serie"
+    data-item-id="${i.id}"
+    style="margin-top:0">
+    Guardar números de serie
+  </button>
+
+</div></div>` : ''}
+</td></tr>`;
+}).join('');
 
       const haySeries = items.some(i => i.series && i.series.length);
       let acciones = '<button class="btn sec chico" id="volver-dep">← Volver</button>';
@@ -6881,18 +6936,39 @@ c.querySelectorAll('.btn-escanear-serie').forEach(btn => {
       const itemId = btn.dataset.itemId;
       const indice = Number(btn.dataset.serieIndex);
 
-      const campos = [
-        ...c.querySelectorAll(
-          `.input-serie[data-item-id="${itemId}"]`
-        )
-      ];
+      const campo = c.querySelector(
+        `.input-serie[data-item-id="${itemId}"][data-serie-index="${indice}"]`
+      );
 
-      if (campos[indice]) {
-        campos[indice].value = codigo;
-        campos[indice].dispatchEvent(
-          new Event('input', { bubbles: true })
-        );
+      const selector = c.querySelector(
+        `.serie-prefijo-individual[data-item-id="${itemId}"][data-serie-index="${indice}"]`
+      );
+
+      if (!campo) return;
+
+      let numero = codigo.trim().toUpperCase();
+
+      // Si ya viene completo, conservarlo.
+      if (!/^[A-Z0-9]+-.+/.test(numero)) {
+        let prefijo = selector?.value || '';
+
+        if (!prefijo) {
+          return err('Seleccioná el prefijo antes de escanear.');
+        }
+
+        if (prefijo === 'otro') {
+          prefijo = prompt('Ingresá el prefijo para este número:');
+
+          if (!prefijo || !prefijo.trim()) return;
+
+          prefijo = prefijo.trim().toUpperCase();
+        }
+
+        numero = prefijo + '-' + numero;
       }
+
+      campo.value = numero;
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
     });
   };
 });
@@ -6959,52 +7035,126 @@ c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
         if (e) err(esc(e.message)); else detallePedidoDeposito(id);
       });
 
-      c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
-        const itemId = btn.dataset.itemId;
-        const vals = [...c.querySelectorAll(`.input-serie[data-item-id="${itemId}"]`)]
-  .map(x => x.value.trim().toUpperCase())
-  .filter(Boolean);
-        if (!vals.length) return err('Ingresá al menos un número de serie.');
-        if (new Set(vals).size !== vals.length) return err('Hay números de serie repetidos en las casillas.');
-        btn.disabled = true;
-        let msg = '';
-        for (const numero_serie of vals) {
-          const { error: e } = await sb.from('series').insert({ pedido_id: p.id, item_id: itemId, numero_serie, cargado_por: perfil.id });
-          if (e) { msg = e.code === '23505' ? `El n.º de serie ${esc(numero_serie)} ya fue cargado en otro pedido o producto.` : 'Error al guardar: ' + esc(e.message); break; }
-        }
-        await detallePedidoDeposito(id);
-        if (msg) document.getElementById('aviso-dep').innerHTML = `<div class="msg err">${msg}</div>`;
-      });
-      c.querySelectorAll('.btn-generar-series').forEach(btn => {
+c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
+  const itemId = btn.dataset.itemId;
+
+  const campos = [...c.querySelectorAll(
+    `.input-serie[data-item-id="${itemId}"]`
+  )];
+
+  const vals = [];
+
+  for (const campo of campos) {
+    let numero = campo.value.trim().toUpperCase();
+    if (!numero) continue;
+
+    const indice = campo.dataset.serieIndex;
+    const selector = c.querySelector(
+      `.serie-prefijo-individual[data-item-id="${itemId}"][data-serie-index="${indice}"]`
+    );
+
+    let prefijo = selector?.value || '';
+
+    if (/^[A-Z0-9]+-.+/.test(numero)) {
+      vals.push(numero);
+      continue;
+    }
+
+    if (!prefijo) {
+      return err(`Seleccioná el prefijo de la serie ${numero}.`);
+    }
+
+    if (prefijo === 'otro') {
+      prefijo = prompt(`Ingresá el prefijo para ${numero}:`);
+      if (!prefijo || !prefijo.trim()) return;
+      prefijo = prefijo.trim().toUpperCase();
+    }
+
+    vals.push(prefijo + '-' + numero);
+  }
+
+  if (!vals.length) return err('Ingresá al menos un número de serie.');
+
+  if (new Set(vals).size !== vals.length) {
+    return err('Hay números de serie repetidos en las casillas.');
+  }
+
+  btn.disabled = true;
+  let msg = '';
+
+  for (const numero_serie of vals) {
+    const { error: e } = await sb.from('series').insert({
+      pedido_id: p.id,
+      item_id: itemId,
+      numero_serie,
+      cargado_por: perfil.id
+    });
+
+    if (e) {
+      msg = e.code === '23505'
+        ? `El n.º de serie ${esc(numero_serie)} ya fue cargado en otro pedido o producto.`
+        : 'Error al guardar: ' + esc(e.message);
+      break;
+    }
+  }
+
+  await detallePedidoDeposito(id);
+
+  if (msg) {
+    document.getElementById('aviso-dep').innerHTML =
+      `<div class="msg err">${msg}</div>`;
+  }
+}); c.querySelectorAll('.btn-generar-series').forEach(btn => {
   btn.onclick = () => {
     const box = btn.closest('.casillas');
+
+    const selector = box.querySelector('.serie-prefijo');
     const inicio = box.querySelector('.serie-inicio').value.trim().toUpperCase();
     const cantidad = parseInt(box.querySelector('.serie-cantidad').value, 10);
+
     const casillas = [...box.querySelectorAll('.input-serie')];
     const vacias = casillas.filter(inp => !inp.value.trim());
 
-    if (!inicio) return err('Ingresá el primer número de serie.');
+    let prefijo = selector.value;
+
+    if (!prefijo) {
+      return err('Seleccioná un prefijo.');
+    }
+
+    if (prefijo === 'otro') {
+      prefijo = prompt('Ingresá el prefijo que querés utilizar:');
+
+      if (!prefijo || !prefijo.trim()) return;
+
+      prefijo = prefijo.trim().toUpperCase();
+    }
+
+    if (!inicio) {
+      return err('Ingresá el primer sufijo.');
+    }
 
     const match = inicio.match(/^(.*?)(\d+)$/);
 
     if (!match) {
-      return err('El número de serie debe terminar en números. Ejemplo: ABC-000125');
+      return err('El sufijo debe terminar en números. Ejemplo: SRME0392');
     }
 
     if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > vacias.length) {
       return err(`Ingresá una cantidad entre 1 y ${vacias.length}.`);
     }
 
-    const prefijo = match[1];
+    const parteSufijo = match[1];
     const numero = match[2];
     const base = Number(numero);
 
     vacias.slice(0, cantidad).forEach((inp, k) => {
-      inp.value = prefijo + String(base + k).padStart(numero.length, '0');
+      inp.value = prefijo + '-' + parteSufijo +
+        String(base + k).padStart(numero.length, '0');
     });
 
     box.querySelector('.serie-inicio').value = '';
     box.querySelector('.serie-cantidad').value = '';
+    selector.value = '';
   };
 });
       c.querySelectorAll('.casillas').forEach(box => {

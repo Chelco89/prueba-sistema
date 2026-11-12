@@ -8972,7 +8972,15 @@ fila.querySelector('.stock-escanear-serie').onclick = () => {
   const input = fila.querySelector('.stock-unidad-nueva-serie');
 
   escanearCodigoStock(codigo => {
-    input.value = codigo.toUpperCase();
+    console.log('CÓDIGO INTERNO ESCANEADO:', codigo);
+
+    if (!codigo) {
+      alert('El lector no devolvió ningún código.');
+      return;
+    }
+
+    input.value = String(codigo).trim().toUpperCase();
+
     guardarBorradorStockExistente();
   });
 };

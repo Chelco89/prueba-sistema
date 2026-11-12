@@ -8443,14 +8443,9 @@ ${unidad.codigo_exterior
   ? '<small>Este código ya está registrado y no se puede modificar.</small>'
   : ''}
 
-      <label>Números internos registrados</label>
+      <label>Números internos</label>
 
-      <p>
-        ${unidad.stock_unidades_series?.length
-          ? unidad.stock_unidades_series
-              .map(s => esc(s.numero_serie)).join(' · ')
-          : 'Todavía no hay números internos.'}
-      </p>
+<div id="stock-unidad-series-actuales"></div>
 
       <label>Agregar números internos</label>
 
@@ -8510,7 +8505,7 @@ fila.style.alignItems = 'center';
  fila.innerHTML = `
   <select
     class="stock-unidad-prefijo"
-    style="width:100%;min-width:0;box-sizing:border-box;padding:8px 4px"
+    style="width:100%;min-width:0;box-sizing:border-box;padding:8px 4px">
     <option value="">Prefijo...</option>
     <option value="MG22">MG22</option>
     <option value="MG33">MG33</option>
@@ -8599,7 +8594,36 @@ if (botonEscanearExterior) {
     formulario.innerHTML = '';
   };
 
+  const contenedorSeriesActuales = formulario.querySelector(
+  '#stock-unidad-series-actuales'
+);
+
+(unidad.stock_unidades_series || []).forEach(serie => {
   agregarCampoSerie();
+
+  const filas = nuevasSeries.querySelectorAll(
+    ':scope > div'
+  );
+
+  const fila = filas[filas.length - 1];
+  const input = fila.querySelector(
+    '.stock-unidad-nueva-serie'
+  );
+
+  const selector = fila.querySelector('.stock-unidad-prefijo');
+const numeroGuardado = serie.numero_serie.toUpperCase();
+const separador = numeroGuardado.indexOf('-');
+
+if (separador > 0) {
+  const prefijo = numeroGuardado.slice(0, separador);
+  const sufijo = numeroGuardado.slice(separador + 1);
+
+  selector.value = prefijo;
+  input.value = sufijo;
+} else {
+  input.value = numeroGuardado;
+}
+});
     formulario.querySelector(
     '#stock-unidad-guardar'
   ).onclick = async () => {
@@ -8612,13 +8636,42 @@ if (botonEscanearExterior) {
         '#stock-unidad-nuevo-codigo'
       )?.value.trim().toUpperCase() || null;
 
-    const series = [
-      ...formulario.querySelectorAll(
-        '.stock-unidad-nueva-serie'
-      )
-    ]
-      .map(input => input.value.trim().toUpperCase())
-      .filter(Boolean);
+   const series = [
+  ...formulario.querySelectorAll(
+    '#stock-unidad-nuevas-series > div'
+  )
+]
+  .map(fila => {
+    const prefijo = fila.querySelector(
+      '.stock-unidad-prefijo'
+    ).value;
+
+    const input = fila.querySelector(
+      '.stock-unidad-nueva-serie'
+    );
+
+    let numero = input.value.trim().toUpperCase();
+
+    if (!numero) return null;
+
+    // Si ya tiene prefijo completo, conservarlo.
+    if (/^[A-Z0-9]+-.+/.test(numero)) {
+      return numero;
+    }
+
+    let prefijoFinal = prefijo;
+
+    if (prefijoFinal === 'otro') {
+      return numero;
+    }
+
+    if (prefijoFinal) {
+      numero = prefijoFinal + '-' + numero;
+    }
+
+    return numero;
+  })
+  .filter(Boolean);
 
     if (!codigoExterior && !series.length) {
       aviso.innerHTML =
@@ -8634,12 +8687,11 @@ if (botonEscanearExterior) {
     boton.textContent = 'Guardando...';
 
     const { error } = await sb.rpc(
-      'completar_identificacion_unidad',
-      {
-        p_unidad_id: unidad.id,
-        p_codigo_exterior: codigoExterior,
-        p_series: series
-      }
+      'editar_series_unidad',
+     {
+  p_unidad_id: unidad.id,
+  p_series: series
+}
     );
 
     if (error) {

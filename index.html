@@ -6585,7 +6585,21 @@ if (
       const completo = i =>
         i.es_kit === true || prep(i) >= Number(i.cantidad);
       const req = i => i.series_requeridas ?? Math.ceil(i.cantidad);
-      const faltaSerie = i => i.lleva_serie ? Math.max(0, req(i) - (i.series || []).length) : 0;
+const faltaSerie = i => i.lleva_serie ? Math.max(0, req(i) - (i.series || []).length) : 0;
+
+const productoUnidadEspecial = i => {
+  const nombre = (i.producto || '').trim().toUpperCase();
+
+  return [
+    'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA',
+    'KIT 4TASGV',
+    'KIT 5+SGV',
+    'KIT 48+SGV',
+    'KIT BLUE SGV',
+    'KIT 6 CIL SGV',
+    'KIT 8 CIL SGV'
+  ].includes(nombre);
+};
 
       const filas = editando
         ? `<tr><td><div style="display:grid;grid-template-columns:1fr 80px 36px;gap:8px;font-size:12px;font-weight:600;color:var(--gris)"><span>PRODUCTO</span><span>CANT.</span><span></span></div>
@@ -6608,6 +6622,7 @@ if (
         </tr>`;
           }
           const ser = i.series || [], falta = faltaSerie(i);
+          const unidadEspecial = productoUnidadEspecial(i);
           const chips = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}${abierto ? `<button type="button" class="del-serie" data-id="${s.id}" title="Quitar" style="background:none;border:0;color:var(--rojo);cursor:pointer;padding:0 0 0 6px">✕</button>` : ''}</span>`).join('') : '<small class="series">Sin números de serie</small>';
           return `<tr><td style="${i.padre_item_id
   ? 'padding:9px 12px 9px 36px;border-left:3px solid #cbd5e1;background:#fafbfd;color:#64748b;font-size:13px;'
@@ -6623,6 +6638,44 @@ if (
           <label style="margin:0;font-size:14px">¿Cuántos n.º de serie cargar?</label>
           <input type="number" class="inp-req" data-item-id="${i.id}" min="0" step="1" value="${req(i)}" style="width:80px;padding:6px"></div>` : ''}
         <div class="lista-series">${chips}</div>
+        ${abierto && unidadEspecial ? `
+  <div class="item-form" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+    <input
+      type="text"
+      class="unidad-codigo-exterior"
+      data-item-id="${i.id}"
+      placeholder="Código exterior"
+      style="flex:1;min-width:150px;padding:9px">
+
+    <button
+      type="button"
+      class="btn sec chico btn-escanear-unidad"
+      data-item-id="${i.id}">
+      📷 Escanear unidad
+    </button>
+  </div>
+
+  <div class="unidad-series" data-item-id="${i.id}">
+    ${Array.from({
+      length: i.producto.trim().toUpperCase() === 'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2
+    }, (_, k) => `
+      <input
+        type="text"
+        class="unidad-serie-interna"
+        data-item-id="${i.id}"
+        placeholder="Número interno ${k + 1}"
+        style="width:100%;padding:9px;margin-top:6px">
+    `).join('')}
+
+    <button
+      type="button"
+      class="btn chico btn-reservar-unidad"
+      data-item-id="${i.id}"
+      style="margin-top:8px">
+      Guardar y reservar unidad
+    </button>
+  </div>
+` : ''}
         ${abierto && falta > 0 ? `<div class="casillas" data-item-id="${i.id}">
           <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
   <input class="serie-inicio" data-item-id="${i.id}" placeholder="Primer n.º de serie" style="font-size:14px;padding:8px;min-width:0;flex:1">
@@ -6728,6 +6781,127 @@ if (
       }
 
       /* ---- MODO PREPARACIÓN ---- */
+      // Escáner de unidades físicas para los kits especiales.
+c.querySelectorAll('.btn-escanear-unidad').forEach(btn => {
+  btn.onclick = () => {
+    escanearCodigoStock(async codigo => {
+      const itemId = btn.dataset.itemId;
+
+      const campo = c.querySelector(
+        `.unidad-codigo-exterior[data-item-id="${itemId}"]`
+      );
+
+      if (campo) campo.value = codigo;
+
+      const item = items.find(i => Number(i.id) === Number(itemId));
+      if (!item) return;
+
+      const idsProductos = {
+        'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA': 37,
+        'KIT 4TASGV': 116,
+        'KIT 5+SGV': 117,
+        'KIT 48+SGV': 118,
+        'KIT BLUE SGV': 119,
+        'KIT 6 CIL SGV': 139,
+        'KIT 8 CIL SGV': 140
+      };
+
+      const nombre = item.producto.trim().toUpperCase();
+      const productoId = idsProductos[nombre];
+
+      const { data: unidad, error: errorUnidad } = await sb
+        .from('stock_unidades_serializadas')
+        .select('id, producto_id, estado')
+        .eq('codigo_exterior', codigo)
+        .maybeSingle();
+
+      if (errorUnidad) {
+        return err('No se pudo consultar la unidad: ' + esc(errorUnidad.message));
+      }
+
+      if (!unidad) {
+        return err('Código exterior no registrado. Completá los números internos manualmente.');
+      }
+
+      if (Number(unidad.producto_id) !== productoId) {
+        if (campo) campo.value = '';
+        return err('Ese código exterior pertenece a otro producto.');
+      }
+
+      const { data: numeros, error: errorSeries } = await sb
+        .from('stock_unidades_series')
+        .select('numero_serie')
+        .eq('unidad_id', unidad.id)
+        .order('id');
+
+      if (errorSeries) {
+        return err('No se pudieron recuperar los números internos: ' + esc(errorSeries.message));
+      }
+
+      const campos = [
+        ...c.querySelectorAll(
+          `.unidad-serie-interna[data-item-id="${itemId}"]`
+        )
+      ];
+
+      campos.forEach((input, k) => {
+        input.value = numeros?.[k]?.numero_serie || '';
+      });
+
+      if (unidad.estado !== 'disponible') {
+        return err('La unidad ya está ' + unidad.estado + '. El sistema no permitirá reservarla nuevamente.');
+      }
+
+      if (!numeros || numeros.length === 0) {
+        return err('Unidad encontrada, pero todavía no tiene números internos cargados.');
+      }
+    });
+  };
+});
+// Guardar identificación y reservar unidad física.
+c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
+  btn.onclick = async () => {
+    const itemId = btn.dataset.itemId;
+
+    const codigo = c.querySelector(
+      `.unidad-codigo-exterior[data-item-id="${itemId}"]`
+    )?.value.trim().toUpperCase() || null;
+
+    const series = [
+      ...c.querySelectorAll(
+        `.unidad-serie-interna[data-item-id="${itemId}"]`
+      )
+    ].map(x => x.value.trim().toUpperCase());
+
+    if (!codigo && series.every(x => !x)) {
+      return err('Escaneá el código exterior o ingresá los números internos.');
+    }
+
+    if (series.some(x => !x)) {
+      return err('Completá todos los números internos de la unidad.');
+    }
+
+    btn.disabled = true;
+
+    const { data, error: e } = await sb.rpc(
+      'reservar_unidad_serializada',
+      {
+        p_pedido_item_id: Number(itemId),
+        p_codigo_exterior: codigo,
+        p_series: series
+      }
+    );
+
+    if (e) {
+      btn.disabled = false;
+      return err(esc(e.message));
+    }
+
+    await detallePedidoDeposito(id);
+    document.getElementById('aviso-dep').innerHTML =
+      '<div class="msg">Unidad física identificada y reservada correctamente.</div>';
+  };
+});
       const bEditar = document.getElementById('editar'); if (bEditar) bEditar.onclick = () => detallePedidoDeposito(id, true);
 
       c.querySelectorAll('.chk-lleva').forEach(chk => chk.onchange = () => actualizarItem(chk.dataset.itemId, { lleva_serie: chk.checked }));
@@ -8129,31 +8303,47 @@ console.log(
     '#stock-unidad-nuevas-series'
   );
 
-  function agregarCampoSerie() {
-    const fila = document.createElement('div');
+ 
+function agregarCampoSerie() {
+  const fila = document.createElement('div');
 
-    fila.style.display = 'flex';
-    fila.style.gap = '8px';
-    fila.style.marginBottom = '8px';
+  fila.style.display = 'flex';
+  fila.style.gap = '8px';
+  fila.style.marginBottom = '8px';
 
-    fila.innerHTML = `
-      <input
-        type="text"
-        class="stock-unidad-nueva-serie"
-        placeholder="Número interno"
-        style="flex:1">
+  fila.innerHTML = `
+    <input
+      type="text"
+      class="stock-unidad-nueva-serie"
+      placeholder="Número interno"
+      style="flex:1;min-width:0">
 
-      <button
-        type="button"
-        class="btn sec chico">
-        Quitar
-      </button>
-    `;
+    <button
+      type="button"
+      class="btn sec chico stock-escanear-serie">
+      📷
+    </button>
 
-    fila.querySelector('button').onclick = () => fila.remove();
+    <button
+      type="button"
+      class="btn sec chico">
+      Quitar
+    </button>
+  `;
 
-    nuevasSeries.appendChild(fila);
-  }
+  fila.querySelector('.stock-escanear-serie').onclick = () => {
+    const input = fila.querySelector('.stock-unidad-nueva-serie');
+
+    escanearCodigoStock(codigo => {
+      input.value = codigo;
+    });
+  };
+
+  fila.querySelectorAll('button')[1].onclick = () => fila.remove();
+
+  nuevasSeries.appendChild(fila);
+}
+
 
   formulario.querySelector(
     '#stock-unidad-agregar-serie'

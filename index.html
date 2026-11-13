@@ -8430,37 +8430,46 @@ function agregarFilaIngresoStock() {
     >
 
     <div class="stock-ingreso-series" style="display:none;margin-top:12px">
-      <p><b>Identificación de unidades</b></p>
-      <p class="vacio stock-ingreso-ayuda">
-        Completá la identificación de cada unidad.
-      </p>
-      <div class="stock-ingreso-generador" style="display:none">
-        <label>Prefijo</label>
-        <select class="stock-unidad-prefijo">
-          <option value="">Prefijo...</option>
-          <option value="MG22">MG22</option>
-          <option value="MG33">MG33</option>
-          <option value="MG31">MG31</option>
-          <option value="TT18">TT18</option>
-          <option value="otro">Otro</option>
-        </select>
+  <p><b>Identificación de unidades</b></p>
 
-        <label>Número inicial</label>
-        <input
-          type="number"
-          class="stock-regulador-numero-inicial"
-          min="0"
-          step="1"
-          placeholder="Ej.: 1001"
-        >
+  <div class="stock-ingreso-generador" style="display:none">
+    <label>Prefijo</label>
+    <select class="stock-unidad-prefijo">
+      <option value="">Prefijo...</option>
+      <option value="MG22">MG22</option>
+      <option value="MG33">MG33</option>
+      <option value="MG31">MG31</option>
+      <option value="TT18">TT18</option>
+      <option value="otro">Otro</option>
+    </select>
 
-        <button type="button"
-          class="btn chico sec stock-generar-series">
-          Generar series correlativas
-        </button>
-      </div>
-      <div class="stock-ingreso-unidades"></div>
-    </div>
+    <label>Número inicial</label>
+<input
+  type="text"
+  class="stock-regulador-numero-inicial"
+  placeholder="Ej.: AB1001"
+>
+<label>Cantidad de series a generar</label>
+<input
+  type="number"
+  class="stock-regulador-cantidad-series"
+  min="1"
+  step="1"
+  placeholder="Ej.: 10"
+>
+
+    <button type="button"
+      class="btn chico sec stock-generar-series">
+      Generar series correlativas
+    </button>
+  </div>
+
+  <p class="vacio stock-ingreso-ayuda">
+    Completá la identificación de cada unidad.
+  </p>
+
+  <div class="stock-ingreso-unidades"></div>
+</div>
 
     <button type="button"
       class="btn chico sec stock-ingreso-quitar">
@@ -8510,16 +8519,14 @@ function agregarFilaIngresoStock() {
       unidad.innerHTML = `
         <b>Unidad ${i + 1}</b>
 
-        ${esRegulador5ta ? `
-          <p class="stock-regulador-serie-generada vacio">
-            Serie todavía no generada.
-          </p>
-          <input
-            type="hidden"
-            class="stock-unidad-numero-serie"
-            value=""
-          >
-        ` : `
+    ${esRegulador5ta ? `
+  <label>Serie interna</label>
+  <input
+    type="text"
+    class="stock-unidad-numero-serie"
+    placeholder="Escribir o escanear serie"
+  >
+` : `
           <label>Código exterior (opcional)</label>
           <input
             type="text"
@@ -8579,48 +8586,84 @@ function agregarFilaIngresoStock() {
     }
   }
 
-  fila.querySelector('.stock-generar-series').onclick = () => {
-    const prefijo = fila.querySelector('.stock-unidad-prefijo').value;
-    const numeroInicial = Number(
-      fila.querySelector('.stock-regulador-numero-inicial').value
-    );
-
-    const unidades = [
-      ...fila.querySelectorAll('.stock-ingreso-unidad')
-    ];
-
-    if (!prefijo) {
-      alert('Seleccioná un prefijo.');
-      return;
-    }
-
-    if (
-      !Number.isSafeInteger(numeroInicial) ||
-      numeroInicial < 0
-    ) {
-      alert('Ingresá un número inicial válido.');
-      return;
-    }
-
-    if (!unidades.length) {
-      alert('Ingresá primero la cantidad de unidades.');
-      return;
-    }
-
-    const prefijoTexto = prefijo === 'otro' ? '' : prefijo;
-
-    unidades.forEach((unidad, i) => {
-      const serie = prefijoTexto + String(numeroInicial + i).padStart(4, '0');
-
-      unidad.querySelector('.stock-unidad-numero-serie').value = serie;
-      unidad.querySelector('.stock-regulador-serie-generada').textContent =
-        'Serie: ' + serie;
-    });
-  };
+  
 
   productoSelect.onchange = actualizarUnidadesSerializadas;
   cantidadInput.onchange = actualizarUnidadesSerializadas;
+ fila.querySelector('.stock-generar-series').onclick = () => {
+  const prefijo = fila.querySelector('.stock-unidad-prefijo').value;
+  const inicial = fila.querySelector(
+    '.stock-regulador-numero-inicial'
+  ).value.trim();
 
+  const cantidadSeries = Number(
+    fila.querySelector('.stock-regulador-cantidad-series').value
+  );
+
+  if (!prefijo) {
+    alert('Seleccioná un prefijo.');
+    return;
+  }
+
+  if (!inicial) {
+    alert('Ingresá la serie inicial.');
+    return;
+  }
+
+  if (!Number.isInteger(cantidadSeries) || cantidadSeries <= 0) {
+    alert('Ingresá una cantidad de series válida.');
+    return;
+  }
+
+  // Separa el texto inicial de los números finales.
+  const coincidencia = inicial.match(/^(.*?)(\d+)$/);
+
+  if (!coincidencia) {
+    alert('La serie inicial debe terminar en números. Ejemplo: AB1001.');
+    return;
+  }
+
+  const parteTexto = coincidencia[1];
+  const parteNumerica = coincidencia[2];
+  const numero = Number(parteNumerica);
+
+  if (!Number.isSafeInteger(numero)) {
+    alert('El número de la serie inicial es demasiado grande.');
+    return;
+  }
+
+  const prefijoTexto = prefijo === 'otro' ? '' : prefijo;
+
+  const unidades = [
+    ...fila.querySelectorAll('.stock-ingreso-unidad')
+  ];
+
+  const unidadesSinSerie = unidades.filter(unidad =>
+    !unidad.querySelector('.stock-unidad-numero-serie').value.trim()
+  );
+
+  if (unidadesSinSerie.length < cantidadSeries) {
+    alert(
+      `Hay ${unidadesSinSerie.length} unidades sin serie. ` +
+      `No alcanza para generar ${cantidadSeries} series. ` +
+      `Agregá unidades al ingreso o reducí la cantidad.`
+    );
+    return;
+  }
+
+  unidadesSinSerie.slice(0, cantidadSeries).forEach((unidad, i) => {
+    const correlativo = String(numero + i).padStart(
+      parteNumerica.length,
+      '0'
+    );
+
+    const serie = prefijoTexto + parteTexto + correlativo;
+
+    unidad.querySelector('.stock-unidad-numero-serie').value = serie;
+  });
+
+  alert(`${cantidadSeries} series generadas correctamente.`);
+};
   fila.querySelector('.stock-ingreso-quitar').onclick = () => {
     fila.remove();
   };
@@ -9787,7 +9830,9 @@ if (!numero.trim() || !fechaValida) {
       ...document.querySelectorAll('.stock-ingreso-fila')
     ];
 
-    const items = filas.map(fila => {
+    let errorSeries = false;
+
+const items = filas.map(fila => {
   const productoSelect = fila.querySelector('.stock-ingreso-producto');
 
   const llevaSerie =
@@ -9795,33 +9840,46 @@ if (!numero.trim() || !fechaValida) {
 
   const item = {
     producto_id: Number(productoSelect.value),
-    cantidad: Number(fila.querySelector('.stock-ingreso-cantidad').value)
+    cantidad: Number(
+      fila.querySelector('.stock-ingreso-cantidad').value
+    )
   };
 
- if (llevaSerie) {
- 
-item.unidades = [
-  ...fila.querySelectorAll('.stock-ingreso-unidad')
-]
-  .map(unidad => ({
-    codigo_exterior:
-      unidad.querySelector('.stock-unidad-codigo-exterior')
-        ?.value.trim().toUpperCase() || null,
-
-    series: [
-      ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+  if (llevaSerie) {
+    item.unidades = [
+      ...fila.querySelectorAll('.stock-ingreso-unidad')
     ]
-      .map(input => input.value.trim().toUpperCase())
-      .filter(Boolean)
-  }))
-  .filter(unidad =>
-    unidad.codigo_exterior || unidad.series.length > 0
-  );
+      .map(unidad => ({
+        codigo_exterior:
+          unidad.querySelector('.stock-unidad-codigo-exterior')
+            ?.value.trim().toUpperCase() || null,
 
-}
+        series: [
+          ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+        ]
+          .map(input => input.value.trim().toUpperCase())
+          .filter(Boolean)
+      }))
+      .filter(unidad =>
+        unidad.codigo_exterior || unidad.series.length > 0
+      );
+
+    if (
+      item.producto_id === 55 &&
+      item.unidades.length !== item.cantidad
+    ) {
+      errorSeries = true;
+    }
+  }
 
   return item;
 });
+
+if (errorSeries) {
+  aviso.innerHTML =
+    '<div class="msg err">Para REGULADOR 5TA, la cantidad de series cargadas debe coincidir con la cantidad de unidades ingresadas.</div>';
+  return;
+}
 
   if (
   !items.length ||

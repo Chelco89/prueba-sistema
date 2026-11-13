@@ -508,7 +508,31 @@
       align-items: center;
       gap: 8px;
     }
+.ventas-solapas {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid #EAECF0;
+  padding-bottom: 10px;
+}
 
+.ventas-solapa {
+  flex: 1;
+  padding: 10px 6px;
+  border: 1px solid #EAECF0;
+  border-radius: 8px;
+  background: #F8FAFC;
+  color: #344054;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ventas-solapa.activa {
+  background: #1565B8;
+  color: #fff;
+  border-color: #1565B8;
+}
     .grid-dash {
       display: grid;
       grid-template-columns: 380px 1fr;
@@ -943,6 +967,7 @@ let pedidoDepositoEditando = false;
 let cajaPanelActivo = null;
 let cuentaCorrienteActiva = null;
 let stockTabActiva = 'ingreso';
+let ventasTabActiva = 'pedido';
 let stockScroll = 0;
 
 function guardarEstadoNavegacion() {
@@ -956,6 +981,7 @@ function guardarEstadoNavegacion() {
      cajaPanelActivo,
 cuentaCorrienteActiva,
 stockTabActiva,
+ventasTabActiva,
 stockScroll: window.scrollY
     }));
   } catch (error) {
@@ -983,6 +1009,7 @@ function recuperarEstadoNavegacion() {
       cajaPanelActivo = estado.cajaPanelActivo || null;
       cuentaCorrienteActiva = estado.cuentaCorrienteActiva || null;
       stockTabActiva = estado.stockTabActiva || 'ingreso';
+      ventasTabActiva = estado.ventasTabActiva || 'pedido';
 stockScroll = Number(estado.stockScroll) || 0;
     }
   } catch (error) {
@@ -2432,11 +2459,11 @@ async function verCuentaCorriente(id) {
   });
 
   const nombresTipo = {
-    cargo: 'Entrega de mercaderia',
-    pago: 'Pago',
-    ajuste_debito: 'Ajuste débito',
-    ajuste_credito: 'Ajuste crédito'
-  };
+  cargo: 'Entrega de mercadería',
+  pago: 'Pago',
+  ajuste_debito: 'Ajuste débito',
+  ajuste_credito: 'Ajuste crédito'
+};
 
   // Buscar los presupuestos asociados a los movimientos.
   const idsPedidos = [...new Set(
@@ -2580,29 +2607,40 @@ const observacionesLimpias = observacionOriginal
   .replace(/\bRC-\d{6}\b/ig, '')
   .trim();
 
-const comprobante = pedido
-  ? `<button type="button"
-       class="btn chico cc-presupuesto-link"
-       data-pedido-id="${esc(String(pedido.id))}">
-       Presupuesto ${esc(fmtRemito(pedido.numero_remito))}
-     </button>`
-  : numeroRecibo
-    ? esc(numeroRecibo)
-    : m.pedido_id
-      ? `Pedido #${esc(String(m.pedido_id))}`
-      : '—';
+const referenciaNota = String(m.referencia || '').match(/\bN[DC]-\d{6,}\b/i);
+const numeroNota = referenciaNota
+  ? referenciaNota[0].toUpperCase()
+  : null;
+
+const comprobante = numeroNota
+  ? esc(numeroNota)
+  : pedido
+    ? `<button type="button"
+         class="btn chico cc-presupuesto-link"
+         data-pedido-id="${esc(String(pedido.id))}">
+         Presupuesto ${esc(fmtRemito(pedido.numero_remito))}
+       </button>`
+    : numeroRecibo
+      ? esc(numeroRecibo)
+      : m.pedido_id
+        ? `Pedido #${esc(String(m.pedido_id))}`
+        : '—';
 
 const movimientoTexto = m.referencia === 'SALDO_INICIAL'
   ? 'Saldo inicial'
-  : m.tipo === 'pago'
-    ? `Pago${m.medio_pago ? ' · ' + ({
-        efectivo: 'Efectivo',
-        cheque: 'Cheque',
-        echeq: 'E-cheq',
-        transferencia: 'Transferencia',
-        otro: 'Otro'
-      }[String(m.medio_pago).toLowerCase()] || m.medio_pago) : ''}`
-    : (nombresTipo[m.tipo] || m.tipo);
+  : numeroNota
+    ? (numeroNota.startsWith('ND-')
+        ? 'Nota de débito'
+        : 'Nota de crédito')
+    : m.tipo === 'pago'
+      ? `Pago${m.medio_pago ? ' · ' + ({
+          efectivo: 'Efectivo',
+          cheque: 'Cheque',
+          echeq: 'E-cheq',
+          transferencia: 'Transferencia',
+          otro: 'Otro'
+        }[String(m.medio_pago).toLowerCase()] || m.medio_pago) : ''}`
+      : (nombresTipo[m.tipo] || m.tipo);
 
 return `
   <tr>
@@ -3910,8 +3948,15 @@ document.getElementById('btn-mostrar-echeqs').addEventListener('click', async ()
     await cargarCarteraCheques('echeq');
   }
 });
-document.getElementById('btn-mostrar-banco-mega').addEventListener('click', () => {
+document.getElementById('btn-mostrar-banco-mega').addEventListener('click', async () => {
   alternarPanelCaja('caja-panel-banco-mega');
+
+  const panel = document.getElementById('caja-panel-banco-mega');
+
+  if (!panel.hidden) {
+    await cargarResumenCaja();
+    await cargarHistorialBanco(1, 'caja-mega-historial', 'Banco Mega');
+  }
 });
 
 document.getElementById('btn-mostrar-banco-particular').addEventListener('click', () => {
@@ -5394,7 +5439,7 @@ async function cargarCarteraCheques(tipo = null) {
       .from('caja_cobros')
       .select('id,cliente_id')
       .in('id', cobroIds);
-      console.log('HISTORIAL: cobrosMap listo', cobrosMap.size);
+      
 
     if (errorCobros) {
       aviso.innerHTML =
@@ -5558,10 +5603,11 @@ const nombres = new Map(
         return;
       }
 
-      if (!confirm(
-        `¿Confirmás el rechazo del instrumento ${id}?\n\n` +
-        `Gasto bancario adicional al cliente: ${dinero(gasto)}`
-      )) return;
+    if (!confirm(
+  `¿Confirmás el rechazo del instrumento ${id}?\n\n` +
+  `Se creará una nota de débito pendiente de confirmación.\n` +
+  `Gasto bancario adicional: ${dinero(gasto)}`
+)) return;
 
       b.disabled = true;
 
@@ -5577,7 +5623,7 @@ const nombres = new Map(
         return;
       }
 
-      alert('Instrumento rechazado correctamente.');
+     alert('Instrumento rechazado. Se creó una nota de débito pendiente de confirmación en la sección Notas.');
 
       await cargarCarteraCheques();
       await cargarHistorialCaja();
@@ -5612,10 +5658,10 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
     }
 
     if (!confirm(
-      `¿Confirmás el rechazo del valor inicial ${id}?\n\n` +
-      `Cargo al cliente: importe del instrumento.\n` +
-      `Gasto bancario adicional: ${dinero(gasto)}`
-    )) return;
+  `¿Confirmás el rechazo del valor inicial ${id}?\n\n` +
+  `Se creará una nota de débito pendiente de confirmación.\n` +
+ `Gasto bancario adicional: ${dinero(gasto)}`
+)) return;
 
     b.disabled = true;
 
@@ -5631,7 +5677,7 @@ contenedor.querySelectorAll('.caja-rechazar-inicial').forEach(b => {
       return;
     }
 
-    alert('Valor inicial rechazado y cargo registrado en Cuenta Corriente.');
+   alert('Valor inicial rechazado. Se creó una nota de débito pendiente de confirmación en la sección Notas.');
 
     await cargarCarteraCheques();
     await cargarHistorialCaja();
@@ -6045,10 +6091,11 @@ try {
       return;
     }
 
-    if (!confirm(
-      `¿Confirmás el rechazo del instrumento ${id}?\n\n` +
-      `Gasto bancario adicional al cliente: ${dinero(gasto)}`
-    )) return;
+  if (!confirm(
+  `¿Confirmás el rechazo del instrumento ${id}?\n\n` +
+  `Se creará una nota de débito pendiente de confirmación.\n` +
+  `Gasto bancario adicional: ${dinero(gasto)}`
+)) return;
 
     b.disabled = true;
 
@@ -9939,7 +9986,48 @@ document.getElementById('stock-filtro-pendientes').value = '';
       Gestión de notas internas de débito y crédito.
     </p>
 
-    <div id="notas-pendientes"></div>
+    <div class="panel" style="margin-top:15px">
+  <h4>Nueva nota interna</h4>
+
+  <form id="form-nota">
+    <label>Tipo de nota</label>
+    <select id="nota-tipo" required>
+      <option value="ND">Nota de débito</option>
+      <option value="NC">Nota de crédito</option>
+    </select>
+
+    <label>Cliente</label>
+    <select id="nota-cliente" required>
+      <option value="">Cargando clientes...</option>
+    </select>
+
+    <label>Fecha</label>
+    <input type="date" id="nota-fecha" required>
+
+    <label>Motivo</label>
+    <input type="text" id="nota-motivo" maxlength="200" required>
+
+    <label>Detalle</label>
+    <textarea id="nota-detalle" rows="3"></textarea>
+
+    <label>Importe</label>
+    <input type="number" id="nota-importe" min="0.01" step="0.01" required>
+
+    <label>Referencia del documento original (opcional)</label>
+    <input type="text" id="nota-referencia" maxlength="150">
+
+    <button type="submit" class="btn">Emitir nota</button>
+    <div id="nota-aviso" style="margin-top:10px"></div>
+  </form>
+</div>
+<div class="panel" style="margin-top:15px">
+  <h4>Historial de notas emitidas</h4>
+  <div id="notas-historial">
+    <p>Cargando historial...</p>
+  </div>
+</div>
+
+<div id="notas-pendientes"></div>
   </div>
       </div>
       <div>
@@ -9992,14 +10080,370 @@ document.getElementById('stock-filtro-pendientes').value = '';
           );
         }
       }
+// Cargar clientes en el selector de Notas
+const selectorNotaCliente = document.getElementById('nota-cliente');
 
+if (selectorNotaCliente) {
+  selectorNotaCliente.innerHTML =
+    '<option value="">Seleccioná un cliente</option>' +
+    clientesActivos.map(cl => `
+      <option value="${cl.id}">${esc(cl.nombre)}</option>
+    `).join('');
+}
       const toggleForm = document.getElementById('toggle-form');
       const colForm = document.getElementById('col-form');
 
       if (toggleForm && colForm) {
         toggleForm.onclick = () => colForm.classList.toggle('abierto');
       }
+      const botonesSolapa = document.querySelectorAll('.ventas-solapa');
+      const panelPedido = document.getElementById('panel-nuevo-pedido');
+      const panelNotas = document.getElementById('panel-notas');
 
+      botonesSolapa.forEach(boton => {
+        boton.onclick = () => {
+          const mostrarNotas = boton.dataset.solapa === 'notas';
+          ventasTabActiva = boton.dataset.solapa;
+
+          panelPedido.hidden = mostrarNotas;
+          panelNotas.hidden = !mostrarNotas;
+
+          botonesSolapa.forEach(b =>
+            b.classList.toggle('activa', b === boton)
+          );
+        };
+      });
+      const botonVentasGuardado = document.querySelector(
+  `.ventas-solapa[data-solapa="${ventasTabActiva}"]`
+);
+
+if (botonVentasGuardado) {
+  botonVentasGuardado.click();
+}
+      // Clientes habilitados para notas de débito y crédito.
+const selectorClienteNota = document.getElementById('nota-cliente');
+
+if (selectorClienteNota) {
+  const { data: clientesNota, error: errorClientesNota } = await sb
+    .from('clientes')
+    .select('id,nombre')
+    .eq('activo', true)
+    .eq('tiene_cuenta_corriente', true)
+    .order('nombre');
+
+  if (errorClientesNota) {
+    selectorClienteNota.innerHTML =
+      '<option value="">Error al cargar clientes</option>';
+    console.error('Error al cargar clientes para notas:', errorClientesNota);
+  } else {
+    selectorClienteNota.innerHTML =
+      '<option value="">Seleccioná un cliente</option>' +
+      (clientesNota || []).map(cl => `
+        <option value="${cl.id}">${esc(cl.nombre)}</option>
+      `).join('');
+  }
+}
+const formNota = document.getElementById('form-nota');
+const fechaNota = document.getElementById('nota-fecha');
+
+if (fechaNota) {
+  fechaNota.value = new Date().toLocaleDateString('en-CA');
+}
+
+if (formNota) {
+  formNota.onsubmit = async e => {
+    e.preventDefault();
+    const tipoNota = document.getElementById('nota-tipo').value;
+const nombreTipo = tipoNota === 'ND'
+  ? 'Nota de Débito'
+  : 'Nota de Crédito';
+
+const confirmar = confirm(
+  `¿Está seguro de emitir esta ${nombreTipo}?\n\n` +
+  'Se asignará un número correlativo y se registrará el movimiento en Cuenta Corriente.'
+);
+
+if (!confirmar) return;
+
+    const boton = formNota.querySelector('[type="submit"]');
+    const aviso = document.getElementById('nota-aviso');
+
+    boton.disabled = true;
+    boton.textContent = 'Emitiendo...';
+    aviso.textContent = '';
+
+    try {
+      const { data, error } = await sb.rpc('crear_y_emitir_nota', {
+        p_tipo: document.getElementById('nota-tipo').value,
+        p_cliente_id: Number(document.getElementById('nota-cliente').value),
+        p_fecha: document.getElementById('nota-fecha').value,
+        p_motivo: document.getElementById('nota-motivo').value.trim(),
+        p_detalle: document.getElementById('nota-detalle').value.trim() || null,
+        p_importe: Number(document.getElementById('nota-importe').value),
+        p_referencia_original: document.getElementById('nota-referencia').value.trim() || null
+      });
+
+      if (error) throw error;
+
+      aviso.innerHTML =
+  `<div class="msg ok">
+    ${esc(data.numero)} emitida correctamente. 
+    Se registró el movimiento en Cuenta Corriente.
+  </div>`;
+
+      formNota.reset();
+
+    } catch (error) {
+      console.error('Error al emitir nota:', error);
+      aviso.innerHTML =
+        `<div class="msg err">${esc(error.message || 'No se pudo emitir la nota.')}</div>`;
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Emitir nota';
+    }
+  };
+}
+async function cargarNotasPendientes() {
+  const contenedor = document.getElementById('notas-pendientes');
+  if (!contenedor) return;
+
+  contenedor.innerHTML = '<p>Cargando notas...</p>';
+
+  try {
+    const { data: notas, error } = await sb
+      .from('notas_credito_debito')
+      .select('id, tipo, numero, cliente_id, fecha, motivo, detalle, importe, estado')
+      .eq('estado', 'pendiente')
+      .order('creado_en', { ascending: false });
+
+    if (error) throw error;
+
+    if (!notas || notas.length === 0) {
+      contenedor.innerHTML = '<p>No hay notas pendientes.</p>';
+      return;
+    }
+
+    const idsClientes = [...new Set(notas.map(n => n.cliente_id))];
+
+    const { data: clientesNotas, error: errorClientes } = await sb
+      .from('clientes')
+      .select('id, nombre')
+      .in('id', idsClientes);
+
+    if (errorClientes) throw errorClientes;
+
+    const nombresClientes = Object.fromEntries(
+      (clientesNotas || []).map(c => [c.id, c.nombre])
+    );
+
+    contenedor.innerHTML = `
+      <h4>Notas pendientes</h4>
+      ${notas.map(n => `
+        <div class="panel" style="margin-top:10px">
+          <strong>${n.tipo === 'ND' ? 'Nota de débito' : 'Nota de crédito'}</strong>
+          <p>Cliente: ${esc(nombresClientes[n.cliente_id] || 'Sin nombre')}</p>
+          <p>Fecha: ${esc(n.fecha)}</p>
+          <p>Motivo: ${esc(n.motivo)}</p>
+          <p>Importe: $ ${Number(n.importe).toFixed(2)}</p>
+          <p>Estado: ${esc(n.estado)}</p>
+        </div>
+      `).join('')}
+    `;
+
+  } catch (error) {
+    console.error('Error al cargar notas pendientes:', error);
+    contenedor.innerHTML =
+      '<p class="msg err">No se pudieron cargar las notas pendientes.</p>';
+  }
+}
+async function cargarHistorialNotas() {
+  const contenedor = document.getElementById('notas-historial');
+  if (!contenedor) return;
+  contenedor.onclick = (evento) => {
+  const boton = evento.target.closest('.btn-imprimir-nota');
+  if (!boton) return;
+
+  imprimirNotaInterna(Number(boton.dataset.notaId));
+};
+  const dineroNota = valor => Number(valor || 0).toLocaleString('es-AR', {
+  style: 'currency',
+  currency: 'ARS'
+});
+
+  contenedor.innerHTML = '<p>Cargando historial...</p>';
+
+  try {
+    const { data: notas, error } = await sb
+      .from('notas_credito_debito')
+      .select('id, tipo, numero, cliente_id, fecha, motivo, detalle, importe, estado')
+      .in('estado', ['emitida', 'cancelada'])
+      .order('creado_en', { ascending: false });
+
+    if (error) throw error;
+
+    if (!notas || notas.length === 0) {
+      contenedor.innerHTML = '<p>Todavía no hay notas emitidas.</p>';
+      return;
+    }
+
+    const idsClientes = [...new Set(notas.map(n => n.cliente_id))];
+
+    const { data: clientesNotas, error: errorClientes } = await sb
+      .from('clientes')
+      .select('id, nombre')
+      .in('id', idsClientes);
+
+    if (errorClientes) throw errorClientes;
+
+    const nombresClientes = Object.fromEntries(
+      (clientesNotas || []).map(c => [c.id, c.nombre])
+    );
+
+    contenedor.innerHTML = `
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Comprobante</th>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Motivo</th>
+              <th>Importe</th>
+              <th>Estado</th>
+<th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${notas.map(n => `
+              <tr>
+                <td>${esc(n.tipo)}-${String(n.numero).padStart(6, '0')}</td>
+                <td>${esc(n.fecha)}</td>
+                <td>${esc(nombresClientes[n.cliente_id] || 'Sin nombre')}</td>
+                <td>${esc(n.motivo)}</td>
+                <td>${dineroNota(n.importe)}</td>
+                <td>${esc(n.estado)}</td>
+<td>
+  <button type="button" class="btn chico btn-imprimir-nota"
+    data-nota-id="${n.id}">
+    Imprimir
+  </button>
+</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+  } catch (error) {
+    console.error('Error al cargar historial de notas:', error);
+    contenedor.innerHTML =
+      '<p class="msg err">No se pudo cargar el historial de notas.</p>';
+  }
+}
+async function imprimirNotaInterna(notaId) {
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes para esta aplicación.');
+    return;
+  }
+
+  try {
+    const { data: nota, error } = await sb
+      .from('notas_credito_debito')
+      .select('id, tipo, numero, fecha, motivo, detalle, importe, estado, cliente_id')
+      .eq('id', notaId)
+      .single();
+
+    if (error) throw error;
+    if (!nota) throw new Error('No se encontró la nota.');
+
+    if (!['emitida', 'cancelada'].includes(nota.estado)) {
+      throw new Error('Solo se pueden imprimir notas emitidas o canceladas.');
+    }
+
+    const { data: cliente, error: errorCliente } = await sb
+      .from('clientes')
+      .select('nombre')
+      .eq('id', nota.cliente_id)
+      .single();
+
+    if (errorCliente) throw errorCliente;
+
+    const dinero = Number(nota.importe).toLocaleString('es-AR', {
+      style: 'currency',
+      currency: 'ARS'
+    });
+
+    const numero = `${nota.tipo}-${String(nota.numero).padStart(6, '0')}`;
+
+    ventana.document.open();
+    ventana.document.write(`
+      <!doctype html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>${esc(numero)}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            color: #172033;
+            margin: 28px;
+          }
+          h1 {
+            font-size: 21px;
+            margin-bottom: 22px;
+          }
+          p {
+            margin: 12px 0;
+          }
+          .importe {
+            font-size: 20px;
+            font-weight: bold;
+            margin-top: 24px;
+          }
+          .leyenda {
+            margin-top: 35px;
+            font-size: 12px;
+            color: #555;
+          }
+          @media print {
+            body { margin: 12mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${esc(numero)}</h1>
+        <p><b>Fecha:</b> ${esc(nota.fecha)}</p>
+        <p><b>Cliente:</b> ${esc(cliente.nombre)}</p>
+        <p><b>Motivo:</b> ${esc(nota.motivo)}</p>
+        ${nota.detalle
+          ? `<p><b>Detalle:</b> ${esc(nota.detalle)}</p>`
+          : ''}
+        <p class="importe">Importe: ${esc(dinero)}</p>
+        ${nota.estado === 'cancelada'
+          ? '<p><b>NOTA CANCELADA</b></p>'
+          : ''}
+        <p class="leyenda">Comprobante interno – No válido como factura</p>
+      </body>
+      </html>
+    `);
+    ventana.document.close();
+    ventana.focus();
+
+    setTimeout(() => {
+      ventana.focus();
+      ventana.print();
+    }, 400);
+
+  } catch (error) {
+    ventana.close();
+    alert('No se pudo preparar la impresión: ' + error.message);
+  }
+}
+cargarNotasPendientes();
+cargarHistorialNotas();
       const items = document.getElementById('items');
       const preciosPorProducto = new Map();
 

@@ -6767,6 +6767,7 @@ const productoUnidadEspecial = i => {
   <input
     class="input-serie"
     data-item-id="${i.id}"
+    data-serie-index="${k}"
     placeholder="N.º de serie ${k + 1}"
     style="flex:1;min-width:0">
 
@@ -6981,7 +6982,7 @@ c.querySelectorAll('.btn-escanear-unidad').forEach(btn => {
 c.querySelectorAll('.btn-escanear-serie').forEach(btn => {
   btn.onclick = () => {
     escanearCodigoStock(codigo => {
-  alert('PRODUCTO SUELTO: ' + codigo);
+ 
       const itemId = btn.dataset.itemId;
       const indice = Number(btn.dataset.serieIndex);
 
@@ -7033,7 +7034,7 @@ c.querySelectorAll('.btn-escanear-unidad-serie').forEach(btn => {
     const indice = Number(btn.dataset.serieIndex);
 
     escanearCodigoStock(codigo => {
-  alert('El escáner devolvió: ' + codigo);
+  
       const campo = c.querySelector(
         `.unidad-serie-interna[data-item-id="${itemId}"][data-serie-index="${indice}"]`
       );

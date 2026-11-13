@@ -8280,9 +8280,6 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
 
 </div>
 
-<div id="stock-unidades-lista" class="vacio">
-  Cargando...
-</div>
 <div class="panel" style="margin-top:15px">
   <h3>Identificar unidades existentes</h3>
 
@@ -8298,10 +8295,16 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
     + Identificar stock existente
   </button>
 </div>
+
 <div
   id="stock-unidades-formulario"
   style="display:none;margin-top:20px">
 </div>
+
+<div id="stock-unidades-lista" class="vacio">
+  Cargando...
+</div>
+
 
 </div>
   </div>
@@ -9058,6 +9061,11 @@ async function abrirFormularioStockExistente() {
   const selectorProducto = formulario.querySelector(
     '#stock-existente-producto'
   );
+  const esRegulador4ta = () =>
+  Number(selectorProducto.value) === 68;
+
+const esRegulador5ta = () =>
+  Number(selectorProducto.value) === 55;
 
   const detalle = formulario.querySelector(
     '#stock-existente-detalle'
@@ -9074,7 +9082,9 @@ if (!selectorProducto.value) return;
       panel.querySelector('.stock-existente-codigo')?.value || '',
 
     series: [
-      ...panel.querySelectorAll('.stock-unidad-nueva-serie')
+     ...panel.querySelectorAll(
+  '.stock-existente-series .stock-unidad-nueva-serie'
+)
     ].map(input => ({
       prefijo:
         input.parentElement.querySelector('.stock-unidad-prefijo')?.value || '',
@@ -9168,33 +9178,82 @@ formulario.addEventListener('change', (e) => {
         <div class="panel" style="margin-top:12px">
           <h4>Unidad física ${i + 1}</h4>
 
-          <label>Código exterior (opcional)</label>
+         ${esRegulador4ta() || esRegulador5ta() ? `
+  <label>Serie interna (MAYÚSCULAS)</label>
+<div class="stock-existente-series"></div>
 
-<div style="display:flex;gap:8px;align-items:center">
-  <input
-    type="text"
-    class="stock-existente-codigo"
-    placeholder="Código exterior"
-    style="flex:1;min-width:0">
+<button
+  type="button"
+  class="btn sec chico stock-existente-agregar-serie-regulador">
+  + Cargar serie manualmente
+</button>
+
+<label>Número inicial (sufijo)</label>
+<input
+  type="text"
+  class="stock-existente-numero-inicial"
+  placeholder="Ej. AB1001"
+  style="width:100%;text-transform:uppercase">
+
+<label>Cantidad de series a generar</label>
+<input
+  type="number"
+  class="stock-existente-cantidad-series"
+  min="1"
+  step="1"
+  placeholder="Ej. 5"
+  style="width:150px">
+
+<button
+  type="button"
+  class="btn sec chico stock-existente-generar-series">
+  Generar series
+</button>
+` : `
+  <label>Código exterior (opcional)</label>
+
+  <div style="display:flex;gap:8px;align-items:center">
+    <input
+      type="text"
+      class="stock-existente-codigo"
+      placeholder="Código exterior"
+      style="flex:1;min-width:0">
+
+    <button
+      type="button"
+      class="btn sec chico stock-existente-escanear-codigo">
+      📷 Escanear
+    </button>
+  </div>
+
+  <label>Números internos (opcional)</label>
+  <div class="stock-existente-series"></div>
 
   <button
     type="button"
-    class="btn sec chico stock-existente-escanear-codigo">
-    📷 Escanear
+    class="btn sec chico stock-existente-agregar-serie">
+    + Agregar número interno
   </button>
-</div>
-
-          <label>Números internos (opcional)</label>
-          <div class="stock-existente-series"></div>
-
-          <button
-            type="button"
-            class="btn sec chico stock-existente-agregar-serie">
-            + Agregar número interno
-          </button>
+`}
         </div>
       `
     ).join('');
+    // REGULADOR 4TA y 5TA: forzar mayúsculas
+if (esRegulador4ta() || esRegulador5ta()) {
+  contenedor.querySelectorAll(
+    '.stock-unidad-nueva-serie'
+  ).forEach(input => {
+    input.addEventListener('input', () => {
+      const inicio = input.selectionStart;
+      const fin = input.selectionEnd;
+
+      input.value = input.value.toUpperCase();
+
+      input.setSelectionRange(inicio, fin);
+      guardarBorradorStockExistente();
+    });
+  });
+}
     contenedor.querySelectorAll(
   '.stock-existente-escanear-codigo'
 ).forEach(boton => {
@@ -9211,7 +9270,116 @@ formulario.addEventListener('change', (e) => {
 });
   };
 });
+// Cargar serie manualmente para REGULADOR 4TA y 5TA
+contenedor.querySelectorAll(
+  '.stock-existente-agregar-serie-regulador'
+).forEach(boton => {
+  boton.onclick = () => {
+    const unidad = boton.closest('.panel');
+    const lista = unidad.querySelector('.stock-existente-series');
 
+    if (
+      lista.querySelectorAll('.stock-unidad-nueva-serie').length >= 1
+    ) {
+      alert('Esta unidad ya tiene una serie cargada.');
+      return;
+    }
+
+    const prefijo = esRegulador4ta() ? 'MG31' : 'MG22';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'stock-unidad-nueva-serie';
+    input.placeholder = `${prefijo}-AB1001`;
+    input.style.cssText =
+      'width:100%;text-transform:uppercase';
+
+    input.addEventListener('input', () => {
+      const inicio = input.selectionStart;
+      const fin = input.selectionEnd;
+
+      input.value = input.value.toUpperCase();
+      input.setSelectionRange(inicio, fin);
+
+      guardarBorradorStockExistente();
+    });
+
+    lista.appendChild(input);
+    input.focus();
+    guardarBorradorStockExistente();
+  };
+});
+// Generador de series para REGULADOR 4TA y 5TA
+contenedor.querySelectorAll(
+  '.stock-existente-generar-series'
+).forEach(boton => {
+  boton.onclick = () => {
+    const prefijo = esRegulador4ta() ? 'MG31' : 'MG22';
+
+    const paneles = [
+      ...contenedor.querySelectorAll(
+        '#stock-existente-unidades > .panel'
+      )
+    ];
+
+    const panel = boton.closest('.panel');
+
+    const numeroInicialTexto = panel.querySelector(
+      '.stock-existente-numero-inicial'
+    ).value.trim().toUpperCase();
+
+    const cantidadSeries = Number(
+      panel.querySelector('.stock-existente-cantidad-series').value
+    );
+
+    if (!numeroInicialTexto) {
+      alert('Ingresá el número inicial.');
+      return;
+    }
+
+    if (!Number.isInteger(cantidadSeries) || cantidadSeries < 1) {
+      alert('Ingresá una cantidad válida.');
+      return;
+    }
+
+    const coincidencia = numeroInicialTexto.match(/^(.*?)(\d+)$/);
+
+    if (!coincidencia) {
+      alert('El sufijo debe terminar en números. Ejemplo: AB1001');
+      return;
+    }
+
+    const disponibles = paneles.filter(unidad =>
+      !unidad.querySelector(
+        '.stock-existente-series input.stock-unidad-nueva-serie'
+      )?.value.trim()
+    );
+
+    if (cantidadSeries > disponibles.length) {
+      alert(`Solo hay ${disponibles.length} unidades sin identificar.`);
+      return;
+    }
+
+    const base = coincidencia[1];
+    const numero = Number(coincidencia[2]);
+    const digitos = coincidencia[2].length;
+
+    disponibles.slice(0, cantidadSeries).forEach((unidad, i) => {
+      const sufijo =
+        base + String(numero + i).padStart(digitos, '0');
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'stock-unidad-nueva-serie';
+      input.value = `${prefijo}-${sufijo}`;
+      input.style.cssText = 'width:100%;text-transform:uppercase';
+
+      unidad.querySelector('.stock-existente-series').appendChild(input);
+    });
+
+    guardarBorradorStockExistente();
+  };
+});
     contenedor.querySelectorAll(
       '.stock-existente-agregar-serie'
     ).forEach(boton => {
@@ -9315,18 +9483,39 @@ let errorPrefijo = false;
       )
     ].map(panel => ({
       codigo_exterior:
-        panel.querySelector(
-          '.stock-existente-codigo'
-        ).value.trim().toUpperCase() || null,
+  panel.querySelector(
+    '.stock-existente-codigo'
+  )?.value.trim().toUpperCase() || null,
 
-   series: [
-  ...panel.querySelectorAll('.stock-unidad-nueva-serie')
+  series: [
+ ...panel.querySelectorAll(
+  '.stock-existente-series .stock-unidad-nueva-serie'
+)
 ]
 .map(input => {
   let numero = input.value.trim().toUpperCase();
 
   if (!numero) return null;
 
+  // REGULADOR 4TA y 5TA: prefijo fijo y obligatorio
+  if (esRegulador4ta() || esRegulador5ta()) {
+    const prefijo = esRegulador4ta() ? 'MG31' : 'MG22';
+
+    const sufijo = numero.startsWith(prefijo + '-')
+      ? numero.slice(prefijo.length + 1).trim().toUpperCase()
+      : numero.replace(/^[^-]+-/, '').trim().toUpperCase();
+
+    if (!sufijo) {
+      errorPrefijo = true;
+      aviso.innerHTML =
+        '<div class="msg err">Ingresá un sufijo válido para la serie.</div>';
+      return null;
+    }
+
+    return `${prefijo}-${sufijo}`;
+  }
+
+  // Resto de los productos: conservar lógica actual
   if (/^[A-Z0-9]+-.+/.test(numero)) {
     return numero;
   }
@@ -9334,19 +9523,21 @@ let errorPrefijo = false;
   const fila = input.parentElement;
   let prefijo = fila.querySelector('.stock-unidad-prefijo')?.value || '';
 
- if (!prefijo) {
-  errorPrefijo = true;
-  aviso.innerHTML =
-    '<div class="msg err">Seleccioná el prefijo de cada número interno.</div>';
-  return null;
-}
+  if (!prefijo) {
+    errorPrefijo = true;
+    aviso.innerHTML =
+      '<div class="msg err">Seleccioná el prefijo de cada número interno.</div>';
+    return null;
+  }
 
   if (prefijo === 'otro') {
     prefijo = prompt('Ingresá el prefijo:');
-  if (!prefijo || !prefijo.trim()) {
-  errorPrefijo = true;
-  return null;
-}
+
+    if (!prefijo || !prefijo.trim()) {
+      errorPrefijo = true;
+      return null;
+    }
+
     prefijo = prefijo.trim().toUpperCase();
   }
 
@@ -9356,6 +9547,23 @@ let errorPrefijo = false;
     }));
 if (errorPrefijo) {
   return;
+}
+// Validar una serie por cada unidad en REGULADOR 4TA y 5TA
+if (esRegulador4ta() || esRegulador5ta()) {
+  const faltanSeries = unidades.some(
+    unidad => unidad.series.length !== 1
+  );
+
+  if (
+    faltanSeries ||
+    unidades.length !== Number(
+      detalle.querySelector('#stock-existente-cantidad').value
+    )
+  ) {
+    aviso.innerHTML =
+      '<div class="msg err">Cada unidad física debe tener exactamente una serie interna.</div>';
+    return;
+  }
 }
     if (!unidades.some(
       u => u.codigo_exterior || u.series.length
@@ -9423,24 +9631,71 @@ try {
         const panel = paneles[i];
         if (!panel) return;
 
-        panel.querySelector('.stock-existente-codigo').value =
-          unidad.codigo_exterior || '';
+       const codigoExterior = panel.querySelector(
+  '.stock-existente-codigo'
+);
 
-        (unidad.series || []).forEach(serie => {
-          panel.querySelector('.stock-existente-agregar-serie').click();
+if (codigoExterior) {
+  codigoExterior.value = unidad.codigo_exterior || '';
+}
 
-          const filas = panel.querySelectorAll(
-            '.stock-unidad-nueva-serie'
-          );
+(unidad.series || []).forEach(serie => {
+  const esRegulador =
+    esRegulador4ta() || esRegulador5ta();
 
-          const input = filas[filas.length - 1];
-          const fila = input.parentElement;
+  if (esRegulador) {
+    const lista = panel.querySelector(
+      '.stock-existente-series'
+    );
 
-          fila.querySelector('.stock-unidad-prefijo').value =
-            serie.prefijo || '';
+    if (!lista) return;
 
-          input.value = serie.numero || '';
-        });
+    const prefijo = esRegulador4ta() ? 'MG31' : 'MG22';
+
+    const valor = typeof serie === 'string'
+      ? serie
+      : (serie.numero || '');
+
+    const sufijo = valor.trim().toUpperCase()
+      .replace(/^[^-]+-/, '');
+
+    const input = document.createElement('input');
+
+    input.type = 'text';
+    input.className = 'stock-unidad-nueva-serie';
+    input.value = `${prefijo}-${sufijo}`;
+    input.style.cssText =
+      'width:100%;text-transform:uppercase';
+
+    input.addEventListener('input', () => {
+      const inicio = input.selectionStart;
+      const fin = input.selectionEnd;
+
+      input.value = input.value.toUpperCase();
+      input.setSelectionRange(inicio, fin);
+
+      guardarBorradorStockExistente();
+    });
+
+    lista.appendChild(input);
+
+    return;
+  }
+
+  panel.querySelector('.stock-existente-agregar-serie').click();
+
+  const filas = panel.querySelectorAll(
+    '.stock-unidad-nueva-serie'
+  );
+
+  const input = filas[filas.length - 1];
+  const fila = input.parentElement;
+
+  fila.querySelector('.stock-unidad-prefijo').value =
+    serie.prefijo || '';
+
+  input.value = serie.numero || '';
+});
       });
     }
   }

@@ -6981,6 +6981,7 @@ c.querySelectorAll('.btn-escanear-unidad').forEach(btn => {
 c.querySelectorAll('.btn-escanear-serie').forEach(btn => {
   btn.onclick = () => {
     escanearCodigoStock(codigo => {
+  alert('PRODUCTO SUELTO: ' + codigo);
       const itemId = btn.dataset.itemId;
       const indice = Number(btn.dataset.serieIndex);
 

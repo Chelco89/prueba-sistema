@@ -8396,6 +8396,7 @@ if (stockTabActiva === 'unidades') {
   cargarUnidadesSerializadas();
 }
 
+
 function agregarFilaIngresoStock() {
   const contenedor = document.getElementById('stock-ingreso-items');
 
@@ -8430,10 +8431,34 @@ function agregarFilaIngresoStock() {
 
     <div class="stock-ingreso-series" style="display:none;margin-top:12px">
       <p><b>Identificación de unidades</b></p>
-      <p class="vacio">
-        Completá el código exterior y los números internos de cada unidad.
-        Podés agregar tantos números internos como necesites.
+      <p class="vacio stock-ingreso-ayuda">
+        Completá la identificación de cada unidad.
       </p>
+      <div class="stock-ingreso-generador" style="display:none">
+        <label>Prefijo</label>
+        <select class="stock-unidad-prefijo">
+          <option value="">Prefijo...</option>
+          <option value="MG22">MG22</option>
+          <option value="MG33">MG33</option>
+          <option value="MG31">MG31</option>
+          <option value="TT18">TT18</option>
+          <option value="otro">Otro</option>
+        </select>
+
+        <label>Número inicial</label>
+        <input
+          type="number"
+          class="stock-regulador-numero-inicial"
+          min="0"
+          step="1"
+          placeholder="Ej.: 1001"
+        >
+
+        <button type="button"
+          class="btn chico sec stock-generar-series">
+          Generar series correlativas
+        </button>
+      </div>
       <div class="stock-ingreso-unidades"></div>
     </div>
 
@@ -8451,12 +8476,20 @@ function agregarFilaIngresoStock() {
   function actualizarUnidadesSerializadas() {
     const requiereSerie =
       productoSelect.selectedOptions[0]?.dataset.llevaSerie === 'true';
+    const esRegulador5ta = productoSelect.value === '55';
 
     const panelSeries = fila.querySelector('.stock-ingreso-series');
     const unidadesContenedor =
       fila.querySelector('.stock-ingreso-unidades');
+    const generador = fila.querySelector('.stock-ingreso-generador');
+    const ayuda = fila.querySelector('.stock-ingreso-ayuda');
 
     panelSeries.style.display = requiereSerie ? '' : 'none';
+    generador.style.display = esRegulador5ta ? '' : 'none';
+
+    ayuda.textContent = esRegulador5ta
+      ? 'Elegí el prefijo y el número inicial para generar una serie por unidad.'
+      : 'Completá el código exterior y los números internos de cada unidad.';
 
     unidadesContenedor.innerHTML = '';
 
@@ -8477,62 +8510,113 @@ function agregarFilaIngresoStock() {
       unidad.innerHTML = `
         <b>Unidad ${i + 1}</b>
 
-        <label>Código exterior (opcional)</label>
-        <input
-          type="text"
-          class="stock-unidad-codigo-exterior"
-          placeholder="Escanear o escribir código exterior"
-        >
+        ${esRegulador5ta ? `
+          <p class="stock-regulador-serie-generada vacio">
+            Serie todavía no generada.
+          </p>
+          <input
+            type="hidden"
+            class="stock-unidad-numero-serie"
+            value=""
+          >
+        ` : `
+          <label>Código exterior (opcional)</label>
+          <input
+            type="text"
+            class="stock-unidad-codigo-exterior"
+            placeholder="Escanear o escribir código exterior"
+          >
 
-        <div class="stock-unidad-series"></div>
+          <div class="stock-unidad-series"></div>
 
-        <button type="button"
-          class="btn chico sec stock-agregar-serie-interna">
-          + Agregar número interno
-        </button>
+          <button type="button"
+            class="btn chico sec stock-agregar-serie-interna">
+            + Agregar número interno
+          </button>
+        `}
       `;
 
       unidadesContenedor.appendChild(unidad);
 
-      const seriesContenedor =
-        unidad.querySelector('.stock-unidad-series');
+      if (!esRegulador5ta) {
+        const seriesContenedor =
+          unidad.querySelector('.stock-unidad-series');
 
-      function agregarSerieInterna() {
-        const campo = document.createElement('div');
-        campo.style.display = 'flex';
-        campo.style.gap = '8px';
-        campo.style.alignItems = 'end';
-        campo.style.marginTop = '8px';
+        function agregarSerieInterna() {
+          const campo = document.createElement('div');
+          campo.style.display = 'flex';
+          campo.style.gap = '8px';
+          campo.style.alignItems = 'end';
+          campo.style.marginTop = '8px';
 
-        campo.innerHTML = `
-          <div style="flex:1">
-            <label>Número de serie interno</label>
-            <input
-              type="text"
-              class="stock-unidad-numero-serie"
-              placeholder="Escanear o escribir número"
-            >
-          </div>
+          campo.innerHTML = `
+            <div style="flex:1">
+              <label>Número de serie interno</label>
+              <input
+                type="text"
+                class="stock-unidad-numero-serie"
+                placeholder="Escanear o escribir número"
+              >
+            </div>
 
-          <button type="button"
-            class="btn chico sec stock-quitar-serie-interna">
-            Quitar
-          </button>
-        `;
+            <button type="button"
+              class="btn chico sec stock-quitar-serie-interna">
+              Quitar
+            </button>
+          `;
 
-        seriesContenedor.appendChild(campo);
+          seriesContenedor.appendChild(campo);
 
-        campo.querySelector('.stock-quitar-serie-interna').onclick =
-          () => campo.remove();
+          campo.querySelector('.stock-quitar-serie-interna').onclick =
+            () => campo.remove();
+        }
+
+        unidad.querySelector('.stock-agregar-serie-interna').onclick =
+          agregarSerieInterna;
+
+        agregarSerieInterna();
       }
-
-      unidad.querySelector('.stock-agregar-serie-interna').onclick =
-        agregarSerieInterna;
-
-      // Comenzamos con un campo interno, pero se pueden agregar más.
-      agregarSerieInterna();
     }
   }
+
+  fila.querySelector('.stock-generar-series').onclick = () => {
+    const prefijo = fila.querySelector('.stock-unidad-prefijo').value;
+    const numeroInicial = Number(
+      fila.querySelector('.stock-regulador-numero-inicial').value
+    );
+
+    const unidades = [
+      ...fila.querySelectorAll('.stock-ingreso-unidad')
+    ];
+
+    if (!prefijo) {
+      alert('Seleccioná un prefijo.');
+      return;
+    }
+
+    if (
+      !Number.isSafeInteger(numeroInicial) ||
+      numeroInicial < 0
+    ) {
+      alert('Ingresá un número inicial válido.');
+      return;
+    }
+
+    if (!unidades.length) {
+      alert('Ingresá primero la cantidad de unidades.');
+      return;
+    }
+
+    const prefijoTexto = prefijo === 'otro' ? '' : prefijo;
+
+    unidades.forEach((unidad, i) => {
+      const serie = prefijoTexto + String(numeroInicial + i).padStart(4, '0');
+
+      unidad.querySelector('.stock-unidad-numero-serie').value = serie;
+      unidad.querySelector('.stock-regulador-serie-generada').textContent =
+        'Serie: ' + serie;
+    });
+  };
 
   productoSelect.onchange = actualizarUnidadesSerializadas;
   cantidadInput.onchange = actualizarUnidadesSerializadas;
@@ -9715,23 +9799,25 @@ if (!numero.trim() || !fechaValida) {
   };
 
  if (llevaSerie) {
-  item.unidades = [
-    ...fila.querySelectorAll('.stock-ingreso-unidad')
-  ]
-    .map(unidad => ({
-      codigo_exterior:
-        unidad.querySelector('.stock-unidad-codigo-exterior')
-          .value.trim().toUpperCase() || null,
+ 
+item.unidades = [
+  ...fila.querySelectorAll('.stock-ingreso-unidad')
+]
+  .map(unidad => ({
+    codigo_exterior:
+      unidad.querySelector('.stock-unidad-codigo-exterior')
+        ?.value.trim().toUpperCase() || null,
 
-      series: [
-        ...unidad.querySelectorAll('.stock-unidad-numero-serie')
-      ]
-        .map(input => input.value.trim().toUpperCase())
-        .filter(Boolean)
-    }))
-    .filter(unidad =>
-      unidad.codigo_exterior || unidad.series.length > 0
-    );
+    series: [
+      ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+    ]
+      .map(input => input.value.trim().toUpperCase())
+      .filter(Boolean)
+  }))
+  .filter(unidad =>
+    unidad.codigo_exterior || unidad.series.length > 0
+  );
+
 }
 
   return item;

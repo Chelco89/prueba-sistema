@@ -6087,7 +6087,9 @@ try {
       agregarValorCaja();
       
       selectorCliente.onchange = async () => {
-        selectorPedido.innerHTML = '<option value="">Sin pedido asociado</option>';
+        if (selectorPedido) {
+  selectorPedido.innerHTML = '<option value="">Sin pedido asociado</option>';
+}
       
 
         const cliente = (clientes || []).find(
@@ -6290,9 +6292,7 @@ if (transferenciaInvalida) {
             'registrar_cobro_caja',
             {
               p_cliente_id: clienteId,
-              p_pedido_id: selectorPedido.value
-                ? Number(selectorPedido.value)
-                : null,
+              p_pedido_id: null,
               p_aplicar_cuenta_corriente: false,
               p_observaciones:
                 document.getElementById('caja-observaciones').value.trim() || null,
@@ -6329,8 +6329,7 @@ if (transferenciaInvalida) {
           };
 
           form.reset();
-          selectorPedido.innerHTML = '<option value="">Sin pedido asociado</option>';
-          valoresContenedor.innerHTML = '';
+valoresContenedor.innerHTML = '';
           agregarValorCaja();
           actualizarTotalCaja();
 
@@ -9882,6 +9881,18 @@ document.getElementById('stock-filtro-pendientes').value = '';
     <button class="btn nuevo-movil" id="toggle-form" type="button">+ Nuevo pedido</button>
     <div class="grid-dash">
       <div class="panel col-form" id="col-form">
+
+  <div class="ventas-solapas">
+    <button type="button" class="ventas-solapa activa" data-solapa="pedido">
+      Nuevo pedido
+    </button>
+
+    <button type="button" class="ventas-solapa" data-solapa="notas">
+      Notas de débito / crédito
+    </button>
+  </div>
+
+  <div id="panel-nuevo-pedido">
         <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">Nuevo Pedido</h3>
         <form id="fp">
           <label for="cliente">CLIENTE</label>
@@ -9917,6 +9928,19 @@ document.getElementById('stock-filtro-pendientes').value = '';
           <div id="aviso" style="margin-top:10px"></div>
           <button class="btn" type="submit" style="margin-top:16px">Guardar pedido</button>
         </form>
+          </div>
+
+  <div id="panel-notas" hidden>
+    <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">
+      Notas de débito / crédito
+    </h3>
+
+    <p style="color:var(--gris); font-size:14px">
+      Gestión de notas internas de débito y crédito.
+    </p>
+
+    <div id="notas-pendientes"></div>
+  </div>
       </div>
       <div>
         <div class="pills">

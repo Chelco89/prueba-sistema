@@ -7027,6 +7027,7 @@ c.querySelectorAll('.btn-escanear-unidad-serie').forEach(btn => {
     const indice = Number(btn.dataset.serieIndex);
 
     escanearCodigoStock(codigo => {
+  alert('El escáner devolvió: ' + codigo);
       const campo = c.querySelector(
         `.unidad-serie-interna[data-item-id="${itemId}"][data-serie-index="${indice}"]`
       );

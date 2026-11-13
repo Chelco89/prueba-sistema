@@ -6993,9 +6993,14 @@ c.querySelectorAll('.btn-escanear-serie').forEach(btn => {
         `.serie-prefijo-individual[data-item-id="${itemId}"][data-serie-index="${indice}"]`
       );
 
-      if (!campo) return;
+    let numero = codigo.trim().toUpperCase();
 
-      let numero = codigo.trim().toUpperCase();
+if (!campo) {
+  alert('NO SE ENCONTRÓ EL CAMPO. Item: ' + itemId + ' Índice: ' + indice);
+  return;
+}
+
+alert('CAMPO ENCONTRADO. Voy a escribir: ' + numero);
 
       // Si ya viene completo, conservarlo.
       if (!/^[A-Z0-9]+-.+/.test(numero)) {

@@ -1163,7 +1163,7 @@ armarSistema();
   ['listas_precios', 'Listas de Precios'],
   ['clientes', 'Clientes'],
   ['caja', 'Caja'],
-  ['cuentas_corrientes', 'Cuenta Corriente']
+  ['cuentas_corrientes', 'Cta Cte']
 );
       }
 
@@ -2330,7 +2330,7 @@ if (vista === 'deposito' && pedidoDepositoActivo) {
         </div>
 
         <div class="panel">
-          <small>Deuda total pendiente</small>
+          <small>Total de cuentas a cobrar</small>
           <h2>${dinero(totalDeuda)}</h2>
         </div>
 
@@ -3085,7 +3085,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     Registrar cobro
   </button>
     <button type="button" class="btn sec chico" id="btn-mostrar-egreso">
-    Registrar egreso
+    Registrar pago
   </button>
   <button type="button" class="btn sec chico" id="btn-mostrar-efectivo">
   Caja efectivo
@@ -3403,12 +3403,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
       `).join('')}
     </select>
 
-    <label for="caja-pedido">Pedido relacionado (opcional)</label>
-    <select id="caja-pedido">
-      <option value="">Sin pedido asociado</option>
-    </select>
-
-   
+       
     <hr style="margin:20px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
     <h3>Medios de pago</h3>
@@ -3538,7 +3533,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
      <div id="caja-egreso-contenido" hidden>
 
-  <h3>Registrar egreso</h3>
+  <h3>Registrar pago</h3>
   <p class="vacio" style="padding-top:0">
     Registrá gastos de Caja en pesos o dólares, sin mezclar monedas.
   </p>
@@ -3564,7 +3559,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     <div id="caja-egreso-aviso" style="margin-top:12px"></div>
 
       <button class="btn" type="submit" id="caja-egreso-guardar">
-    Registrar egreso
+    Registrar pago
   </button>
 </form>
 

@@ -7545,7 +7545,8 @@ c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
     <p class="vacio" style="padding-top:0">Todos los números de serie cargados, con el cliente y el presupuesto al que salió cada uno.</p>
     <label for="b-serie">Buscar n.º de serie</label>
     <input id="b-serie" value="${esc(busquedaSerie)}" placeholder="Escribí o escaneá el número" autocomplete="off">
-    <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div></div>`;
+    <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div>
+<datalist id="lista-pec-transferido"></datalist></div>`;
       let t;
       document.getElementById('b-serie').oninput = e => { busquedaSerie = e.target.value; clearTimeout(t); t = setTimeout(cargarSeries, 300); };
       cargarSeries();
@@ -7557,7 +7558,37 @@ c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
       if (busquedaSerie.trim()) q = q.ilike('numero_serie', `%${busquedaSerie.trim()}%`);
       const { data, error } = await q;
       if (error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
-      res.className = '';
+
+// Cargar nombres de PEC TRANSFERIDO ya utilizados
+const { data: pecs, error: errorPecs } = await sb
+  .from('series')
+  .select('pec_transferido')
+  .not('pec_transferido', 'is', null)
+  .order('pec_transferido');
+
+const listaPec = document.getElementById('lista-pec-transferido');
+
+if (listaPec && !errorPecs) {
+  const nombresUnicos = new Map();
+
+  (pecs || []).forEach(p => {
+    const nombre = (p.pec_transferido || '').trim();
+
+    if (nombre && !nombresUnicos.has(nombre.toUpperCase())) {
+      nombresUnicos.set(nombre.toUpperCase(), nombre);
+    }
+  });
+
+  listaPec.innerHTML = '';
+
+  nombresUnicos.forEach(nombre => {
+    const opcion = document.createElement('option');
+    opcion.value = nombre;
+    listaPec.appendChild(opcion);
+  });
+}
+
+res.className = '';
      res.innerHTML = data.length ? data.map(s => `
     <div class="fila item item-serie" data-id="${s.pedidos.id}" style="cursor:pointer">
       <div class="dato">
@@ -7571,6 +7602,7 @@ c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
       <div class="dato">
         <small style="font-weight:700">PEC TRANSFERIDO</small>
         <input class="inp-pec-serie" data-serie-id="${s.id}"
+         list="lista-pec-transferido"
           value="${esc(s.pec_transferido || '')}"
 placeholder="Destinatario"
 style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weight:700">

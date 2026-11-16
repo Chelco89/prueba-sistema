@@ -7538,24 +7538,50 @@ c.querySelectorAll('.btn-add-serie').forEach(btn => btn.onclick = async () => {
 
     /* ---------- NÚMEROS DE SERIE (Ventas, Depósito y Admin) ---------- */
     let busquedaSerie = '';
+let busquedaClienteSerie = '';
     function vistaSeries() {
       const c = document.getElementById('contenido');
       c.innerHTML = `<div class="panel">
     <div class="barra"><h2>Números de serie</h2></div>
     <p class="vacio" style="padding-top:0">Todos los números de serie cargados, con el cliente y el presupuesto al que salió cada uno.</p>
     <label for="b-serie">Buscar n.º de serie</label>
-    <input id="b-serie" value="${esc(busquedaSerie)}" placeholder="Escribí o escaneá el número" autocomplete="off">
+<input id="b-serie" value="${esc(busquedaSerie)}"
+  placeholder="Escribí o escaneá el número" autocomplete="off">
+
+<label for="b-cliente" style="margin-top:12px">Buscar cliente</label>
+<input id="b-cliente" placeholder="Escribí el nombre del cliente"
+  autocomplete="off">
     <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div>
 <datalist id="lista-pec-transferido"></datalist></div>`;
       let t;
-      document.getElementById('b-serie').oninput = e => { busquedaSerie = e.target.value; clearTimeout(t); t = setTimeout(cargarSeries, 300); };
-      cargarSeries();
+      document.getElementById('b-serie').oninput = e => {
+  busquedaSerie = e.target.value;
+  clearTimeout(t);
+  t = setTimeout(cargarSeries, 300);
+};
+
+document.getElementById('b-cliente').oninput = e => {
+  busquedaClienteSerie = e.target.value.trim();
+
+  clearTimeout(t);
+
+  t = setTimeout(() => {
+    cargarSeries();
+  }, 300);
+};
+
+cargarSeries();
     }
     async function cargarSeries() {
       const res = document.getElementById('res-series'); if (!res) return;
-      let q = sb.from('series').select('id, numero_serie, creado_en, pec_transferido, pedido_items(producto), pedidos(id, numero_remito, cliente, estado, fecha_entregado, enargas_transferido)')
+      let q = sb.from('series').select('id, numero_serie, creado_en, pec_transferido, pedido_items(producto), pedidos!inner(id, numero_remito, cliente, estado, fecha_entregado, enargas_transferido)')
         .order('creado_en', { ascending: false }).limit(200);
       if (busquedaSerie.trim()) q = q.ilike('numero_serie', `%${busquedaSerie.trim()}%`);
+ if (busquedaClienteSerie.trim()) {
+  q = q
+    .not('pedido_id', 'is', null)
+    .ilike('pedidos.cliente', `%${busquedaClienteSerie.trim()}%`);
+}
       const { data, error } = await q;
       if (error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
 
@@ -7564,6 +7590,7 @@ const { data: pecs, error: errorPecs } = await sb
   .from('series')
   .select('pec_transferido')
   .not('pec_transferido', 'is', null)
+  .neq('pec_transferido', '')
   .order('pec_transferido');
 
 const listaPec = document.getElementById('lista-pec-transferido');

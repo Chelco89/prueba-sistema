@@ -8378,6 +8378,191 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
 const panelProductos = document.getElementById('stock-panel-productos');
 const panelHistorial = document.getElementById('stock-panel-historial');
 const panelUnidades = document.getElementById('stock-panel-unidades');
+const CLAVE_BORRADOR_STOCK = 'sgv_borrador_ingreso_stock';
+
+let restaurandoBorradorStock = false;
+
+function guardarBorradorIngresoStock() {
+  const borrador = {
+    proveedor:
+      document.getElementById('stock-ingreso-proveedor').value,
+
+    numeroRemito:
+      document.getElementById('stock-ingreso-numero-remito').value,
+
+    fechaRemito:
+      document.getElementById('stock-ingreso-fecha-remito').value,
+
+    observaciones:
+      document.getElementById('stock-ingreso-observaciones').value,
+
+    filas: [...document.querySelectorAll('.stock-ingreso-fila')]
+      .map(fila => ({
+        producto:
+          fila.querySelector('.stock-ingreso-producto').value,
+
+        cantidad:
+          fila.querySelector('.stock-ingreso-cantidad').value,
+
+        numeroInicial:
+          fila.querySelector('.stock-regulador-numero-inicial').value,
+
+        cantidadSeries:
+          fila.querySelector('.stock-regulador-cantidad-series').value,
+
+        codigoInicial:
+          fila.querySelector('.stock-kit-codigo-inicial').value,
+
+        unidades: [
+          ...fila.querySelectorAll('.stock-ingreso-unidad')
+        ].map(unidad => ({
+          codigoExterior:
+            unidad.querySelector('.stock-unidad-codigo-exterior')?.value || '',
+
+          prefijoSecundario:
+            unidad.querySelector('.stock-kit-prefijo-secundario')?.value || '',
+
+          series: [
+            ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+          ].map(input => input.value)
+        }))
+      }))
+  };
+
+  try {
+    localStorage.setItem(
+      'sgv_borrador_ingreso_stock',
+      JSON.stringify(borrador)
+    );
+  } catch (error) {
+    console.error('No se pudo guardar el borrador de Stock:', error);
+  }
+}
+const panelIngresoBorrador =
+  document.getElementById('stock-panel-ingreso');
+
+['input', 'change'].forEach(evento => {
+  panelIngresoBorrador.addEventListener(evento, () => {
+    guardarBorradorIngresoStock();
+  });
+});
+function recuperarBorradorIngresoStock() {
+  const guardado = localStorage.getItem(
+    'sgv_borrador_ingreso_stock'
+  );
+
+  if (!guardado) return;
+
+  let borrador;
+
+  try {
+    borrador = JSON.parse(guardado);
+  } catch (error) {
+    console.error('El borrador de Stock no es válido:', error);
+    return;
+  }
+
+  document.getElementById('stock-ingreso-proveedor').value =
+    borrador.proveedor || '';
+
+  document.getElementById('stock-ingreso-numero-remito').value =
+    borrador.numeroRemito || '';
+
+  document.getElementById('stock-ingreso-fecha-remito').value =
+    borrador.fechaRemito || '';
+
+  document.getElementById('stock-ingreso-observaciones').value =
+    borrador.observaciones || '';
+
+  const contenedor = document.getElementById('stock-ingreso-items');
+
+  contenedor.innerHTML = '';
+
+  (borrador.filas || []).forEach(datosFila => {
+    agregarFilaIngresoStock();
+
+    const fila = contenedor.lastElementChild;
+
+    const producto = fila.querySelector('.stock-ingreso-producto');
+    producto.value = datosFila.producto || '';
+
+    producto.dispatchEvent(new Event('change', {
+      bubbles: true
+    }));
+
+    const cantidad = fila.querySelector('.stock-ingreso-cantidad');
+    cantidad.value = datosFila.cantidad || '';
+
+    cantidad.dispatchEvent(new Event('change', {
+      bubbles: true
+    }));
+
+    fila.querySelector('.stock-regulador-numero-inicial').value =
+      datosFila.numeroInicial || '';
+
+    fila.querySelector('.stock-regulador-cantidad-series').value =
+      datosFila.cantidadSeries || '';
+
+    fila.querySelector('.stock-kit-codigo-inicial').value =
+      datosFila.codigoInicial || '';
+
+    const unidades = [
+      ...fila.querySelectorAll('.stock-ingreso-unidad')
+    ];
+
+    (datosFila.unidades || []).forEach((datosUnidad, indice) => {
+      const unidad = unidades[indice];
+      if (!unidad) return;
+
+      const codigoExterior = unidad.querySelector(
+        '.stock-unidad-codigo-exterior'
+      );
+
+      if (codigoExterior) {
+        codigoExterior.value = datosUnidad.codigoExterior || '';
+      }
+
+      const prefijo = unidad.querySelector(
+        '.stock-kit-prefijo-secundario'
+      );
+
+      if (prefijo && datosUnidad.prefijoSecundario) {
+        prefijo.value = datosUnidad.prefijoSecundario;
+        prefijo.dispatchEvent(new Event('change'));
+      }
+
+      let camposSeries = [
+        ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+      ];
+
+      while (
+        camposSeries.length < (datosUnidad.series || []).length
+      ) {
+        const botonAgregar = unidad.querySelector(
+          '.stock-agregar-serie-interna'
+        );
+
+        if (!botonAgregar) break;
+
+        botonAgregar.onclick();
+
+        camposSeries = [
+          ...unidad.querySelectorAll('.stock-unidad-numero-serie')
+        ];
+      }
+
+      (datosUnidad.series || []).forEach((serie, indiceSerie) => {
+        if (camposSeries[indiceSerie]) {
+          camposSeries[indiceSerie].value = serie;
+        }
+      });
+    });
+  });
+
+  guardarBorradorIngresoStock();
+
+  console.log('Borrador de ingreso de Stock recuperado.');
+}
 
 const tabIngreso = document.getElementById('stock-tab-ingreso');
 const tabProductos = document.getElementById('stock-tab-productos');
@@ -8534,6 +8719,25 @@ function agregarFilaIngresoStock() {
         Generar series correlativas
       </button>
     </div>
+        <div class="stock-kit-codigo-generador"
+      style="display:none;margin-top:12px;padding:10px;border:1px solid #ddd;border-radius:8px">
+
+      <b>Generar códigos exteriores correlativos</b>
+
+      <label>Código exterior inicial</label>
+      <input type="text"
+        class="stock-kit-codigo-inicial"
+        placeholder="Ej.: SK526110661">
+
+      <button type="button"
+        class="btn chico sec stock-kit-generar-codigos">
+        Generar códigos exteriores
+      </button>
+
+      <p class="vacio">
+        Se generará un código correlativo para cada unidad.
+      </p>
+    </div>
   </div>
 
   <p class="vacio stock-ingreso-ayuda">
@@ -8564,6 +8768,18 @@ function agregarFilaIngresoStock() {
 
 const prefijoFijo = prefijosSeries[productoSelect.value] || '';
 const esProductoConPrefijo = Boolean(prefijoFijo);
+const prefijosKit = {
+  '118': 'MG22-',
+  '117': 'MG22-',
+  '139': 'MG22-',
+  '140': 'MG22-',
+  '119': 'MG22-',
+  '120': 'MG22-',
+  '116': 'MG31-'
+};
+
+const prefijoKit = prefijosKit[productoSelect.value] || '';
+const esKitDosSeries = Boolean(prefijoKit);
 
     const panelSeries = fila.querySelector('.stock-ingreso-series');
     const unidadesContenedor =
@@ -8575,6 +8791,12 @@ const esProductoConPrefijo = Boolean(prefijoFijo);
 
 generador.style.display =
   esProductoConPrefijo ? '' : 'none';
+  const generadorCodigoKit = fila.querySelector(
+  '.stock-kit-codigo-generador'
+);
+
+generadorCodigoKit.style.display =
+  esKitDosSeries ? '' : 'none';
 
 generador.querySelector('.stock-regulador-prefijo').style.display =
   'none';
@@ -8610,64 +8832,138 @@ const cantidad = Number(cantidadInput.value);
        <b>Unidad ${i + 1}</b>
 
 ${esProductoConPrefijo ? `
-    <div style="margin-top: 8px;">
+  <div style="margin-top: 8px;">
     <label>Serie interna</label>
-<div style="display:flex;align-items:center;gap:0">
-  <span style="padding:9px;border:1px solid #ccc;border-radius:6px 0 0 6px;background:#eee">
-    ${prefijoFijo}
-  </span>
-  <div style="display:flex;gap:6px;align-items:center;flex:1">
-  <input
-    type="text"
-    class="stock-unidad-numero-serie"
-    placeholder="Ej.: AB009"
-    style="flex:1;border-radius:0 6px 6px 0"
-  >
+    <div style="display:flex;align-items:center;gap:0">
+      <span style="padding:9px;border:1px solid #ccc;border-radius:6px 0 0 6px;background:#eee">
+        ${prefijoFijo}
+      </span>
+      <div style="display:flex;gap:6px;align-items:center;flex:1">
+        <input type="text"
+          class="stock-unidad-numero-serie"
+          placeholder="Ej.: AB009"
+          style="flex:1;border-radius:0 6px 6px 0">
+        <button type="button"
+          class="btn chico sec stock-escanear-serie">
+          <i class="fa fa-camera"></i> Escanear
+        </button>
+      </div>
+    </div>
+  </div>
+` : esKitDosSeries ? `
+  <label>Código exterior (obligatorio)</label>
+<div style="display:flex;gap:6px;align-items:center">
+  <input type="text"
+    class="stock-unidad-codigo-exterior"
+    required
+    placeholder="Código exterior"
+    style="flex:1;min-width:0">
 
-  <button
-    type="button"
+  <button type="button"
     class="btn chico sec stock-escanear-serie">
     <i class="fa fa-camera"></i> Escanear
   </button>
 </div>
-</div>
+
+ <div style="margin-top:10px">
+  <label>Serie interna 1 (${prefijoKit})</label>
+  <div style="display:flex;gap:6px;align-items:center;width:100%">
+    <span style="width:105px;min-width:105px;flex:0 0 105px;padding:9px;border:1px solid #ccc;border-radius:6px;background:#eee;text-align:center">
+      ${prefijoKit}
+    </span>
+
+    <input type="text"
+      class="stock-unidad-numero-serie"
+      data-prefijo="${prefijoKit}"
+      placeholder="Número interno"
+      style="flex:1;min-width:0;width:0">
+
+    <button type="button"
+      class="btn chico sec stock-escanear-serie">
+      <i class="fa fa-camera"></i> Escanear
+    </button>
   </div>
+</div>
+
+ <div style="display:flex;gap:6px;align-items:center;width:100%">
+  <select class="stock-kit-prefijo-secundario"
+    style="width:105px;min-width:105px;flex:0 0 105px">
+    <option value="MG33-">MG33-</option>
+    <option value="TT18-">TT18-</option>
+  </select>
+
+  <input type="text"
+    class="stock-unidad-numero-serie"
+    data-prefijo="MG33-"
+    placeholder="Número interno"
+    style="flex:1;min-width:0;width:0">
+
+  <button type="button"
+    class="btn chico sec stock-escanear-serie">
+    <i class="fa fa-camera"></i> Escanear
+  </button>
+</div>
 ` : `
-          <label>Código exterior (opcional)</label>
-          <input
-            type="text"
-            class="stock-unidad-codigo-exterior"
-            placeholder="Escanear o escribir código exterior"
-          >
+  <label>Código exterior (opcional)</label>
+  <input type="text"
+    class="stock-unidad-codigo-exterior"
+    placeholder="Escanear o escribir código exterior">
 
-          <div class="stock-unidad-series"></div>
+  <div class="stock-unidad-series"></div>
 
-          <button type="button"
-            class="btn chico sec stock-agregar-serie-interna">
-            + Agregar número interno
-          </button>
-        `}
+  <button type="button"
+    class="btn chico sec stock-agregar-serie-interna">
+    + Agregar número interno
+  </button>
+`}
       `;
 
       unidadesContenedor.appendChild(unidad);
-      const botonEscanear = unidad.querySelector('.stock-escanear-serie');
-
-if (botonEscanear) {
-  botonEscanear.onclick = () => {
+      unidad.querySelectorAll('.stock-escanear-serie').forEach(boton => {
+  boton.onclick = () => {
     escanearCodigoStock(codigo => {
-      const campoSerie = unidad.querySelector(
-        '.stock-unidad-numero-serie'
-      );
-
+      const contenedor = boton.parentElement;
+    const campoSerie = contenedor.querySelector(
+  '.stock-unidad-numero-serie, .stock-unidad-codigo-exterior'
+);
       campoSerie.value = codigo.trim().toUpperCase();
+
       campoSerie.dispatchEvent(new Event('input', {
         bubbles: true
       }));
     });
   };
+});
+// Convertir todos los códigos y series a mayúsculas
+unidad.querySelectorAll(
+  '.stock-unidad-numero-serie, .stock-unidad-codigo-exterior'
+).forEach(input => {
+  input.addEventListener('input', () => {
+    const posicion = input.selectionStart;
+    input.value = input.value.toUpperCase();
+
+    if (posicion !== null) {
+      input.setSelectionRange(posicion, posicion);
+    }
+  });
+});
+
+// Actualizar el prefijo de la segunda serie del KIT
+const selectorPrefijoKit = unidad.querySelector(
+  '.stock-kit-prefijo-secundario'
+);
+
+if (selectorPrefijoKit) {
+  selectorPrefijoKit.onchange = () => {
+    const segundaSerie = selectorPrefijoKit
+      .parentElement
+      .querySelector('.stock-unidad-numero-serie');
+
+    segundaSerie.dataset.prefijo = selectorPrefijoKit.value;
+  };
 }
 
-      if (!esProductoConPrefijo) {
+     if (!esProductoConPrefijo && !esKitDosSeries) {
         const seriesContenedor =
           unidad.querySelector('.stock-unidad-series');
 
@@ -8790,6 +9086,70 @@ if (botonEscanear) {
   });
 
   alert(`${cantidadSeries} series generadas correctamente.`);
+};
+fila.querySelector('.stock-kit-generar-codigos').onclick = () => {
+  const inicial = fila.querySelector(
+    '.stock-kit-codigo-inicial'
+  ).value.trim().toUpperCase();
+
+  if (!inicial) {
+    alert('Ingresá el código exterior inicial.');
+    return;
+  }
+
+  const coincidencia = inicial.match(/^(.*?)(\d+)$/);
+
+  if (!coincidencia) {
+    alert('El código debe terminar en números. Ejemplo: SK526110661.');
+    return;
+  }
+
+  const parteTexto = coincidencia[1];
+  const parteNumerica = coincidencia[2];
+  const numero = Number(parteNumerica);
+
+  if (!Number.isSafeInteger(numero)) {
+    alert('El número inicial es demasiado grande.');
+    return;
+  }
+
+  const unidades = [
+    ...fila.querySelectorAll('.stock-ingreso-unidad')
+  ];
+
+  if (!unidades.length) {
+    alert('Primero ingresá la cantidad de unidades.');
+    return;
+  }
+
+  if (!confirm(
+    `Se generarán ${unidades.length} códigos exteriores ` +
+    `desde ${inicial}. ¿Continuar?`
+  )) {
+    return;
+  }
+
+  unidades.forEach((unidad, i) => {
+    const correlativo = String(numero + i).padStart(
+      parteNumerica.length,
+      '0'
+    );
+
+    const codigo = parteTexto + correlativo;
+
+    const campo = unidad.querySelector(
+      '.stock-unidad-codigo-exterior'
+    );
+
+    if (campo) {
+      campo.value = codigo;
+      campo.dispatchEvent(new Event('input', {
+        bubbles: true
+      }));
+    }
+  });
+
+  alert(`${unidades.length} códigos exteriores generados correctamente.`);
 };
   fila.querySelector('.stock-ingreso-quitar').onclick = () => {
     fila.remove();
@@ -10224,16 +10584,26 @@ const items = filas.map(fila => {
     )
   };
 
-  if (llevaSerie) {
+if (llevaSerie) {
+  const prefijos = {
+    68: 'MG31-',
+    55: 'MG22-',
+    57: 'TT18-',
+    56: 'MG33-'
+  };
+
+  const idsKit = [116, 117, 118, 119, 120, 139, 140];
+  const esKit = idsKit.includes(Number(item.producto_id));
+
   item.unidades = [
     ...fila.querySelectorAll('.stock-ingreso-unidad')
   ]
-    .map(unidad => ({
-      codigo_exterior:
+    .map(unidad => {
+      const codigoExterior =
         unidad.querySelector('.stock-unidad-codigo-exterior')
-          ?.value.trim().toUpperCase() || null,
+          ?.value.trim().toUpperCase() || null;
 
-      series: [
+      const series = [
         ...unidad.querySelectorAll('.stock-unidad-numero-serie')
       ]
         .map(input => {
@@ -10241,14 +10611,8 @@ const items = filas.map(fila => {
 
           if (!valor) return null;
 
-          const prefijos = {
-            68: 'MG31-',
-            55: 'MG22-',
-            57: 'TT18-',
-            56: 'MG33-'
-          };
-
-          const prefijo = prefijos[item.producto_id];
+          const prefijo =
+            input.dataset.prefijo || prefijos[item.producto_id];
 
           if (!prefijo) return valor;
 
@@ -10257,14 +10621,29 @@ const items = filas.map(fila => {
             ''
           );
         })
-        .filter(Boolean)
-    }))
+        .filter(Boolean);
+
+      return {
+        codigo_exterior: codigoExterior,
+        series
+      };
+    })
     .filter(unidad =>
       unidad.codigo_exterior || unidad.series.length > 0
     );
 
-  if (
-    [55, 56, 57, 68].includes(item.producto_id) &&
+  if (esKit) {
+    if (
+      item.unidades.length !== item.cantidad ||
+      item.unidades.some(unidad =>
+        !unidad.codigo_exterior ||
+        unidad.series.length !== 2
+      )
+    ) {
+      errorSeries = true;
+    }
+  } else if (
+    [55, 56, 57, 68].includes(Number(item.producto_id)) &&
     item.unidades.length !== item.cantidad
   ) {
     errorSeries = true;
@@ -10340,19 +10719,21 @@ if (errorSeries) {
         }
       }
 
-      aviso.innerHTML =
-        '<div class="msg ok">Ingreso de mercadería registrado correctamente.</div>';
+    aviso.innerHTML =
+  '<div class="msg ok">Ingreso de mercadería registrado correctamente.</div>';
 
-      document.getElementById('stock-ingreso-items').innerHTML = '';
-      document.getElementById('stock-ingreso-proveedor').value = '';
-      document.getElementById('stock-ingreso-numero-remito').value = '';
-      document.getElementById('stock-ingreso-fecha-remito').value = '';
-      document.getElementById('stock-ingreso-observaciones').value = '';
+// Eliminar el borrador del ingreso que se acaba de registrar.
+localStorage.removeItem('sgv_borrador_ingreso_stock');
 
-      agregarFilaIngresoStock();
+document.getElementById('stock-ingreso-items').innerHTML = '';
+document.getElementById('stock-ingreso-proveedor').value = '';
+document.getElementById('stock-ingreso-numero-remito').value = '';
+document.getElementById('stock-ingreso-fecha-remito').value = '';
+document.getElementById('stock-ingreso-observaciones').value = '';
 
-      await cargarPantallaStock();
+agregarFilaIngresoStock();
 
+await cargarPantallaStock();
     } catch (error) {
       aviso.innerHTML =
         `<div class="msg err">${esc(error.message || 'Ocurrió un error.')}</div>`;
@@ -10446,8 +10827,10 @@ document.getElementById('stock-filtro-pendientes').value = '';
 
   await cargarPantallaStock();
 };
-      await cargarPantallaStock();
-    }
+    await cargarPantallaStock();
+
+recuperarBorradorIngresoStock();
+}
 
     /* ---------- VENTAS ---------- */
     const ESTADOS = { pendiente: 'Pendiente', listo: 'Listo', entregado: 'Entregado', anulado: 'Anulado' };

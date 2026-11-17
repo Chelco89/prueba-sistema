@@ -3152,6 +3152,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 <div id="caja-panel-cobro" hidden style="margin:16px 0"></div>
 <div id="caja-panel-egreso" hidden style="margin:16px 0"></div>
 <div id="caja-panel-efectivo" hidden style="margin:16px 0">
+  
   <section class="panel">
     <h2>Caja efectivo (ARS)</h2>
     <p>Libro de movimientos de efectivo.</p>
@@ -3177,6 +3178,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
 
     <p id="caja-efectivo-total"></p>
   </section>
+  <div id="caja-panel-sesion" style="margin:16px 0"></div>
 </div>
 <div id="caja-panel-usd" hidden style="margin:16px 0">
   <section class="panel">
@@ -3364,7 +3366,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     </div>
   </section>
 </div>
-<div id="caja-panel-sesion" hidden style="margin:16px 0"></div>
+
 <div id="caja-informes" class="panel" style="margin:16px 0" hidden>
   <h3>Informes de cierre de Caja</h3>
   <p class="vacio">Consultá e imprimí los informes de sesiones anteriores.</p>
@@ -3793,11 +3795,25 @@ async function cargarLibroCaja(moneda) {
   total.textContent = '';
 
   const { data, error } = await sb
-    .from('caja_movimientos')
-    .select('id, fecha, tipo, moneda, importe, medio_pago, descripcion, observaciones')
-    .eq('moneda', moneda)
-    .order('fecha', { ascending: true })
-    .order('id', { ascending: true });
+  .from('caja_movimientos')
+  .select(`
+    id,
+    fecha,
+    tipo,
+    moneda,
+    importe,
+    medio_pago,
+    descripcion,
+    observaciones,
+    cobro:caja_cobros (
+      cliente:clientes (
+        nombre
+      )
+    )
+  `)
+  .eq('moneda', moneda)
+  .order('fecha', { ascending: true })
+  .order('id', { ascending: true });
 
   if (error) {
     filas.innerHTML = `<tr><td colspan="5">No se pudieron cargar los movimientos: ${esc(error.message)}</td></tr>`;
@@ -3827,7 +3843,10 @@ async function cargarLibroCaja(moneda) {
     let movimiento = m.descripcion || m.tipo;
 
     if (m.tipo === 'saldo_inicial') movimiento = 'Saldo inicial';
-    if (m.tipo === 'cobro') movimiento = 'Cobro en efectivo';
+    if (m.tipo === 'cobro') {
+  const nombreCliente = m.cobro?.cliente?.nombre || 'Cliente sin identificar';
+  movimiento = `Cobro en efectivo - ${nombreCliente}`;
+}
     if (m.tipo === 'egreso') movimiento = 'Egreso de Caja';
     if (m.tipo === 'retiro') movimiento = 'Retiro de Caja';
     if (m.tipo === 'gasto_entre_sesiones') movimiento = 'Gasto entre sesiones';
@@ -3868,8 +3887,7 @@ function alternarPanelCaja(id) {
     'caja-panel-cheques',
     'caja-panel-echeqs',
     'caja-panel-banco-mega',
-    'caja-panel-banco-particular',
-    'caja-panel-sesion'
+    'caja-panel-banco-particular'
   ].forEach(panelId => {
     const otro = document.getElementById(panelId);
     if (otro) otro.hidden = true;
@@ -6530,19 +6548,27 @@ valoresContenedor.innerHTML = '';
       await cargarHistorialCaja();
       await cargarCarteraCheques();
       await cargarResumenCaja();
-    const panelesCajaPermitidos = [
+ const panelesCajaPermitidos = [
   'caja-panel-cobro',
   'caja-panel-egreso',
+  'caja-panel-efectivo',
+  'caja-panel-usd',
   'caja-panel-cheques',
   'caja-panel-echeqs',
   'caja-panel-banco-mega',
   'caja-panel-banco-particular',
-  'caja-panel-sesion',
   'caja-panel-transferencia'
 ];
-
 if (panelesCajaPermitidos.includes(cajaPanelActivo)) {
   alternarPanelCaja(cajaPanelActivo);
+    if (cajaPanelActivo === 'caja-panel-efectivo') {
+    await cargarLibroCaja('ARS');
+  }
+
+  if (cajaPanelActivo === 'caja-panel-usd') {
+    await cargarLibroCaja('USD');
+  }
+  
 
   if (cajaPanelActivo === 'caja-panel-cheques') {
   await cargarCarteraCheques('cheque');

@@ -2446,17 +2446,17 @@ async function vistaProveedores() {
   // Buscar la cuenta de MEGA.
   const { data: proveedor, error: errorProveedor } = await sb
     .from('proveedores')
-    .select('id,nombre')
+    .select('id,nombre,saldo_inicial,saldo_inicial_cargado')
     .eq('nombre', 'MEGA')
     .eq('activo', true)
     .maybeSingle();
 
-  if (errorProveedor || !proveedor) {
-    c.innerHTML = `<div class="panel">
-      Error al cargar el proveedor: ${esc(errorProveedor?.message || 'No se encontró MEGA.')}
-    </div>`;
-    return;
-  }
+ if (errorProveedor || !proveedor) {
+  c.innerHTML = `<div class="panel">
+    Error al cargar el proveedor: ${esc(errorProveedor?.message || 'No se encontró MEGA.')}
+  </div>`;
+  return;
+}
 
   // Consultar movimientos del proveedor.
   const { data, error } = await sb
@@ -2500,11 +2500,55 @@ async function vistaProveedores() {
   }).join('');
 
   const saldoActual = saldo;
+  const formularioSaldoInicial = proveedor.saldo_inicial_cargado
+  ? ''
+  : `
+    <div class="panel" style="margin:16px 0">
+      <h3>Cargar saldo inicial de MEGA</h3>
+      <p>
+        Ingresá el saldo con el que comienza la cuenta.
+        Positivo: deuda con MEGA. Negativo: saldo a favor.
+        También podés ingresar cero.
+      </p>
+
+      <form id="form-saldo-inicial-proveedor">
+        <div style="display:grid;grid-template-columns:
+          repeat(auto-fit,minmax(180px,1fr));gap:12px">
+
+          <div>
+            <label>Fecha del saldo inicial</label>
+            <input type="date" id="prov-saldo-fecha"
+              value="${hoy}" required>
+          </div>
+
+          <div>
+            <label>Importe inicial (positivo o negativo)</label>
+            <input type="number" id="prov-saldo-importe"
+              step="0.01" placeholder="Ej.: 150000 o -50000"
+              required>
+          </div>
+
+          <div>
+            <label>Observaciones</label>
+            <input type="text" id="prov-saldo-observaciones"
+              placeholder="Opcional">
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <button type="submit" class="btn">
+            Confirmar saldo inicial
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
 
   c.innerHTML = `
     <div class="panel">
       <h2>Cuenta corriente de proveedores</h2>
       <p>Registro de presupuestos y pagos realizados a MEGA.</p>
+      ${formularioSaldoInicial}
 
       <div class="panel" style="margin:16px 0">
         <h3>Cargar presupuesto</h3>
@@ -2580,7 +2624,63 @@ async function vistaProveedores() {
       </div>
     </div>
   `;
+  // Confirmar saldo inicial del proveedor.
+  const formularioSaldo = document.getElementById(
+    'form-saldo-inicial-proveedor'
+  );
 
+  if (formularioSaldo) {
+    formularioSaldo.addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const boton = formularioSaldo.querySelector('button[type="submit"]');
+      const fecha = document.getElementById('prov-saldo-fecha').value;
+      const importeTexto = document.getElementById('prov-saldo-importe').value;
+      const observaciones = document.getElementById('prov-saldo-observaciones').value.trim();
+
+      if (!fecha || importeTexto.trim() === '') {
+        alert('Completá la fecha y el importe.');
+        return;
+      }
+
+      const importe = Number(importeTexto);
+
+      if (!Number.isFinite(importe) || Math.round(importe * 100) !== importe * 100) {
+        alert('Ingresá un importe válido con hasta dos decimales.');
+        return;
+      }
+
+      if (!confirm(
+        '¿Confirmás el saldo inicial de MEGA por ' + dinero(importe) + '?\n\n' +
+        'Esta operación solamente puede realizarse una vez.'
+      )) {
+        return;
+      }
+
+      boton.disabled = true;
+      boton.textContent = 'Confirmando...';
+
+      const { error } = await sb.rpc(
+        'registrar_saldo_inicial_proveedor',
+        {
+          p_proveedor_id: proveedor.id,
+          p_fecha: fecha,
+          p_importe: importe,
+          p_observaciones: observaciones || null
+        }
+      );
+
+      if (error) {
+        alert('Error al confirmar el saldo inicial: ' + error.message);
+        boton.disabled = false;
+        boton.textContent = 'Confirmar saldo inicial';
+        return;
+      }
+
+      alert('Saldo inicial confirmado correctamente.');
+      await vistaProveedores();
+    });
+  }
   // Registrar un presupuesto como DEBE.
   const formulario = document.getElementById('form-presupuesto-proveedor');
 

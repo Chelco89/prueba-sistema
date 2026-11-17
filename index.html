@@ -1190,7 +1190,8 @@ armarSistema();
   ['listas_precios', 'Listas de Precios'],
   ['clientes', 'Clientes'],
   ['caja', 'Caja'],
-  ['cuentas_corrientes', 'Cta Cte']
+  ['cuentas_corrientes', 'Cta Cte'],
+  ['proveedores', 'Proveedores']
 );
       }
 
@@ -1238,6 +1239,7 @@ armarSistema();
     vistaCuentasCorrientes();
   }
 },
+proveedores: vistaProveedores,
   caja: vistaCaja
 })[vista]();
 
@@ -2419,6 +2421,207 @@ if (vista === 'deposito' && pedidoDepositoActivo) {
       });
     }
 
+async function vistaProveedores() {
+  const c = document.getElementById('contenido');
+
+  if (!['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
+    c.innerHTML = '<div class="panel">Sin permisos para ver esta sección.</div>';
+    return;
+  }
+
+  c.innerHTML = '<div class="panel">Cargando cuenta de proveedores…</div>';
+
+  const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const fechaLocal = new Date();
+  const hoy = [
+    fechaLocal.getFullYear(),
+    String(fechaLocal.getMonth() + 1).padStart(2, '0'),
+    String(fechaLocal.getDate()).padStart(2, '0')
+  ].join('-');
+
+  // Buscar la cuenta de MEGA.
+  const { data: proveedor, error: errorProveedor } = await sb
+    .from('proveedores')
+    .select('id,nombre')
+    .eq('nombre', 'MEGA')
+    .eq('activo', true)
+    .maybeSingle();
+
+  if (errorProveedor || !proveedor) {
+    c.innerHTML = `<div class="panel">
+      Error al cargar el proveedor: ${esc(errorProveedor?.message || 'No se encontró MEGA.')}
+    </div>`;
+    return;
+  }
+
+  // Consultar movimientos del proveedor.
+  const { data, error } = await sb
+    .from('proveedores_movimientos')
+    .select('id,fecha,comprobante_numero,descripcion,tipo,importe,origen')
+    .eq('proveedor_id', proveedor.id)
+    .order('fecha', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) {
+    c.innerHTML = `<div class="panel">
+      Error al cargar los movimientos: ${esc(error.message)}
+    </div>`;
+    return;
+  }
+
+  const movimientos = data || [];
+  let saldo = 0;
+
+  const filas = movimientos.map(m => {
+    const importe = Number(m.importe || 0);
+
+    if (m.tipo === 'debe') {
+      saldo += importe;
+    } else {
+      saldo -= importe;
+    }
+
+    return `
+      <tr>
+        <td>${m.fecha
+          ? new Date(m.fecha + 'T12:00:00').toLocaleDateString('es-AR')
+          : ''}</td>
+        <td>${esc(m.comprobante_numero || '')}</td>
+        <td>${esc(m.descripcion || '')}</td>
+        <td class="num">${m.tipo === 'debe' ? dinero(importe) : ''}</td>
+        <td class="num">${m.tipo === 'haber' ? dinero(importe) : ''}</td>
+        <td class="num">${dinero(saldo)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const saldoActual = saldo;
+
+  c.innerHTML = `
+    <div class="panel">
+      <h2>Cuenta corriente de proveedores</h2>
+      <p>Registro de presupuestos y pagos realizados a MEGA.</p>
+
+      <div class="panel" style="margin:16px 0">
+        <h3>Cargar presupuesto</h3>
+
+        <form id="form-presupuesto-proveedor">
+          <div style="display:grid;grid-template-columns:
+            repeat(auto-fit,minmax(180px,1fr));gap:12px">
+
+            <div>
+              <label>Proveedor</label>
+              <input type="text" value="${esc(proveedor.nombre)}" disabled>
+            </div>
+
+            <div>
+              <label>Fecha</label>
+              <input type="date" id="prov-fecha"
+                value="${hoy}" required>
+            </div>
+
+            <div>
+              <label>Número de presupuesto</label>
+              <input type="text" id="prov-comprobante"
+                placeholder="Número de presupuesto" required>
+            </div>
+
+            <div>
+              <label>Importe total</label>
+              <input type="number" id="prov-importe"
+                min="0.01" step="0.01"
+                placeholder="0,00" required>
+            </div>
+          </div>
+
+          <div style="margin-top:14px">
+            <button type="submit" class="btn">
+              Guardar presupuesto
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;
+        align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0">
+        <h3>Libro de movimientos · MEGA</h3>
+        <div>
+          <small>Saldo actual</small>
+          <h2>${dinero(saldoActual)}</h2>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>FECHA</th>
+              <th>COMP. N°</th>
+              <th>DESCRIPCIÓN</th>
+              <th class="num">DEBE</th>
+              <th class="num">HABER</th>
+              <th class="num">SALDO</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filas || `
+              <tr>
+                <td colspan="6">
+                  Todavía no hay movimientos registrados.
+                </td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Registrar un presupuesto como DEBE.
+  const formulario = document.getElementById('form-presupuesto-proveedor');
+
+  formulario.onsubmit = async e => {
+    e.preventDefault();
+
+    const boton = formulario.querySelector('button[type="submit"]');
+    const fecha = document.getElementById('prov-fecha').value;
+    const comprobante = document.getElementById('prov-comprobante').value.trim();
+    const importe = Number(document.getElementById('prov-importe').value);
+
+    if (!fecha || !comprobante || !Number.isFinite(importe) || importe <= 0) {
+      alert('Completá la fecha, el número de presupuesto y un importe válido.');
+      return;
+    }
+
+    boton.disabled = true;
+    boton.textContent = 'Guardando…';
+
+    const { error: errorGuardar } = await sb.rpc(
+      'registrar_presupuesto_proveedor',
+      {
+        p_fecha: fecha,
+        p_comprobante_numero: comprobante,
+        p_importe: importe,
+        p_descripcion: 'Presupuesto MEGA'
+      }
+    );
+
+    if (errorGuardar) {
+      alert('No se pudo guardar el presupuesto: ' + errorGuardar.message);
+      boton.disabled = false;
+      boton.textContent = 'Guardar presupuesto';
+      return;
+    }
+
+    alert('Presupuesto registrado correctamente.');
+    await vistaProveedores();
+  };
+}
+
     
 async function verCuentaCorriente(id) {
   const c = document.getElementById('contenido');
@@ -3234,13 +3437,14 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
     placeholder="Ingresar saldo del extracto"
   >
 
-  <label for="caja-mega-observaciones">Observaciones del cierre</label>
-  <textarea
-    id="caja-mega-observaciones"
-    rows="2"
-    maxlength="1000"
-    placeholder="Observaciones opcionales"
-  ></textarea>
+ <label for="caja-mega-observaciones">N.º de recibo MEGA (obligatorio)</label>
+<input
+  id="caja-mega-observaciones"
+  type="text"
+  maxlength="100"
+  placeholder="Ingresá el número de recibo"
+  required
+>
 
   <div id="caja-mega-cierre-aviso"></div>
 
@@ -4841,7 +5045,7 @@ cierresBancarios.forEach(cuenta => {
 
     const { data: cierre, error: errorInforme } = await sb
       .from('bancos_cierres')
-      .select('id,fecha_inicio,fecha_fin,saldo_calculado,saldo_extracto,diferencia,observaciones,informe')
+      .select('id,fecha_inicio,fecha_fin,saldo_calculado,saldo_extracto,diferencia,observaciones,numero_recibo_mega,informe')
       .eq('cuenta_id', cuenta.id)
       .eq('estado', 'cerrado')
       .order('id', { ascending: false })
@@ -4876,6 +5080,11 @@ cierresBancarios.forEach(cuenta => {
           <p>Saldo según extracto: ${cierre.saldo_extracto === null ? 'No informado' : dinero(cierre.saldo_extracto)}</p>
           <p>Diferencia: ${cierre.diferencia === null ? 'No calculada' : dinero(cierre.diferencia)}</p>
           <p>Observaciones: ${esc(cierre.observaciones || 'Sin observaciones')}</p>
+${
+  cuenta.id === 1
+    ? `<p>N.º de recibo MEGA: <b>${esc(cierre.numero_recibo_mega || '—')}</b></p>`
+    : ''
+}
           <h4>Transferencias del período (${movimientos.length})</h4>
           ${
             movimientos.length
@@ -5706,15 +5915,44 @@ contenedor.querySelectorAll('.caja-entregar-valor').forEach(b => {
   b.onclick = async () => {
     const id = Number(b.dataset.id);
 
-    const destinatario = prompt(
-      '¿A quién se entrega el cheque o e-cheq?'
+    const esPagoMega = confirm(
+      '¿El destinatario es MEGA?\n\n' +
+      'ACEPTAR: MEGA\n' +
+      'CANCELAR: Otro proveedor'
     );
 
-    if (destinatario === null) return;
+    let destinatario = '';
+    let numeroRecibo = null;
 
-    if (!destinatario.trim()) {
-      alert('Ingresá el destinatario.');
-      return;
+    if (esPagoMega) {
+      destinatario = 'MEGA';
+
+      numeroRecibo = prompt(
+        'Ingresá el número de recibo de MEGA:'
+      );
+
+      if (numeroRecibo === null) return;
+
+      if (!numeroRecibo.trim()) {
+        alert('El número de recibo de MEGA es obligatorio.');
+        return;
+      }
+    } else {
+      destinatario = prompt(
+        'Ingresá el nombre del otro proveedor:'
+      );
+
+      if (destinatario === null) return;
+
+      if (!destinatario.trim()) {
+        alert('Ingresá el nombre del destinatario.');
+        return;
+      }
+
+      if (destinatario.trim().toUpperCase() === 'MEGA') {
+        alert('Para MEGA tenés que seleccionar ACEPTAR en la pregunta anterior.');
+        return;
+      }
     }
 
     const fechaEntrega = prompt(
@@ -5724,8 +5962,10 @@ contenedor.querySelectorAll('.caja-entregar-valor').forEach(b => {
 
     if (fechaEntrega === null) return;
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega) ||
-        Number.isNaN(Date.parse(fechaEntrega))) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega) ||
+      Number.isNaN(Date.parse(fechaEntrega))
+    ) {
       alert('Ingresá una fecha válida con formato AAAA-MM-DD.');
       return;
     }
@@ -5740,12 +5980,17 @@ contenedor.querySelectorAll('.caja-entregar-valor').forEach(b => {
 
     b.disabled = true;
 
-    const { error } = await sb.rpc('entregar_valor_caja', {
-      p_valor_id: id,
-      p_destinatario: destinatario.trim(),
-      p_fecha_entrega: fechaEntrega,
-      p_observaciones: observaciones.trim() || null
-    });
+    const { error } = await sb.rpc(
+      'entregar_valor_caja_con_recibo',
+      {
+        p_valor_id: id,
+        p_destinatario: destinatario.trim(),
+        p_fecha_entrega: fechaEntrega,
+        p_observaciones: observaciones.trim() || null,
+        p_numero_recibo_mega: numeroRecibo?.trim() || null,
+        p_es_pago_mega: esPagoMega
+      }
+    );
 
     if (error) {
       alert('No se pudo registrar la entrega: ' + error.message);
@@ -5753,7 +5998,11 @@ contenedor.querySelectorAll('.caja-entregar-valor').forEach(b => {
       return;
     }
 
-    alert('Entrega registrada correctamente.');
+    alert(
+      esPagoMega
+        ? 'Entrega registrada correctamente. Se agregó el HABER a la cuenta corriente de MEGA.'
+        : 'Entrega registrada correctamente.'
+    );
 
     await cargarCarteraCheques();
     await cargarHistorialCaja();
@@ -5766,15 +6015,44 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
   b.onclick = async () => {
     const id = Number(b.dataset.id);
 
-    const destinatario = prompt(
-      '¿A quién se entrega el cheque o e-cheq?'
+    const esPagoMega = confirm(
+      '¿El destinatario es MEGA?\n\n' +
+      'ACEPTAR: MEGA\n' +
+      'CANCELAR: Otro proveedor'
     );
 
-    if (destinatario === null) return;
+    let destinatario = '';
+    let numeroRecibo = null;
 
-    if (!destinatario.trim()) {
-      alert('Ingresá el destinatario.');
-      return;
+    if (esPagoMega) {
+      destinatario = 'MEGA';
+
+      numeroRecibo = prompt(
+        'Ingresá el número de recibo de MEGA:'
+      );
+
+      if (numeroRecibo === null) return;
+
+      if (!numeroRecibo.trim()) {
+        alert('El número de recibo de MEGA es obligatorio.');
+        return;
+      }
+    } else {
+      destinatario = prompt(
+        'Ingresá el nombre del otro proveedor:'
+      );
+
+      if (destinatario === null) return;
+
+      if (!destinatario.trim()) {
+        alert('Ingresá el nombre del destinatario.');
+        return;
+      }
+
+      if (destinatario.trim().toUpperCase() === 'MEGA') {
+        alert('Para MEGA tenés que seleccionar ACEPTAR en la pregunta anterior.');
+        return;
+      }
     }
 
     const fechaEntrega = prompt(
@@ -5784,8 +6062,10 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
 
     if (fechaEntrega === null) return;
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega) ||
-        Number.isNaN(Date.parse(fechaEntrega))) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega) ||
+      Number.isNaN(Date.parse(fechaEntrega))
+    ) {
       alert('Ingresá una fecha válida con formato AAAA-MM-DD.');
       return;
     }
@@ -5800,12 +6080,17 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
 
     b.disabled = true;
 
-    const { error } = await sb.rpc('entregar_valor_inicial_caja', {
-      p_valor_id: id,
-      p_destinatario: destinatario.trim(),
-      p_fecha_entrega: fechaEntrega,
-      p_observaciones: observaciones.trim() || null
-    });
+    const { error } = await sb.rpc(
+      'entregar_valor_inicial_caja_con_recibo',
+      {
+        p_valor_id: id,
+        p_destinatario: destinatario.trim(),
+        p_fecha_entrega: fechaEntrega,
+        p_observaciones: observaciones.trim() || null,
+        p_numero_recibo_mega: numeroRecibo?.trim() || null,
+        p_es_pago_mega: esPagoMega
+      }
+    );
 
     if (error) {
       alert('No se pudo registrar la entrega: ' + error.message);
@@ -5813,7 +6098,11 @@ contenedor.querySelectorAll('.caja-entregar-inicial').forEach(b => {
       return;
     }
 
-    alert('Entrega registrada correctamente.');
+    alert(
+      esPagoMega
+        ? 'Entrega registrada correctamente. Se agregó el HABER a la cuenta corriente de MEGA.'
+        : 'Entrega registrada correctamente.'
+    );
 
     await cargarCarteraCheques();
     await cargarHistorialCaja();

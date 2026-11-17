@@ -6660,6 +6660,27 @@ if (
       if (error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
 
       const items = p.pedido_items.sort((a, b) => a.id - b.id);
+      // Orden visual: cada componente aparece inmediatamente debajo de su kit.
+const itemsOrdenados = [];
+const agregados = new Set();
+
+for (const item of items) {
+  if (agregados.has(item.id)) continue;
+
+  itemsOrdenados.push(item);
+  agregados.add(item.id);
+
+  const hijos = items.filter(
+    h => Number(h.padre_item_id) === Number(item.id)
+  );
+
+  hijos.forEach(hijo => {
+    if (!agregados.has(hijo.id)) {
+      itemsOrdenados.push(hijo);
+      agregados.add(hijo.id);
+    }
+  });
+}
       const abierto = ['pendiente', 'listo'].includes(p.estado);
       const tieneKits = items.some(i =>
         i.es_kit === true || i.padre_item_id != null
@@ -6671,7 +6692,8 @@ if (
      const req = i => i.series_requeridas ?? (
   productoUnidadEspecial(i)
     ? Math.ceil(i.cantidad) * (
-        i.producto.trim().toUpperCase() === 'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2
+        ['MINIKIT 5+ CON RAMPA Y REGULADOR 5TA', 'REGULADOR 5TA']
+          .includes(i.producto.trim().toUpperCase()) ? 1 : 2
       )
     : Math.ceil(i.cantidad)
 );
@@ -6687,9 +6709,41 @@ const productoUnidadEspecial = i => {
     'KIT 48+SGV',
     'KIT BLUE SGV',
     'KIT 6 CIL SGV',
-    'KIT 8 CIL SGV'
+    'KIT 8 CIL SGV',
+    'REGULADOR 5TA'
   ].includes(nombre);
 };
+// Obtener números internos de unidades disponibles en stock.
+const { data: unidadesStock, error: errorStockSeries } = await sb
+  .from('stock_unidades_serializadas')
+  .select('producto_id, stock_unidades_series(numero_serie)')
+  .eq('estado', 'disponible');
+
+const seriesDisponiblesPorProducto = {};
+
+if (!errorStockSeries) {
+  (unidadesStock || []).forEach(unidad => {
+    const productoId = String(unidad.producto_id);
+
+    if (!seriesDisponiblesPorProducto[productoId]) {
+      seriesDisponiblesPorProducto[productoId] = [];
+    }
+
+    (unidad.stock_unidades_series || []).forEach(serie => {
+      if (serie.numero_serie) {
+        seriesDisponiblesPorProducto[productoId].push(
+          serie.numero_serie
+        );
+      }
+    });
+  });
+
+  Object.keys(seriesDisponiblesPorProducto).forEach(productoId => {
+    seriesDisponiblesPorProducto[productoId] = [
+      ...new Set(seriesDisponiblesPorProducto[productoId])
+    ];
+  });
+}
 
       const filas = editando
         ? `<tr><td><div style="display:grid;grid-template-columns:1fr 80px 36px;gap:8px;font-size:12px;font-weight:600;color:var(--gris)"><span>PRODUCTO</span><span>CANT.</span><span></span></div>
@@ -6699,7 +6753,7 @@ const productoUnidadEspecial = i => {
           <input class="cant" type="number" step="any" min="0" value="${i.cantidad}" aria-label="Cantidad">
           <button type="button" class="quitar" aria-label="Quitar">✕</button></div>`).join('')}</div>
         <button type="button" class="btn sec chico" id="ed-mas" style="margin-top:10px;width:100%;border-style:dashed">+ Agregar producto</button></td></tr>`
-        : items.map(i => {
+        : itemsOrdenados.map(i => {
           if (i.es_kit === true) {
             return `<tr>
           <td style="background:#f4f7fb;padding:12px;border-radius:8px">
@@ -6711,8 +6765,19 @@ const productoUnidadEspecial = i => {
           </td>
         </tr>`;
           }
-          const ser = i.series || [], falta = faltaSerie(i);
-          const unidadEspecial = productoUnidadEspecial(i);
+         const ser = i.series || [], falta = faltaSerie(i);
+
+const productoStock = productosLista.find(
+  x => x.nombre.trim().toUpperCase() === i.producto.trim().toUpperCase()
+);
+const esRegulador55 = Number(productoStock?.id) === 55;
+
+const seriesDisponibles = productoStock
+  ? seriesDisponiblesPorProducto[String(productoStock.id)] || []
+  : [];
+
+const listaSeriesId = `lista-series-${i.id}`;
+          const unidadEspecial = productoUnidadEspecial(i) || esRegulador55;
           const chips = ser.length ? ser.map(s => `<span class="chip-serie">${esc(s.numero_serie)}${abierto ? `<button type="button" class="del-serie" data-id="${s.id}" title="Quitar" style="background:none;border:0;color:var(--rojo);cursor:pointer;padding:0 0 0 6px">✕</button>` : ''}</span>`).join('') : '<small class="series">Sin números de serie</small>';
           return `<tr><td style="${i.padre_item_id
   ? 'padding:9px 12px 9px 36px;border-left:3px solid #cbd5e1;background:#fafbfd;color:#64748b;font-size:13px;'
@@ -6728,7 +6793,9 @@ const productoUnidadEspecial = i => {
           <label style="margin:0;font-size:14px">¿Cuántos n.º de serie cargar?</label>
           <input type="number" class="inp-req" data-item-id="${i.id}" min="0" step="1" value="${req(i)}" style="width:80px;padding:6px"></div>` : ''}
         <div class="lista-series">${chips}</div>
-        ${abierto && unidadEspecial ? `
+      
+${abierto && unidadEspecial ? `
+  ${!esRegulador55 ? `
   <div class="item-form" style="margin-top:10px;gap:8px;flex-wrap:wrap">
     <input
       type="text"
@@ -6744,53 +6811,68 @@ const productoUnidadEspecial = i => {
       📷 Escanear unidad
     </button>
   </div>
+  ` : ''}
 
- <div class="unidad-series" data-item-id="${i.id}">
-  ${Array.from({
-    length: i.producto.trim().toUpperCase() === 'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2
-  }, (_, k) => `
-    <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+  <div class="unidad-series" data-item-id="${i.id}">
+    ${esRegulador55 ? `
+      <datalist id="${listaSeriesId}">
+        ${seriesDisponibles.map(numero => `
+          <option value="${esc(numero)}"></option>
+        `).join('')}
+      </datalist>
+    ` : ''}
 
-      <select
-        class="unidad-serie-prefijo"
-        data-item-id="${i.id}"
-        data-serie-index="${k}"
-        style="padding:8px">
-        <option value="">Prefijo...</option>
-        <option value="MG22">MG22</option>
-        <option value="MG33">MG33</option>
-        <option value="MG31">MG31</option>
-        <option value="TT18">TT18</option>
-        <option value="otro">Otro</option>
-      </select>
+    ${Array.from({
+      length: esRegulador55 ? 1 :
+        (i.producto.trim().toUpperCase() ===
+        'MINIKIT 5+ CON RAMPA Y REGULADOR 5TA' ? 1 : 2)
+    }, (_, k) => `
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
 
-      <input
-        type="text"
-        class="unidad-serie-interna"
-        data-item-id="${i.id}"
-        data-serie-index="${k}"
-        placeholder="Número interno ${k + 1}"
-        style="flex:1;min-width:0;padding:9px">
+        ${!esRegulador55 ? `
+        <select
+          class="unidad-serie-prefijo"
+          data-item-id="${i.id}"
+          data-serie-index="${k}"
+          style="padding:8px">
+          <option value="">Prefijo...</option>
+          <option value="MG22">MG22</option>
+          <option value="MG33">MG33</option>
+          <option value="MG31">MG31</option>
+          <option value="TT18">TT18</option>
+          <option value="otro">Otro</option>
+        </select>
+        ` : ''}
 
-      <button
-        type="button"
-        class="btn sec chico btn-escanear-unidad-serie"
-        data-item-id="${i.id}"
-        data-serie-index="${k}">
-        📷
-      </button>
-    </div>
-  `).join('')}
+        <input
+          type="text"
+          class="unidad-serie-interna"
+          data-item-id="${i.id}"
+          data-serie-index="${k}"
+          ${esRegulador55 ? `list="${listaSeriesId}"` : ''}
+          placeholder="${esRegulador55 ? 'Serie MG22-' : 'Número interno ' + (k + 1)}"
+          style="flex:1;min-width:0;padding:9px">
 
-  <button
-    type="button"
-    class="btn chico btn-reservar-unidad"
-    data-item-id="${i.id}"
-    style="margin-top:8px">
-    Guardar y reservar unidad
-  </button>
-</div>
+        <button
+          type="button"
+          class="btn sec chico btn-escanear-unidad-serie"
+          data-item-id="${i.id}"
+          data-serie-index="${k}">
+          📷
+        </button>
+      </div>
+    `).join('')}
+
+    <button
+      type="button"
+      class="btn chico btn-reservar-unidad"
+      data-item-id="${i.id}"
+      style="margin-top:8px">
+      Guardar y reservar unidad
+    </button>
+  </div>
 ` : ''}
+
        ${abierto && falta > 0 && !unidadEspecial ?`<div class="casillas" data-item-id="${i.id}">
         <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
 
@@ -6815,6 +6897,11 @@ const productoUnidadEspecial = i => {
   <button type="button" class="btn sec chico btn-generar-series"
     data-item-id="${i.id}">Generar</button>
 </div>
+<datalist id="${listaSeriesId}">
+  ${seriesDisponibles.map(numero => `
+    <option value="${esc(numero)}"></option>
+  `).join('')}
+</datalist>
          ${Array.from({ length: falta }, (_, k) => `
   <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
 
@@ -6832,11 +6919,12 @@ const productoUnidadEspecial = i => {
   </select>
 
   <input
-    class="input-serie"
-    data-item-id="${i.id}"
-    data-serie-index="${k}"
-    placeholder="N.º de serie ${k + 1}"
-    style="flex:1;min-width:0">
+  class="input-serie"
+  data-item-id="${i.id}"
+  data-serie-index="${k}"
+  list="${listaSeriesId}"
+  placeholder="N.º de serie ${k + 1}"
+  style="flex:1;min-width:0">
 
   <button
     type="button"
@@ -7106,6 +7194,10 @@ c.querySelectorAll('.btn-escanear-unidad-serie').forEach(btn => {
         `.unidad-serie-interna[data-item-id="${itemId}"][data-serie-index="${indice}"]`
       );
 
+           const item = itemPorId(itemId);
+      const esRegulador55 =
+        item?.producto?.trim().toUpperCase() === 'REGULADOR 5TA';
+
       const selector = c.querySelector(
         `.unidad-serie-prefijo[data-item-id="${itemId}"][data-serie-index="${indice}"]`
       );
@@ -7114,7 +7206,15 @@ c.querySelectorAll('.btn-escanear-unidad-serie').forEach(btn => {
 
       let numero = String(codigo || '').trim().toUpperCase();
 
-      if (!/^[A-Z0-9]+-.+/.test(numero)) {
+      if (esRegulador55) {
+        if (numero.startsWith('MG22-')) {
+          // Ya tiene el prefijo correcto.
+        } else if (numero.includes('-')) {
+          return err('La serie del REGULADOR 5TA debe comenzar con MG22-.');
+        } else {
+          numero = 'MG22-' + numero;
+        }
+      } else if (!/^[A-Z0-9]+-.+/.test(numero)) {
         let prefijo = selector?.value || '';
 
         if (!prefijo) {
@@ -7143,9 +7243,15 @@ c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
   btn.onclick = async () => {
     const itemId = btn.dataset.itemId;
 
-    const codigo = c.querySelector(
-      `.unidad-codigo-exterior[data-item-id="${itemId}"]`
-    )?.value.trim().toUpperCase() || null;
+       const item = itemPorId(itemId);
+    const esRegulador55 =
+      item?.producto?.trim().toUpperCase() === 'REGULADOR 5TA';
+
+    const codigo = esRegulador55 ? null : (
+      c.querySelector(
+        `.unidad-codigo-exterior[data-item-id="${itemId}"]`
+      )?.value.trim().toUpperCase() || null
+    );
 
     const campos = [
       ...c.querySelectorAll(
@@ -7155,8 +7261,22 @@ c.querySelectorAll('.btn-reservar-unidad').forEach(btn => {
 
     const series = campos.map(x => x.value.trim().toUpperCase());
 
-    if (!codigo && series.every(x => !x)) {
-      return err('Escaneá el código exterior o ingresá los números internos.');
+       if (!codigo && series.every(x => !x)) {
+      return err('Escaneá o ingresá el número de serie.');
+    }
+
+    if (esRegulador55) {
+      if (series.length !== 1) {
+        return err('El REGULADOR 5TA requiere una sola serie.');
+      }
+
+      if (series[0].startsWith('MG22-')) {
+        // Serie completa.
+      } else if (series[0].includes('-')) {
+        return err('La serie del REGULADOR 5TA debe comenzar con MG22-.');
+      } else {
+        series[0] = 'MG22-' + series[0];
+      }
     }
 
     if (series.some(x => !x)) {
@@ -8785,6 +8905,9 @@ function agregarFilaIngresoStock() {
   function actualizarUnidadesSerializadas() {
     const requiereSerie =
       productoSelect.selectedOptions[0]?.dataset.llevaSerie === 'true';
+      const esKitMG22 = ['34', '41', '44'].includes(
+  productoSelect.value
+);
   const prefijosSeries = {
   '68': 'MG31-',
   '55': 'MG22-',
@@ -8813,7 +8936,8 @@ const esKitDosSeries = Boolean(prefijoKit);
     const generador = fila.querySelector('.stock-ingreso-generador');
     const ayuda = fila.querySelector('.stock-ingreso-ayuda');
 
- panelSeries.style.display = requiereSerie ? '' : 'none';
+panelSeries.style.display =
+  (requiereSerie || esKitMG22) ? '' : 'none';
 
 generador.style.display =
   esProductoConPrefijo ? '' : 'none';
@@ -8840,7 +8964,7 @@ ayuda.textContent =
 
    unidadesContenedor.innerHTML = '';
 
-if (!requiereSerie) return;
+if (!requiereSerie && !esKitMG22) return;
 
 const cantidad = Number(cantidadInput.value);
 
@@ -8857,7 +8981,26 @@ const cantidad = Number(cantidadInput.value);
       unidad.innerHTML = `
        <b>Unidad ${i + 1}</b>
 
-${esProductoConPrefijo ? `
+${esKitMG22 ? `
+  <div style="margin-top: 8px;">
+    <label>Serie del regulador 5TA (MG22)</label>
+    <div style="display:flex;align-items:center;gap:0">
+      <span style="padding:9px;border:1px solid #ccc;border-radius:6px 0 0 6px;background:#eee">
+        MG22-
+      </span>
+      <div style="display:flex;gap:6px;align-items:center;flex:1">
+        <input type="text"
+          class="stock-unidad-numero-serie"
+          placeholder="Ej.: SRME0540"
+          style="flex:1;border-radius:0 6px 6px 0">
+        <button type="button"
+          class="btn chico sec stock-escanear-serie">
+          <i class="fa fa-camera"></i> Escanear
+        </button>
+      </div>
+    </div>
+  </div>
+` : esProductoConPrefijo ? `
   <div style="margin-top: 8px;">
     <label>Serie interna</label>
     <div style="display:flex;align-items:center;gap:0">
@@ -8989,7 +9132,11 @@ if (selectorPrefijoKit) {
   };
 }
 
-     if (!esProductoConPrefijo && !esKitDosSeries) {
+    if (
+  !esProductoConPrefijo &&
+  !esKitDosSeries &&
+  !esKitMG22
+) {
         const seriesContenedor =
           unidad.querySelector('.stock-unidad-series');
 
@@ -10610,7 +10757,42 @@ const items = filas.map(fila => {
     )
   };
 
-if (llevaSerie) {
+
+const idProducto = Number(item.producto_id);
+const esKitMG22 = [34, 41, 44].includes(idProducto);
+
+if (esKitMG22) {
+  item.unidades = [
+    ...fila.querySelectorAll('.stock-ingreso-unidad')
+  ]
+    .map(unidad => {
+      const input = unidad.querySelector(
+        '.stock-unidad-numero-serie'
+      );
+
+      const valor = input?.value.trim().toUpperCase() || '';
+
+      if (!valor) {
+        return { series: [] };
+      }
+
+      const serie = valor.startsWith('MG22-')
+        ? valor
+        : 'MG22-' + valor;
+
+      return {
+        series: [serie]
+      };
+    });
+
+  if (
+    item.unidades.length > item.cantidad ||
+    item.unidades.some(unidad => unidad.series.length > 1)
+  ) {
+    errorSeries = true;
+  }
+
+} else if (llevaSerie) {
   const prefijos = {
     68: 'MG31-',
     55: 'MG22-',
@@ -10619,7 +10801,7 @@ if (llevaSerie) {
   };
 
   const idsKit = [116, 117, 118, 119, 120, 139, 140];
-  const esKit = idsKit.includes(Number(item.producto_id));
+  const esKit = idsKit.includes(idProducto);
 
   item.unidades = [
     ...fila.querySelectorAll('.stock-ingreso-unidad')
@@ -10669,21 +10851,24 @@ if (llevaSerie) {
       errorSeries = true;
     }
   } else if (
-    [55, 56, 57, 68].includes(Number(item.producto_id)) &&
+    [55, 56, 57, 68].includes(idProducto) &&
     item.unidades.length !== item.cantidad
   ) {
     errorSeries = true;
   }
 }
 
+
   return item;
 });
 
+
 if (errorSeries) {
   aviso.innerHTML =
-    '<div class="msg err">Para REGULADOR 5TA y VALVULA DE CILINDRO C/DAP TESMON, la cantidad de series cargadas debe coincidir con la cantidad de unidades ingresadas.</div>';
+    '<div class="msg err">Revisá las identificaciones: los kits nuevos admiten una serie MG22 por regulador identificado; los demás productos mantienen sus validaciones habituales.</div>';
   return;
 }
+
 
   if (
   !items.length ||
@@ -12435,10 +12620,33 @@ lista_precio_id: linea.lista_precio_id,
       }
       res.innerHTML = data.map(p => {
         
+const itemsOrdenados = (p.pedido_items || [])
+  .slice()
+  .sort((a, b) => a.id - b.id);
+
+const itemsVisuales = [];
+const agregados = new Set();
+
+for (const item of itemsOrdenados) {
+  if (agregados.has(item.id)) continue;
+
+  itemsVisuales.push(item);
+  agregados.add(item.id);
+
+  const hijos = itemsOrdenados.filter(
+    h => Number(h.padre_item_id) === Number(item.id)
+  );
+
+  hijos.forEach(hijo => {
+    if (!agregados.has(hijo.id)) {
+      itemsVisuales.push(hijo);
+      agregados.add(hijo.id);
+    }
+  });
+}
+
 const itemsHtml = p.pedido_items && p.pedido_items.length
-  ? p.pedido_items
-      .sort((a, b) => a.id - b.id)
-      .map(i => {
+  ? itemsVisuales.map(i => {
         const esComponente = !!i.padre_item_id;
         const esKit = i.es_kit === true;
 

@@ -3108,10 +3108,17 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
   let precios = [];
 
   if (idsItems.length) {
-    const { data, error } = await sb
-      .from('pedido_item_precios')
-      .select('*')
-      .in('pedido_item_id', idsItems);
+   const { data, error } = await sb
+  .from('pedido_item_precios')
+  .select(`
+    pedido_item_id,
+    precio_unitario,
+    descuento_tipo,
+    descuento_valor,
+    descuento_importe,
+    total_linea
+  `)
+  .in('pedido_item_id', idsItems);
 
     if (error) {
       c.innerHTML = `<div class="panel">
@@ -3153,15 +3160,23 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
         <tr>
           <td>${esc(item.producto || 'Producto')}</td>
           <td class="num">${cantidad.toLocaleString('es-AR')}</td>
-          <td class="num">Sin precio registrado</td>
-          <td class="num">Pendiente</td>
+          <td colspan="3" class="num">Sin precio registrado</td>
         </tr>
       `;
     }
 
     const precioUnitario = Number(precio.precio_unitario || 0);
-    const totalLinea = Number(precio.total_linea);
-    total += totalLinea;
+const totalLinea = Number(precio.total_linea);
+const descuentoImporte = Number(precio.descuento_importe || 0);
+
+const etiquetaDescuento =
+  precio.descuento_tipo === 'porcentaje'
+    ? `${precio.descuento_valor}%`
+    : precio.descuento_tipo === 'importe'
+      ? dinero(descuentoImporte)
+      : '—';
+
+total += totalLinea;
 
     const componentes = (items || []).filter(
       hijo => String(hijo.padre_item_id) === String(item.id)
@@ -3184,7 +3199,8 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
         </td>
         <td class="num">${cantidad.toLocaleString('es-AR')}</td>
         <td class="num">${dinero(precioUnitario)}</td>
-        <td class="num">${dinero(totalLinea)}</td>
+        <td class="num">${esc(etiquetaDescuento)}</td>
+<td class="num">${dinero(totalLinea)}</td>
       </tr>
     `;
   }).join('');
@@ -3223,7 +3239,8 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
               <th>Producto</th>
               <th class="num">Cantidad</th>
               <th class="num">Precio unitario</th>
-              <th class="num">Total</th>
+<th class="num">Descuento</th>
+<th class="num">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -3231,7 +3248,7 @@ async function verPresupuestoCuentaCorriente(pedidoId, cuentaId) {
           </tbody>
           <tfoot>
             <tr>
-              <th colspan="3" class="num">Total registrado</th>
+             <th colspan="4" class="num">Total registrado</th>
               <th class="num">${dinero(total)}</th>
             </tr>
           </tfoot>
@@ -8872,8 +8889,29 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
     </button>
   </div>
 
-</div>
+<div class="panel" style="margin-top:15px">
+  <h3>Buscar número de serie interno</h3>
 
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <input
+      type="text"
+      id="stock-unidades-buscar-serie"
+      placeholder="Ingresá el número completo o una parte"
+      style="flex:1;min-width:200px;text-transform:uppercase"
+    >
+
+    <button
+      type="button"
+      class="btn"
+      id="stock-unidades-ejecutar-busqueda">
+      Buscar
+    </button>
+  </div>
+
+  <p class="vacio">
+    Podés buscar, por ejemplo, SRME0358 y encontrar MG22-SRME0358.
+  </p>
+</div>
 <div class="panel" style="margin-top:15px">
   <h3>Identificar unidades existentes</h3>
 
@@ -8914,7 +8952,14 @@ const panelProductos = document.getElementById('stock-panel-productos');
 const panelHistorial = document.getElementById('stock-panel-historial');
 const panelUnidades = document.getElementById('stock-panel-unidades');
 const CLAVE_BORRADOR_STOCK = 'sgv_borrador_ingreso_stock';
+const CLAVE_SOLAPA_STOCK = 'sgv_stock_solapa';
+const CLAVE_PRODUCTO_UNIDADES = 'sgv_stock_producto_unidades';
+const CLAVE_ESTADO_UNIDADES = 'sgv_stock_estado_unidades';
 
+stockTabActiva =
+  sessionStorage.getItem(CLAVE_SOLAPA_STOCK) ||
+  stockTabActiva ||
+  'ingreso';
 let restaurandoBorradorStock = false;
 
 function guardarBorradorIngresoStock() {
@@ -9106,6 +9151,7 @@ const tabUnidades = document.getElementById('stock-tab-unidades');
 
      function mostrarSolapaStock(solapa) {
       stockTabActiva = solapa;
+      sessionStorage.setItem(CLAVE_SOLAPA_STOCK, solapa);
       guardarEstadoNavegacion();
   const verIngreso = solapa === 'ingreso';
   const verProductos = solapa === 'productos';
@@ -9151,15 +9197,74 @@ document.getElementById(
 ).onclick = abrirFormularioStockExistente;
 document.getElementById(
   'stock-unidades-filtro-producto'
-).onchange = cargarUnidadesSerializadas;
+).onchange = () => {
+  sessionStorage.setItem(
+    CLAVE_PRODUCTO_UNIDADES,
+    document.getElementById(
+      'stock-unidades-filtro-producto'
+    ).value
+  );
+
+  cargarUnidadesSerializadas();
+};
 
 document.getElementById(
   'stock-unidades-filtro-estado'
-).onchange = cargarUnidadesSerializadas;
+).onchange = () => {
+  sessionStorage.setItem(
+    CLAVE_ESTADO_UNIDADES,
+    document.getElementById(
+      'stock-unidades-filtro-estado'
+    ).value
+  );
 
+  cargarUnidadesSerializadas();
+};
+document.getElementById(
+  'stock-unidades-ejecutar-busqueda'
+).onclick = () => {
+  const texto = document.getElementById(
+    'stock-unidades-buscar-serie'
+  ).value.trim().toUpperCase();
+
+  sessionStorage.setItem(
+    'stock_unidades_buscar_serie',
+    texto
+  );
+
+  cargarUnidadesSerializadas();
+};
+
+// BUSCAR AUTOMÁTICAMENTE AL ESCRIBIR
+document.getElementById(
+  'stock-unidades-buscar-serie'
+).oninput = () => {
+  const texto = document.getElementById(
+    'stock-unidades-buscar-serie'
+  ).value.trim().toUpperCase();
+
+  sessionStorage.setItem(
+    'stock_unidades_buscar_serie',
+    texto
+  );
+
+  cargarUnidadesSerializadas();
+};
+
+document.getElementById(
+  'stock-unidades-buscar-serie'
+).onkeydown = (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    cargarUnidadesSerializadas();
+  }
+};
 document.getElementById(
   'stock-unidades-limpiar'
 ).onclick = async () => {
+  sessionStorage.removeItem(CLAVE_PRODUCTO_UNIDADES);
+  sessionStorage.removeItem(CLAVE_ESTADO_UNIDADES);
+
   document.getElementById(
     'stock-unidades-filtro-producto'
   ).value = '';
@@ -10749,79 +10854,261 @@ if (codigoExterior) {
   console.error('Error recuperando borrador de stock:', error);
 }
 }
- async function cargarUnidadesSerializadas() {
+
+async function cargarUnidadesSerializadas() {
   const contenedor =
     document.getElementById('stock-unidades-lista');
 
   contenedor.innerHTML =
     '<p class="vacio">Cargando unidades...</p>';
-    const filtroProducto = document.getElementById(
-  'stock-unidades-filtro-producto'
+
+  const filtroProducto = document.getElementById(
+    'stock-unidades-filtro-producto'
+  );
+
+  const { data: productosFiltro, error: errorProductos } =
+    await sb
+      .from('productos')
+      .select('id,nombre,stock')
+      .eq('activo', true)
+      .eq('lleva_serie', true)
+      .order('nombre');
+
+  if (errorProductos) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(errorProductos.message)}</div>`;
+    return;
+  }
+
+ const productoSeleccionado =
+  filtroProducto.value ||
+  sessionStorage.getItem(CLAVE_PRODUCTO_UNIDADES) ||
+  '';
+
+  filtroProducto.innerHTML =
+    '<option value="">Todos los productos</option>' +
+    productosFiltro.map(p => `
+      <option value="${p.id}">${esc(p.nombre)}</option>
+    `).join('');
+
+  filtroProducto.value = productoSeleccionado;
+
+ const filtroEstado = document.getElementById(
+  'stock-unidades-filtro-estado'
 );
 
-const { data: productosFiltro, error: errorProductos } =
-  await sb
-    .from('productos')
-    .select('id,nombre')
-    .eq('activo', true)
-    .eq('lleva_serie', true)
-    .order('nombre');
+const estadoSeleccionado =
+  filtroEstado.value ||
+  sessionStorage.getItem(CLAVE_ESTADO_UNIDADES) ||
+  '';
+const buscadorSerie = document.getElementById(
+  'stock-unidades-buscar-serie'
+);
 
-if (errorProductos) {
-  contenedor.innerHTML =
-    `<div class="msg err">${esc(errorProductos.message)}</div>`;
-  return;
+const textoGuardado = sessionStorage.getItem(
+  'stock_unidades_buscar_serie'
+) || '';
+
+if (!buscadorSerie.value && textoGuardado) {
+  buscadorSerie.value = textoGuardado;
 }
 
-filtroProducto.innerHTML =
-  '<option value="">Todos los productos</option>' +
-  productosFiltro.map(p => `
-    <option value="${p.id}">${esc(p.nombre)}</option>
-  `).join('');
+const textoBusqueda = buscadorSerie.value
+  .trim()
+  .toUpperCase();
+filtroEstado.value = estadoSeleccionado;
 
-  let consulta = sb
+ // CONTADORES DEL PRODUCTO SELECCIONADO
+
+// STOCK REAL
+const productoActual = productoSeleccionado
+  ? productosFiltro.find(
+      p => p.id === Number(productoSeleccionado)
+    )
+  : null;
+
+const stockReal = productoSeleccionado
+  ? Number(productoActual?.stock || 0)
+  : productosFiltro.reduce(
+      (suma, p) => suma + Number(p.stock || 0),
+      0
+    );
+
+// UNIDADES DISPONIBLES CON SUS SERIES INTERNAS
+let consultaIdentificadas = sb
   .from('stock_unidades_serializadas')
   .select(`
     id,
-    producto_id,
-    codigo_exterior,
-    estado,
-    pedido_id,
-    creado_en,
-    productos(nombre),
-    stock_unidades_series(
-      id,
-      numero_serie
-    )
+    stock_unidades_series(id)
   `)
-  .order('id', { ascending: false })
-  .range(0, 49);
-
-const productoSeleccionado =
-  document.getElementById(
-    'stock-unidades-filtro-producto'
-  ).value;
-
-const estadoSeleccionado =
-  document.getElementById(
-    'stock-unidades-filtro-estado'
-  ).value;
+  .eq('estado', 'disponible');
 
 if (productoSeleccionado) {
-  consulta = consulta.eq(
+  consultaIdentificadas = consultaIdentificadas.eq(
     'producto_id',
     Number(productoSeleccionado)
   );
 }
 
-if (estadoSeleccionado) {
+// UNIDADES ASIGNADAS
+let consultaAsignadas = sb
+  .from('stock_unidades_serializadas')
+  .select('id', { count: 'exact', head: true })
+  .eq('estado', 'asignada');
+
+if (productoSeleccionado) {
+  consultaAsignadas = consultaAsignadas.eq(
+    'producto_id',
+    Number(productoSeleccionado)
+  );
+}
+
+const [
+  resultadoIdentificadas,
+  resultadoAsignadas
+] = await Promise.all([
+  consultaIdentificadas,
+  consultaAsignadas
+]);
+
+if (resultadoIdentificadas.error || resultadoAsignadas.error) {
+  contenedor.innerHTML =
+    `<div class="msg err">${esc(
+      resultadoIdentificadas.error?.message ||
+      resultadoAsignadas.error?.message
+    )}</div>`;
+  return;
+}
+
+// CADA UNIDAD FÍSICA CUENTA UNA SOLA VEZ,
+// AUNQUE TENGA VARIOS NÚMEROS INTERNOS.
+const total = (resultadoIdentificadas.data || [])
+  .filter(u => u.stock_unidades_series?.length > 0)
+  .length;
+
+const pendientes = Math.max(stockReal - total, 0);
+
+const asignadas = resultadoAsignadas.count || 0;
+// BUSCAR UNIDADES POR NÚMERO DE SERIE INTERNO
+let unidadesEncontradasPorSerie = null;
+
+if (textoBusqueda) {
+  const { data: seriesEncontradas, error: errorBusqueda } =
+    await sb
+      .from('stock_unidades_series')
+      .select('unidad_id')
+      .ilike('numero_serie', `%${textoBusqueda}%`);
+
+  if (errorBusqueda) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(errorBusqueda.message)}</div>`;
+    return;
+  }
+
+  unidadesEncontradasPorSerie = [
+    ...new Set(
+      (seriesEncontradas || [])
+        .map(s => s.unidad_id)
+        .filter(Boolean)
+    )
+  ];
+}
+  // CONSULTA DE UNIDADES PARA MOSTRAR
+  let consulta = sb
+    .from('stock_unidades_serializadas')
+    .select(`
+      id,
+      producto_id,
+      codigo_exterior,
+      estado,
+      pedido_id,
+      pedido_item_id,
+      creado_en,
+      productos(nombre),
+      stock_unidades_series(
+        id,
+        numero_serie
+      )
+    `)
+    .order('id', { ascending: false })
+    .range(0, 49);
+
+  if (productoSeleccionado) {
+    consulta = consulta.eq(
+      'producto_id',
+      Number(productoSeleccionado)
+    );
+  }
+  if (textoBusqueda) {
+  if (unidadesEncontradasPorSerie.length === 0) {
+  contenedor.innerHTML =
+    '<p class="vacio">No se encontraron números de serie coincidentes.</p>';
+  return;
+}
+
+  consulta = consulta.in(
+    'id',
+    unidadesEncontradasPorSerie
+  );
+}
+
+  if (estadoSeleccionado && !textoBusqueda) {
   consulta = consulta.eq(
     'estado',
     estadoSeleccionado
   );
 }
 
-const { data, error } = await consulta;
+  const { data, error } = await consulta;
+  // OBTENER INFORMACIÓN DE LOS ITEMS DE PEDIDO
+const itemsPedidoIds = [
+  ...new Set(
+    (data || [])
+      .map(u => u.pedido_item_id)
+      .filter(Boolean)
+  )
+];
+
+let itemsPedido = [];
+let itemsPadre = [];
+
+if (itemsPedidoIds.length) {
+  const { data: items, error: errorItems } = await sb
+    .from('pedido_items')
+    .select('id, producto, es_kit, padre_item_id')
+    .in('id', itemsPedidoIds);
+
+  if (errorItems) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(errorItems.message)}</div>`;
+    return;
+  }
+
+  itemsPedido = items || [];
+  // OBTENER LOS ITEMS PADRE (KITS)
+const itemsPadreIds = [
+  ...new Set(
+    itemsPedido
+      .map(item => item.padre_item_id)
+      .filter(Boolean)
+  )
+];
+
+if (itemsPadreIds.length) {
+  const { data: padres, error: errorPadres } = await sb
+    .from('pedido_items')
+    .select('id, producto, es_kit')
+    .in('id', itemsPadreIds);
+
+  if (errorPadres) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(errorPadres.message)}</div>`;
+    return;
+  }
+
+  itemsPadre = padres || [];
+}
+}
 
   if (error) {
     contenedor.innerHTML =
@@ -10829,13 +11116,43 @@ const { data, error } = await consulta;
     return;
   }
 
+// CONTADORES
+const resumen = `
+  <div class="panel" style="margin-bottom:12px;">
+    <div class="grid-resumen">
+      <div>
+        <small>Stock real</small>
+        <h3>${stockReal}</h3>
+      </div>
+      <div>
+        <small>Con serie</small>
+        <h3>${total}</h3>
+      </div>
+      <div>
+        <small>Pendientes de identificar</small>
+        <h3>${pendientes}</h3>
+      </div>
+      <div>
+        <small>Asignadas a pedidos</small>
+        <h3>${asignadas}</h3>
+      </div>
+    </div>
+  </div>
+`;
+
   if (!data.length) {
     contenedor.innerHTML =
-      '<p class="vacio">Todavía no hay unidades físicas identificadas.</p>';
+      resumen +
+      '<p class="vacio">No hay unidades para mostrar con estos filtros.</p>';
     return;
   }
+  const buscarItemPedido = id =>
+  itemsPedido.find(item => item.id === id);
 
-  contenedor.innerHTML = data.map(unidad => `
+const buscarItemPadre = id =>
+  itemsPadre.find(item => item.id === id);
+
+  contenedor.innerHTML = resumen + data.map(unidad => `
     <div class="fila">
       <div class="dato">
         <b>${esc(unidad.productos?.nombre || 'Producto')}</b>
@@ -10858,26 +11175,44 @@ const { data, error } = await consulta;
         <small>
           Estado: ${esc(unidad.estado)}
         </small>
-        ${unidad.estado === 'disponible' ? `
-  <button
-    type="button"
-    class="btn sec chico stock-unidad-identificar"
-    data-id="${unidad.id}">
-    Identificar / completar
-  </button>
+        ${unidad.pedido_id ? `
+  <small>
+    Pedido: #${unidad.pedido_id}
+  </small>
 ` : ''}
+
+${(() => {
+  const item = buscarItemPedido(unidad.pedido_item_id);
+  const padre = item?.padre_item_id
+    ? buscarItemPadre(item.padre_item_id)
+    : null;
+
+  return padre
+    ? `<small>Tipo: Componente del kit ${esc(padre.producto)}</small>`
+    : `<small>Tipo: Producto suelto</small>`;
+})()}
+
+        ${unidad.estado === 'disponible' ? `
+          <button
+            type="button"
+            class="btn sec chico stock-unidad-identificar"
+            data-id="${unidad.id}">
+            Identificar / completar
+          </button>
+        ` : ''}
       </div>
     </div>
   `).join('');
+
   contenedor.querySelectorAll(
-  '.stock-unidad-identificar'
-).forEach(btn => {
-  btn.onclick = () => {
-    abrirFormularioIdentificacionUnidad(
-      Number(btn.dataset.id)
-    );
-  };
-});
+    '.stock-unidad-identificar'
+  ).forEach(btn => {
+    btn.onclick = () => {
+      abrirFormularioIdentificacionUnidad(
+        Number(btn.dataset.id)
+      );
+    };
+  });
 }
 
       async function cargarPantallaStock() {

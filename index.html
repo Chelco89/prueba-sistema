@@ -9837,12 +9837,13 @@ document.getElementById('stock-agregar-producto').onclick =
   const { data: unidad, error } = await sb
     .from('stock_unidades_serializadas')
     .select(`
-      id,
-      codigo_exterior,
-      estado,
-      productos(nombre),
-      stock_unidades_series(numero_serie)
-    `)
+  id,
+  producto_id,
+  codigo_exterior,
+  estado,
+  productos(nombre),
+  stock_unidades_series(numero_serie)
+`)
     .eq('id', id)
     .single();
 
@@ -9871,9 +9872,8 @@ document.getElementById('stock-agregar-producto').onclick =
   <input
     id="stock-unidad-nuevo-codigo"
     placeholder="Código exterior (opcional)"
-    value="${esc(unidad.codigo_exterior || '')}"
-    style="flex:1;min-width:0"
-    ${unidad.codigo_exterior ? 'disabled' : ''}>
+  value="${esc(unidad.codigo_exterior || '')}"
+style="flex:1;min-width:0">
 
   <button
     type="button"
@@ -9883,9 +9883,11 @@ document.getElementById('stock-agregar-producto').onclick =
   </button>
 </div>
 
-${unidad.codigo_exterior
-  ? '<small>Este código ya está registrado y no se puede modificar.</small>'
-  : ''}
+${Number(unidad.producto_id) === 117
+  ? '<small>Podés corregir el código exterior si fue cargado incorrectamente.</small>'
+  : unidad.codigo_exterior
+    ? '<small>Este código ya está registrado y no se puede modificar.</small>'
+    : ''}
 
       <label>Números internos</label>
 
@@ -10130,13 +10132,49 @@ if (separador > 0) {
     boton.disabled = true;
     boton.textContent = 'Guardando...';
 
-    const { error } = await sb.rpc(
-      'editar_series_unidad',
-     {
-  p_unidad_id: unidad.id,
-  p_series: series
+  let error = null;
+
+if (Number(unidad.producto_id) === 117) {
+
+  if (!codigoExterior) {
+    aviso.innerHTML =
+      '<div class="msg err">El código exterior es obligatorio.</div>';
+    boton.disabled = false;
+    boton.textContent = 'Guardar identificación';
+    return;
+  }
+
+  if (series.length !== 2) {
+    aviso.innerHTML =
+      '<div class="msg err">Debés ingresar exactamente 2 números internos.</div>';
+    boton.disabled = false;
+    boton.textContent = 'Guardar identificación';
+    return;
+  }
+
+  const resultado = await sb.rpc(
+    'actualizar_identificacion_kit_5_sgv',
+    {
+      p_unidad_id: unidad.id,
+      p_codigo_exterior: codigoExterior,
+      p_series: series
+    }
+  );
+
+  error = resultado.error;
+
+} else {
+
+  const resultado = await sb.rpc(
+    'editar_series_unidad',
+    {
+      p_unidad_id: unidad.id,
+      p_series: series
+    }
+  );
+
+  error = resultado.error;
 }
-    );
 
     if (error) {
       aviso.innerHTML =
@@ -10938,9 +10976,10 @@ const stockReal = productoSeleccionado
 let consultaIdentificadas = sb
   .from('stock_unidades_serializadas')
   .select(`
-    id,
-    stock_unidades_series(id)
-  `)
+  id,
+  codigo_exterior,
+  stock_unidades_series(id)
+`)
   .eq('estado', 'disponible');
 
 if (productoSeleccionado) {
@@ -10982,35 +11021,58 @@ if (resultadoIdentificadas.error || resultadoAsignadas.error) {
 
 // CADA UNIDAD FÍSICA CUENTA UNA SOLA VEZ,
 // AUNQUE TENGA VARIOS NÚMEROS INTERNOS.
+const esKit5SGV =
+  Number(productoSeleccionado) === 117;
+
 const total = (resultadoIdentificadas.data || [])
-  .filter(u => u.stock_unidades_series?.length > 0)
+  .filter(u => {
+    if (esKit5SGV) {
+      return (
+        u.codigo_exterior &&
+        u.stock_unidades_series?.length === 2
+      );
+    }
+
+    return u.stock_unidades_series?.length > 0;
+  })
   .length;
 
 const pendientes = Math.max(stockReal - total, 0);
 
 const asignadas = resultadoAsignadas.count || 0;
-// BUSCAR UNIDADES POR NÚMERO DE SERIE INTERNO
+// BUSCAR POR NÚMERO INTERNO O CÓDIGO EXTERIOR
 let unidadesEncontradasPorSerie = null;
 
 if (textoBusqueda) {
-  const { data: seriesEncontradas, error: errorBusqueda } =
-    await sb
+  const [
+    resultadoSeries,
+    resultadoCodigos
+  ] = await Promise.all([
+    sb
       .from('stock_unidades_series')
       .select('unidad_id')
-      .ilike('numero_serie', `%${textoBusqueda}%`);
+      .ilike('numero_serie', `%${textoBusqueda}%`),
 
-  if (errorBusqueda) {
+    sb
+      .from('stock_unidades_serializadas')
+      .select('id')
+      .ilike('codigo_exterior', `%${textoBusqueda}%`)
+  ]);
+
+  if (resultadoSeries.error || resultadoCodigos.error) {
     contenedor.innerHTML =
-      `<div class="msg err">${esc(errorBusqueda.message)}</div>`;
+      `<div class="msg err">${esc(
+        resultadoSeries.error?.message ||
+        resultadoCodigos.error?.message
+      )}</div>`;
     return;
   }
 
   unidadesEncontradasPorSerie = [
-    ...new Set(
-      (seriesEncontradas || [])
-        .map(s => s.unidad_id)
-        .filter(Boolean)
-    )
+    ...new Set([
+      ...(resultadoSeries.data || []).map(s => s.unidad_id),
+      ...(resultadoCodigos.data || []).map(u => u.id)
+    ].filter(Boolean))
   ];
 }
   // CONSULTA DE UNIDADES PARA MOSTRAR
@@ -11039,12 +11101,12 @@ if (textoBusqueda) {
       Number(productoSeleccionado)
     );
   }
-  if (textoBusqueda) {
+ if (textoBusqueda) {
   if (unidadesEncontradasPorSerie.length === 0) {
-  contenedor.innerHTML =
-    '<p class="vacio">No se encontraron números de serie coincidentes.</p>';
-  return;
-}
+    contenedor.innerHTML =
+      '<p class="vacio">No se encontraron códigos ni números internos coincidentes.</p>';
+    return;
+  }
 
   consulta = consulta.in(
     'id',
@@ -11525,7 +11587,7 @@ if (esKitMG22) {
   };
 
   const idsKit = [116, 117, 118, 119, 120, 139, 140];
-  const esKit = idsKit.includes(idProducto);
+   const esKit = idsKit.includes(idProducto);
 
   item.unidades = [
     ...fila.querySelectorAll('.stock-ingreso-unidad')
@@ -11574,16 +11636,17 @@ if (esKitMG22) {
     ) {
       errorSeries = true;
     }
-  } else if (
+
+   } else if (
     [55, 56, 57, 68].includes(idProducto) &&
     item.unidades.length !== item.cantidad
   ) {
     errorSeries = true;
   }
+
 }
 
-
-  return item;
+return item;
 });
 
 

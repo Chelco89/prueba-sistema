@@ -2464,7 +2464,7 @@ async function vistaProveedores() {
     .select('id,fecha,comprobante_numero,descripcion,tipo,importe,origen')
     .eq('proveedor_id', proveedor.id)
     .order('fecha', { ascending: true })
-    .order('id', { ascending: true });
+.order('id', { ascending: true });
 
   if (error) {
     c.innerHTML = `<div class="panel">
@@ -2473,19 +2473,34 @@ async function vistaProveedores() {
     return;
   }
 
-  const movimientos = data || [];
-  let saldo = 0;
+ const movimientos = data || [];
 
-  const filas = movimientos.map(m => {
-    const importe = Number(m.importe || 0);
+// Calcular los saldos en orden cronológico.
+let saldo = 0;
 
-    if (m.tipo === 'debe') {
-      saldo += importe;
-    } else {
-      saldo -= importe;
-    }
+const movimientosConSaldo = movimientos.map(m => {
+  const importe = Number(m.importe || 0);
 
-    return `
+  if (m.tipo === 'debe') {
+    saldo += importe;
+  } else {
+    saldo -= importe;
+  }
+
+  return {
+    ...m,
+    saldo_acumulado: saldo
+  };
+});
+
+// Mostrar el último movimiento arriba.
+const movimientosOrdenados = [...movimientosConSaldo].reverse();
+
+const filas = movimientosOrdenados.map(m => {
+  const importe = Number(m.importe || 0);
+  const saldo = m.saldo_acumulado;
+
+  return `
       <tr>
         <td>${m.fecha
           ? new Date(m.fecha + 'T12:00:00').toLocaleDateString('es-AR')
@@ -3892,14 +3907,39 @@ total += totalLinea;
       
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
 
-     <div id="caja-egreso-contenido" hidden>
+    
+<div id="caja-egreso-contenido" hidden>
 
   <h3>Registrar pago</h3>
   <p class="vacio" style="padding-top:0">
-    Registrá gastos de Caja en pesos o dólares, sin mezclar monedas.
+    Registrá egresos de Caja o pagos a proveedores.
   </p>
 
   <form id="caja-egreso-form">
+
+    <label for="caja-egreso-tipo">Tipo de operación</label>
+    <select id="caja-egreso-tipo" required>
+      <option value="egreso">Egreso</option>
+      <option value="pago_proveedor">Pago proveedor</option>
+    </select>
+
+    <div id="caja-egreso-proveedor-campos" hidden>
+
+      <label for="caja-egreso-proveedor">Proveedor</label>
+      <select id="caja-egreso-proveedor">
+        <option value="1">MEGA</option>
+      </select>
+
+      <label for="caja-egreso-recibo">Número de recibo de MEGA</label>
+      <input
+        id="caja-egreso-recibo"
+        type="text"
+        maxlength="100"
+        placeholder="Ej.: 10299"
+      >
+
+    </div>
+
     <label for="caja-egreso-fecha">Fecha del egreso</label>
     <input id="caja-egreso-fecha" type="datetime-local" required>
 
@@ -3910,29 +3950,41 @@ total += totalLinea;
     </select>
 
     <label for="caja-egreso-importe">Importe</label>
-    <input id="caja-egreso-importe" type="number"
-      min="0.01" step="0.01" required placeholder="0,00">
+    <input
+      id="caja-egreso-importe"
+      type="number"
+      min="0.01"
+      step="0.01"
+      required
+      placeholder="0,00"
+    >
 
     <label for="caja-egreso-motivo">Motivo (opcional)</label>
-    <textarea id="caja-egreso-motivo" rows="2"
-      maxlength="500" placeholder="Detalle del gasto"></textarea>
+    <textarea
+      id="caja-egreso-motivo"
+      rows="2"
+      maxlength="500"
+      placeholder="Detalle del gasto"
+    ></textarea>
 
     <div id="caja-egreso-aviso" style="margin-top:12px"></div>
 
-      <button class="btn" type="submit" id="caja-egreso-guardar">
-    Registrar pago
-  </button>
-</form>
+    <button class="btn" type="submit" id="caja-egreso-guardar">
+      Registrar pago
+    </button>
 
-<hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+  </form>
 
-<h3>Últimos egresos registrados</h3>
-<div id="caja-egresos-historial" class="vacio">
-  Próximamente: historial de egresos.
+  <hr style="margin:24px 0;border:0;border-top:1px solid var(--borde,#ddd)">
+
+  <h3>Últimos egresos registrados</h3>
+
+  <div id="caja-egresos-historial" class="vacio">
+    Próximamente: historial de egresos.
+  </div>
+
 </div>
 
-
-    </div>
   `;
 const panelCobro = document.getElementById('caja-panel-cobro');
 const tipoInicial = document.getElementById('caja-inicial-tipo');
@@ -6819,6 +6871,25 @@ valoresContenedor.innerHTML = '';
       const botonEgreso = document.getElementById('caja-egreso-guardar');
       const fechaEgreso = document.getElementById('caja-egreso-fecha');
       const historialEgresos = document.getElementById('caja-egresos-historial');
+      // Mostrar u ocultar los campos de pago a proveedor.
+const tipoEgreso = document.getElementById('caja-egreso-tipo');
+const camposProveedor = document.getElementById(
+  'caja-egreso-proveedor-campos'
+);
+const reciboProveedor = document.getElementById(
+  'caja-egreso-recibo'
+);
+
+tipoEgreso.addEventListener('change', () => {
+  const esPagoProveedor = tipoEgreso.value === 'pago_proveedor';
+
+  camposProveedor.hidden = !esPagoProveedor;
+  reciboProveedor.required = esPagoProveedor;
+
+  if (!esPagoProveedor) {
+    reciboProveedor.value = '';
+  }
+});
 
       function fechaLocalParaCampo() {
         const ahora = new Date();
@@ -6886,69 +6957,118 @@ valoresContenedor.innerHTML = '';
         `;
       }
 
-      formEgreso.onsubmit = async e => {
-        e.preventDefault();
-        avisoEgreso.innerHTML = '';
+     
+formEgreso.onsubmit = async e => {
+  e.preventDefault();
+  avisoEgreso.innerHTML = '';
 
-        const moneda = document.getElementById('caja-egreso-moneda').value;
-        const importe = Number(
-          document.getElementById('caja-egreso-importe').value
-        );
-        const motivo = document.getElementById('caja-egreso-motivo').value.trim();
-        const fechaValor = fechaEgreso.value;
+  const tipo = tipoEgreso.value;
+  const esPagoProveedor = tipo === 'pago_proveedor';
 
-        if (!['ARS', 'USD'].includes(moneda)) {
-          avisoEgreso.innerHTML =
-            '<div class="msg err">Seleccioná una moneda válida.</div>';
-          return;
+  const moneda = document.getElementById('caja-egreso-moneda').value;
+  const importe = Number(
+    document.getElementById('caja-egreso-importe').value
+  );
+  const motivo = document.getElementById('caja-egreso-motivo').value.trim();
+  const fechaValor = fechaEgreso.value;
+  const numeroRecibo = reciboProveedor.value.trim();
+
+  if (!['ARS', 'USD'].includes(moneda)) {
+    avisoEgreso.innerHTML =
+      '<div class="msg err">Seleccioná una moneda válida.</div>';
+    return;
+  }
+
+  // Los pagos a MEGA se registran únicamente en pesos.
+  if (esPagoProveedor && moneda !== 'ARS') {
+    avisoEgreso.innerHTML =
+      '<div class="msg err">Los pagos a MEGA solamente se pueden registrar en pesos argentinos (ARS).</div>';
+    return;
+  }
+
+  if (esPagoProveedor && !numeroRecibo) {
+    avisoEgreso.innerHTML =
+      '<div class="msg err">Ingresá el número de recibo de MEGA.</div>';
+    return;
+  }
+
+  if (!Number.isFinite(importe) || importe <= 0) {
+    avisoEgreso.innerHTML =
+      '<div class="msg err">El importe debe ser mayor que cero.</div>';
+    return;
+  }
+
+  if (!fechaValor || Number.isNaN(new Date(fechaValor).getTime())) {
+    avisoEgreso.innerHTML =
+      '<div class="msg err">Ingresá una fecha válida.</div>';
+    return;
+  }
+
+  botonEgreso.disabled = true;
+
+  try {
+    const fechaISO = new Date(fechaValor).toISOString();
+
+    if (esPagoProveedor) {
+      // Pago a MEGA: Caja y Cuenta Corriente se registran juntos.
+      const { data, error } = await sb.rpc(
+        'registrar_pago_mega_efectivo',
+        {
+          p_comprobante_numero: numeroRecibo,
+          p_importe: importe,
+          p_fecha: fechaISO,
+          p_observaciones: motivo || null
         }
+      );
 
-        if (!Number.isFinite(importe) || importe <= 0) {
-          avisoEgreso.innerHTML =
-            '<div class="msg err">El importe debe ser mayor que cero.</div>';
-          return;
+      if (error) {
+        avisoEgreso.innerHTML =
+          `<div class="msg err">No se pudo registrar el pago a MEGA: ${esc(error.message)}</div>`;
+        return;
+      }
+
+      avisoEgreso.innerHTML =
+        `<div class="msg ok">Pago a MEGA registrado correctamente. Recibo: ${esc(numeroRecibo)}. Movimiento de Caja: ${esc(String(data.caja_movimiento_id))}.</div>`;
+
+    } else {
+      // Egreso común: conserva la función y el comportamiento actuales.
+      const { data: egresoId, error } = await sb.rpc(
+        'registrar_egreso_caja',
+        {
+          p_moneda: moneda,
+          p_importe: importe,
+          p_motivo: motivo || null,
+          p_fecha: fechaISO
         }
+      );
 
-        if (!fechaValor || Number.isNaN(new Date(fechaValor).getTime())) {
-          avisoEgreso.innerHTML =
-            '<div class="msg err">Ingresá una fecha válida.</div>';
-          return;
-        }
+      if (error) {
+        avisoEgreso.innerHTML =
+          `<div class="msg err">No se pudo registrar el egreso: ${esc(error.message)}</div>`;
+        return;
+      }
 
-        botonEgreso.disabled = true;
+      avisoEgreso.innerHTML =
+        `<div class="msg ok">Egreso registrado correctamente. Número: ${esc(String(egresoId))}.</div>`;
+    }
 
-        try {
-          const { data: egresoId, error } = await sb.rpc(
-            'registrar_egreso_caja',
-            {
-              p_moneda: moneda,
-              p_importe: importe,
-              p_motivo: motivo || null,
-              p_fecha: new Date(fechaValor).toISOString()
-            }
-          );
+    formEgreso.reset();
+    fechaEgreso.value = fechaLocalParaCampo();
 
-          if (error) {
-            avisoEgreso.innerHTML =
-              `<div class="msg err">No se pudo registrar el egreso: ${esc(error.message)}</div>`;
-            return;
-          }
+    // Actualizar la visibilidad de los campos del proveedor.
+    tipoEgreso.dispatchEvent(new Event('change'));
 
-          avisoEgreso.innerHTML =
-            `<div class="msg ok">Egreso registrado correctamente. Número: ${esc(String(egresoId))}.</div>`;
+    await cargarHistorialEgresos();
+    await cargarResumenCaja();
 
-          formEgreso.reset();
-          fechaEgreso.value = fechaLocalParaCampo();
+  } catch (error) {
+    avisoEgreso.innerHTML =
+      `<div class="msg err">Ocurrió un error: ${esc(error.message || 'Error inesperado')}</div>`;
+  } finally {
+    botonEgreso.disabled = false;
+  }
+};
 
-          await cargarHistorialEgresos();
-          await cargarResumenCaja();
-        } catch (error) {
-          avisoEgreso.innerHTML =
-            `<div class="msg err">Ocurrió un error: ${esc(error.message || 'Error inesperado')}</div>`;
-        } finally {
-          botonEgreso.disabled = false;
-        }
-      };
 
       await cargarHistorialEgresos();
       await cargarHistorialCaja();
@@ -10980,7 +11100,7 @@ let consultaIdentificadas = sb
   codigo_exterior,
   stock_unidades_series(id)
 `)
-  .eq('estado', 'disponible');
+  .in('estado', ['disponible', 'reservada']);
 
 if (productoSeleccionado) {
   consultaIdentificadas = consultaIdentificadas.eq(
@@ -10989,32 +11109,14 @@ if (productoSeleccionado) {
   );
 }
 
-// UNIDADES ASIGNADAS
-let consultaAsignadas = sb
-  .from('stock_unidades_serializadas')
-  .select('id', { count: 'exact', head: true })
-  .eq('estado', 'asignada');
 
-if (productoSeleccionado) {
-  consultaAsignadas = consultaAsignadas.eq(
-    'producto_id',
-    Number(productoSeleccionado)
-  );
-}
+const resultadoIdentificadas =
+  await consultaIdentificadas;
 
-const [
-  resultadoIdentificadas,
-  resultadoAsignadas
-] = await Promise.all([
-  consultaIdentificadas,
-  consultaAsignadas
-]);
-
-if (resultadoIdentificadas.error || resultadoAsignadas.error) {
+if (resultadoIdentificadas.error) {
   contenedor.innerHTML =
     `<div class="msg err">${esc(
-      resultadoIdentificadas.error?.message ||
-      resultadoAsignadas.error?.message
+      resultadoIdentificadas.error.message
     )}</div>`;
   return;
 }
@@ -11038,8 +11140,51 @@ const total = (resultadoIdentificadas.data || [])
   .length;
 
 const pendientes = Math.max(stockReal - total, 0);
+// PRODUCTOS CON SERIALIZACIÓN PENDIENTE
+const productosPendientes = [];
 
-const asignadas = resultadoAsignadas.count || 0;
+for (const producto of productosFiltro) {
+  const { data: unidades, error: errorUnidades } = await sb
+    .from('stock_unidades_serializadas')
+    .select(`
+      id,
+      codigo_exterior,
+      stock_unidades_series(id)
+    `)
+    .eq('producto_id', producto.id)
+    .in('estado', ['disponible', 'reservada']);
+
+  if (errorUnidades) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(errorUnidades.message)}</div>`;
+    return;
+  }
+
+  const identificadas = (unidades || []).filter(u => {
+    if (Number(producto.id) === 117) {
+      return (
+        u.codigo_exterior &&
+        u.stock_unidades_series?.length === 2
+      );
+    }
+
+    return u.stock_unidades_series?.length > 0;
+  }).length;
+
+  const faltantes = Math.max(
+    Number(producto.stock || 0) - identificadas,
+    0
+  );
+
+  if (faltantes > 0) {
+    productosPendientes.push({
+      id: producto.id,
+      nombre: producto.nombre,
+      faltantes
+    });
+  }
+}
+
 // BUSCAR POR NÚMERO INTERNO O CÓDIGO EXTERIOR
 let unidadesEncontradasPorSerie = null;
 
@@ -11177,7 +11322,51 @@ if (itemsPadreIds.length) {
       `<div class="msg err">${esc(error.message)}</div>`;
     return;
   }
+// LISTADO DE PRODUCTOS PENDIENTES
+const panelProductosPendientes = `
+  <div class="panel" style="margin-bottom:12px;">
+    <h3>Productos pendientes de serializar</h3>
 
+    ${
+      productosPendientes.length
+        ? productosPendientes.map(p => `
+            <div class="fila">
+              <div class="dato">
+                <b>${esc(p.nombre)}</b>
+                <small>Pendientes de identificar: ${p.faltantes}</small>
+
+                <button
+                  type="button"
+                  class="btn sec chico stock-ir-producto-pendiente"
+                  data-id="${p.id}">
+                  Ver producto
+                </button>
+              </div>
+            </div>
+          `).join('')
+        : '<p class="vacio">No hay productos pendientes de serializar.</p>'
+    }
+  </div>
+`;
+// ACTIVAR BOTONES DE PRODUCTOS PENDIENTES
+const activarBotonesProductosPendientes = () => {
+  contenedor.querySelectorAll(
+    '.stock-ir-producto-pendiente'
+  ).forEach(btn => {
+    btn.onclick = () => {
+      const id = Number(btn.dataset.id);
+
+      filtroProducto.value = String(id);
+
+      sessionStorage.setItem(
+        CLAVE_PRODUCTO_UNIDADES,
+        String(id)
+      );
+
+      cargarUnidadesSerializadas();
+    };
+  });
+};
 // CONTADORES
 const resumen = `
   <div class="panel" style="margin-bottom:12px;">
@@ -11194,18 +11383,17 @@ const resumen = `
         <small>Pendientes de identificar</small>
         <h3>${pendientes}</h3>
       </div>
-      <div>
-        <small>Asignadas a pedidos</small>
-        <h3>${asignadas}</h3>
-      </div>
+      
     </div>
   </div>
 `;
 
   if (!data.length) {
     contenedor.innerHTML =
-      resumen +
-      '<p class="vacio">No hay unidades para mostrar con estos filtros.</p>';
+  panelProductosPendientes +
+  resumen +
+  '<p class="vacio">No hay unidades para mostrar con estos filtros.</p>';
+  activarBotonesProductosPendientes();
     return;
   }
   const buscarItemPedido = id =>
@@ -11214,7 +11402,7 @@ const resumen = `
 const buscarItemPadre = id =>
   itemsPadre.find(item => item.id === id);
 
-  contenedor.innerHTML = resumen + data.map(unidad => `
+  contenedor.innerHTML = panelProductosPendientes + resumen + data.map(unidad => `
     <div class="fila">
       <div class="dato">
         <b>${esc(unidad.productos?.nombre || 'Producto')}</b>
@@ -11265,7 +11453,7 @@ ${(() => {
       </div>
     </div>
   `).join('');
-
+activarBotonesProductosPendientes();
   contenedor.querySelectorAll(
     '.stock-unidad-identificar'
   ).forEach(btn => {

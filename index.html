@@ -1199,7 +1199,6 @@ armarSistema();
      if (['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
   tabs.push(
     ['ventas', 'Ventas'],
-    ['gestion', 'Gestión'],
     ['caja', 'Caja'],
     ['cuentas_corrientes', 'Cta Cte Clientes'],
     ['proveedores', 'Cta Cte Proveedores']
@@ -1212,9 +1211,13 @@ armarSistema();
 
       tabs.push(['series', 'N.º de serie']);
 
-      if (['ventas', 'deposito', 'admin', 'supervisor'].includes(perfil.rol)) {
-        tabs.push(['stock', 'Stock']);
-      }
+     if (['ventas', 'deposito', 'admin', 'supervisor'].includes(perfil.rol)) {
+  tabs.push(['stock', 'Stock']);
+}
+
+if (['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
+  tabs.push(['gestion', 'Gestión']);
+}
 
       if (perfil.rol === 'admin') {
         tabs.push(['usuarios', 'Usuarios']);

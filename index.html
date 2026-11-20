@@ -1182,7 +1182,7 @@ armarSistema();
       }
     }
     function armarSistema() {
-      const tabs = [];
+            const tabs = [];
 
       if (['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
         tabs.push(
@@ -16021,10 +16021,22 @@ if (a) a.onclick = async () => {
     }
 
     /* ---------- ARRANQUE ---------- */
-    sb.auth.onAuthStateChange((evento, sesion) => {
-      if (sesion) setTimeout(cargarPerfil, 0); else { perfil = null; pantallaLogin(); }
-    });
-    sb.auth.getSession().then(({ data: { session } }) => { if (!session) pantallaLogin(); });
+sb.auth.onAuthStateChange((evento, sesion) => {
+  if (evento === 'SIGNED_IN' && sesion && !perfil) {
+    setTimeout(cargarPerfil, 0);
+  } else if (evento === 'SIGNED_OUT') {
+    perfil = null;
+    pantallaLogin();
+  }
+});
+
+sb.auth.getSession().then(({ data: { session } }) => {
+  if (session && !perfil) {
+    cargarPerfil();
+  } else if (!session) {
+    pantallaLogin();
+  }
+});
   </script>
   <script>
     if ("serviceWorker" in navigator) {

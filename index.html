@@ -764,6 +764,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script>
     const cfg = window.SGV_CONFIG;
     const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
@@ -12042,14 +12043,97 @@ recuperarBorradorIngresoStock();
       <div class="panel col-form" id="col-form">
 
   <div class="ventas-solapas">
-    <button type="button" class="ventas-solapa activa" data-solapa="pedido">
-      Nuevo pedido
-    </button>
 
-    <button type="button" class="ventas-solapa" data-solapa="notas">
+  <button type="button" class="ventas-solapa" data-solapa="cotizador">
+    Cotizador
+  </button>
+
+  <button type="button" class="ventas-solapa activa" data-solapa="pedido">
+    Nuevo pedido
+  </button>
+
+     <button type="button" class="ventas-solapa" data-solapa="notas">
       Notas de débito / crédito
     </button>
   </div>
+  <div id="panel-cotizador" hidden>
+
+  <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">
+    Cotizador
+  </h3>
+
+  <p style="color:var(--gris); font-size:14px">
+    Creá y administrá cotizaciones antes de convertirlas en presupuestos.
+  </p>
+
+ 
+<div id="cotizador-contenido">
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:15px">
+    <button type="button" class="btn" id="cot-nueva">
+      + Nueva cotización
+    </button>
+  </div>
+
+  <div id="cot-formulario" class="panel" hidden>
+    <h4 id="cot-titulo">Nueva cotización</h4>
+
+    <form id="form-cotizacion">
+
+      <label for="cot-cliente">CLIENTE</label>
+      <select id="cot-cliente" required>
+        <option value="">Seleccioná un cliente</option>
+      </select>
+
+      <label for="cot-fecha">FECHA DE ENTREGA</label>
+      <input id="cot-fecha" type="date">
+
+      <label for="cot-modalidad">MODALIDAD</label>
+      <select id="cot-modalidad">
+        <option value="retira">Retira el cliente</option>
+        <option value="despacho">Se despacha</option>
+      </select>
+
+      <label style="margin-bottom:2px">PRODUCTOS</label>
+
+      <div style="display:grid;grid-template-columns:1fr 80px 36px;gap:8px;font-size:12px;font-weight:600;color:var(--gris);margin-bottom:4px">
+        <span>PRODUCTO</span>
+        <span>CANT.</span>
+        <span></span>
+      </div>
+
+      <div id="cot-items"></div>
+
+      <datalist id="cot-lista-productos">
+        ${productosLista.map(x => `<option value="${esc(x.nombre)}">`).join('')}
+      </datalist>
+
+      <button type="button" class="btn sec chico" id="cot-mas"
+        style="margin-top:10px;width:100%;border-style:dashed">
+        + Agregar producto
+      </button>
+
+      <label for="cot-coment">OBSERVACIONES</label>
+      <input id="cot-coment" placeholder="Observaciones de la cotización">
+
+      <div id="cot-aviso" style="margin-top:10px"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+        <button type="submit" class="btn">Guardar cotización</button>
+        <button type="button" class="btn sec" id="cot-cancelar">
+          Cancelar
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <div id="cot-listado"></div>
+
+</div>
+
+
+</div>
 
   <div id="panel-nuevo-pedido">
         <h3 style="margin-top:0; font-size:16px; text-transform:uppercase; letter-spacing:0.5px">Nuevo Pedido</h3>
@@ -12150,6 +12234,162 @@ recuperarBorradorIngresoStock();
         <div id="res-ventas">Cargando pedidos…</div>
       </div>
     </div>`;
+    // Inicializar el listado del Cotizador
+const cargarCotizaciones = async () => {
+  const contenedor = document.getElementById('cot-listado');
+  if (!contenedor) return;
+
+  contenedor.innerHTML = '<p>Cargando cotizaciones...</p>';
+
+  const { data, error } = await sb
+    .from('cotizaciones')
+    .select('id, numero_cotizacion, cliente, estado, creado_en, pedido_id')
+    .order('numero_cotizacion', { ascending: false });
+
+  if (error) {
+    contenedor.innerHTML =
+      `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (!data || !data.length) {
+    contenedor.innerHTML = `
+      <div class="panel">
+        Todavía no hay cotizaciones registradas.
+      </div>
+    `;
+    return;
+  }
+
+   contenedor.innerHTML = `
+    <div class="panel">
+      <h4 style="margin-top:0">Cotizaciones registradas</h4>
+
+      ${data.map(c => `
+        <div style="padding:12px 0;border-bottom:1px solid var(--borde)">
+          <strong>
+            Cotización ${String(c.numero_cotizacion).padStart(6, '0')}
+          </strong>
+          <div>${esc(c.cliente)}</div>
+          <small>${esc(c.estado)}</small>
+          <div style="margin-top:8px">
+            <button
+              type="button"
+              class="btn sec chico cot-ver"
+              data-id="${c.id}">
+              Ver cotización
+            </button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  contenedor.querySelectorAll('.cot-ver').forEach(boton => {
+    boton.onclick = () => {
+      detalleCotizacion(Number(boton.dataset.id), () => vistaVentas());
+    };
+  });
+};
+document.getElementById('form-cotizacion').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const aviso = document.getElementById('cot-aviso');
+  const clienteId = Number(document.getElementById('cot-cliente').value);
+
+  if (!clienteId) {
+    aviso.innerHTML = '<div class="msg err">Seleccioná un cliente.</div>';
+    return;
+  }
+
+  const filas = [...document.querySelectorAll('#cot-items > div')];
+
+  if (!filas.length) {
+    aviso.innerHTML = '<div class="msg err">Agregá al menos un producto.</div>';
+    return;
+  }
+
+  const itemsCotizacion = [];
+
+  for (const fila of filas) {
+    const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
+    const producto = productosLista.find(p => p.nombre.toUpperCase() === nombre);
+    const cantidad = Number(fila.querySelector('.cant').value);
+
+    if (!producto || !Number.isInteger(cantidad) || cantidad <= 0) {
+      aviso.innerHTML = '<div class="msg err">Revisá los productos y las cantidades.</div>';
+      return;
+    }
+
+    if (!fila.dataset.precioUnitario || !fila.dataset.totalLinea) {
+      aviso.innerHTML = '<div class="msg err">Revisá el precio de cada producto.</div>';
+      return;
+    }
+
+    itemsCotizacion.push({
+      producto_id: producto.id,
+      cantidad,
+      precio_unitario: Number(fila.dataset.precioUnitario),
+      descuento_tipo: fila.dataset.descuentoTipo || 'ninguno',
+      descuento_valor: Number(fila.dataset.descuentoValor || 0),
+      descuento_importe: Number(fila.dataset.descuentoImporte || 0),
+      total_linea: Number(fila.dataset.totalLinea),
+      origen_precio: fila.dataset.origenPrecio,
+      lista_precio_id: fila.dataset.listaPrecioId
+  ? Number(fila.dataset.listaPrecioId)
+  : null
+    });
+  }
+
+  const datos = {
+    cliente_id: clienteId,
+    fecha_entrega: document.getElementById('cot-fecha').value || null,
+    modalidad: document.getElementById('cot-modalidad').value,
+    comentarios: document.getElementById('cot-coment').value.trim(),
+    items: itemsCotizacion
+  };
+
+  aviso.textContent = 'Guardando cotización...';
+
+  const { data, error } = await sb.rpc('guardar_cotizacion', {
+    p_datos: datos
+  });
+
+  if (error) {
+    aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  aviso.innerHTML = '<div class="msg ok">Cotización guardada correctamente.</div>';
+
+  document.getElementById('form-cotizacion').reset();
+  document.getElementById('cot-items').innerHTML = '';
+  document.getElementById('cot-formulario').hidden = true;
+  document.getElementById('cot-listado').hidden = false;
+
+  await cargarCotizaciones();
+});
+const botonCotMas = document.getElementById('cot-mas');
+if (botonCotMas) {
+  botonCotMas.onclick = cotAgregarItem;
+}
+
+const botonCotNueva = document.getElementById('cot-nueva');
+if (botonCotNueva) {
+  botonCotNueva.onclick = () => {
+    document.getElementById('cot-formulario').hidden = false;
+    document.getElementById('cot-listado').hidden = true;
+    document.getElementById('form-cotizacion').reset();
+    document.getElementById('cot-items').innerHTML = '';
+    cotAgregarItem();
+  };
+}
+document.getElementById('cot-cancelar').onclick = () => {
+  document.getElementById('cot-formulario').hidden = true;
+  document.getElementById('cot-listado').hidden = false;
+};
+
+await cargarCotizaciones();
 
       const selectorCliente = document.getElementById('cliente');
       if (!selectorCliente) return;
@@ -12194,6 +12434,16 @@ recuperarBorradorIngresoStock();
       }
 // Cargar clientes en el selector de Notas
 const selectorNotaCliente = document.getElementById('nota-cliente');
+// Cargar los mismos clientes activos en el Cotizador
+const selectorCotCliente = document.getElementById('cot-cliente');
+
+if (selectorCotCliente) {
+  selectorCotCliente.innerHTML =
+    '<option value="">Seleccioná un cliente</option>' +
+    clientesActivos.map(cl => `
+      <option value="${cl.id}">${esc(cl.nombre)}</option>
+    `).join('');
+}
 
 if (selectorNotaCliente) {
   selectorNotaCliente.innerHTML =
@@ -12208,23 +12458,29 @@ if (selectorNotaCliente) {
       if (toggleForm && colForm) {
         toggleForm.onclick = () => colForm.classList.toggle('abierto');
       }
-      const botonesSolapa = document.querySelectorAll('.ventas-solapa');
-      const panelPedido = document.getElementById('panel-nuevo-pedido');
-      const panelNotas = document.getElementById('panel-notas');
+     const botonesSolapa = document.querySelectorAll('.ventas-solapa');
 
-      botonesSolapa.forEach(boton => {
-        boton.onclick = () => {
-          const mostrarNotas = boton.dataset.solapa === 'notas';
-          ventasTabActiva = boton.dataset.solapa;
+const panelesVentas = {
+  cotizador: document.getElementById('panel-cotizador'),
+  pedido: document.getElementById('panel-nuevo-pedido'),
+  notas: document.getElementById('panel-notas')
+};
 
-          panelPedido.hidden = mostrarNotas;
-          panelNotas.hidden = !mostrarNotas;
+botonesSolapa.forEach(boton => {
+  boton.onclick = () => {
+    const solapa = boton.dataset.solapa;
 
-          botonesSolapa.forEach(b =>
-            b.classList.toggle('activa', b === boton)
-          );
-        };
-      });
+    ventasTabActiva = solapa;
+
+    Object.entries(panelesVentas).forEach(([nombre, panel]) => {
+      panel.hidden = nombre !== solapa;
+    });
+
+    botonesSolapa.forEach(b =>
+      b.classList.toggle('activa', b === boton)
+    );
+  };
+});
       const botonVentasGuardado = document.querySelector(
   `.ventas-solapa[data-solapa="${ventasTabActiva}"]`
 );
@@ -12558,6 +12814,8 @@ cargarNotasPendientes();
 cargarHistorialNotas();
       const items = document.getElementById('items');
       const preciosPorProducto = new Map();
+      // Mapa independiente de precios para el Cotizador
+const cotPreciosPorProducto = new Map();
 
       const formatoDinero = valor =>
         Number(valor).toLocaleString('es-AR', {
@@ -12710,7 +12968,7 @@ const subtotal = precio * cantidad;
           items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
           return;
         }
-
+  
         const cliente = clientesActivos.find(
           c => Number(c.id) === clienteId
         );
@@ -12849,6 +13107,431 @@ mapa.set(id, opciones);
         items.querySelectorAll('.item-form-grid').forEach(actualizarPrecioFila);
         return true;
       }
+     async function cotCargarPreciosCliente() {
+  cotPreciosPorProducto.clear();
+
+  const selector = document.getElementById('cot-cliente');
+  const aviso = document.getElementById('cot-aviso');
+
+  const clienteId = Number(selector?.value);
+
+  if (!clienteId) {
+    if (aviso) aviso.textContent = 'Seleccioná un cliente para consultar sus precios.';
+    return false;
+  }
+
+  const cliente = clientesActivos.find(
+    c => Number(c.id) === clienteId
+  );
+
+  if (!cliente) {
+    if (aviso) aviso.innerHTML =
+      '<div class="msg err">No se encontró el cliente seleccionado.</div>';
+    return false;
+  }
+
+  const { data: asignaciones, error: errorAsignaciones } = await sb
+    .from('clientes_listas_precios')
+    .select('lista_precios_id')
+    .eq('cliente_id', clienteId);
+
+  if (errorAsignaciones) {
+    if (aviso) aviso.innerHTML =
+      `<div class="msg err">${esc(errorAsignaciones.message)}</div>`;
+    return false;
+  }
+
+  const listaIds = [...new Set(
+    (asignaciones || [])
+      .map(x => Number(x.lista_precios_id))
+      .filter(id => Number.isInteger(id) && id > 0)
+  )];
+
+  if (
+    listaIds.length === 0 &&
+    Number.isInteger(Number(cliente.lista_precios_id)) &&
+    Number(cliente.lista_precios_id) > 0
+  ) {
+    listaIds.push(Number(cliente.lista_precios_id));
+  }
+
+  if (!listaIds.length) {
+    if (aviso) aviso.innerHTML =
+      '<div class="msg">Este cliente no tiene listas de precios asignadas.</div>';
+    return false;
+  }
+
+  const [
+    { data: listas, error: errorListas },
+    { data: precios, error: errorPrecios },
+    { data: especiales, error: errorEspeciales }
+  ] = await Promise.all([
+    sb.from('listas_precios')
+      .select('id,nombre')
+      .in('id', listaIds)
+      .eq('activo', true),
+
+    sb.from('lista_precios_items')
+      .select('lista_precio_id,producto_id,precio')
+      .in('lista_precio_id', listaIds),
+
+    sb.from('precios_especiales_clientes')
+      .select('producto_id,precio')
+      .eq('cliente_id', clienteId)
+      .eq('activo', true)
+  ]);
+
+  if (errorListas || errorPrecios || errorEspeciales) {
+    const error = errorListas || errorPrecios || errorEspeciales;
+    if (aviso) aviso.innerHTML =
+      `<div class="msg err">No se pudieron cargar los precios: ${esc(error.message)}</div>`;
+    return false;
+  }
+
+  const nombresListas = new Map(
+    (listas || []).map(l => [Number(l.id), l.nombre])
+  );
+
+  const mapa = new Map();
+
+  (precios || []).forEach(p => {
+    const precio = Number(p.precio);
+    if (!Number.isFinite(precio) || precio <= 0) return;
+
+    const id = String(p.producto_id);
+    if (!mapa.has(id)) mapa.set(id, []);
+
+    mapa.get(id).push({
+      lista_precio_id: Number(p.lista_precio_id),
+      lista: nombresListas.get(Number(p.lista_precio_id)) || 'Lista',
+      precio,
+      origen_precio: 'lista'
+    });
+  });
+
+  const mapaEspeciales = new Map(
+    (especiales || [])
+      .filter(p => Number.isFinite(Number(p.precio)) && Number(p.precio) > 0)
+      .map(p => [String(p.producto_id), Number(p.precio)])
+  );
+
+  productosLista.forEach(producto => {
+    const id = String(producto.id);
+
+    if (mapaEspeciales.has(id)) {
+      const listaEspecialId = Number(cliente.lista_precios_id);
+
+      if (!Number.isInteger(listaEspecialId) || listaEspecialId <= 0) {
+        mapa.set(id, []);
+        return;
+      }
+
+      mapa.set(id, [{
+        lista_precio_id: listaEspecialId,
+        lista: 'Precio especial permanente',
+        precio: mapaEspeciales.get(id),
+        origen_precio: 'especial_permanente'
+      }]);
+    }
+  });
+
+  mapa.forEach((opciones, id) => {
+    cotPreciosPorProducto.set(id, opciones);
+  });
+
+  if (aviso) aviso.textContent = '';
+  return true;
+}
+
+
+if (selectorCotCliente) {
+  selectorCotCliente.addEventListener('change', async () => {
+    const cargado = await cotCargarPreciosCliente();
+
+    if (cargado) {
+      document.querySelectorAll('#cot-items .item-form-grid')
+        .forEach(cotActualizarPrecioFila);
+    }
+  });
+}
+function cotActualizarPrecioFila(fila) {
+  const resumen = fila.querySelector('.precio-resumen');
+  if (!resumen) return;
+
+  const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
+  const cantidad = Number(fila.querySelector('.cant').value);
+  const clienteId = Number(document.getElementById('cot-cliente').value);
+
+  if (!clienteId) {
+    resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
+    return;
+  }
+
+  const producto = productosLista.find(
+    p => p.nombre.toUpperCase() === nombre
+  );
+    if (producto) {
+    fila.dataset.productoId = String(producto.id);
+  }
+
+  if (!producto) {
+    resumen.textContent = 'Elegí un producto de la lista.';
+    return;
+  }
+
+  if (!Number.isFinite(cantidad) || cantidad <= 0) {
+    resumen.textContent = 'Ingresá una cantidad válida.';
+    return;
+  }
+
+  const opciones = cotPreciosPorProducto.get(String(producto.id)) || [];
+
+  const opcionesValidas = opciones.filter(
+    op => Number.isFinite(Number(op.precio)) && Number(op.precio) > 0
+  );
+
+    if (!opcionesValidas.length) {
+    const bloqueManual = fila.querySelector('.cot-precio-excepcional');
+    if (bloqueManual) bloqueManual.hidden = false;
+
+    const precioManual = Number(
+      fila.querySelector('.cot-precio-manual').value
+    );
+
+    const cliente = clientesActivos.find(
+      c => Number(c.id) === clienteId
+    );
+
+    const listaReferenciaId = Number(cliente?.lista_precios_id);
+
+    fila.dataset.listaPrecioId =
+      Number.isInteger(listaReferenciaId) && listaReferenciaId > 0
+        ? String(listaReferenciaId)
+        : '';
+
+    fila.dataset.origenPrecio = 'excepcional_pedido';
+        if (!fila.dataset.listaPrecioId) {
+      resumen.textContent =
+        'Este cliente no tiene una lista principal asignada. No se puede guardar un precio excepcional.';
+      return;
+    }
+
+    if (!Number.isFinite(precioManual) || precioManual <= 0) {
+      resumen.textContent =
+        'Ingresá un precio unitario mayor que cero.';
+      return;
+    }
+
+    const subtotalManual = precioManual * cantidad;
+    const tipoManual = fila.querySelector('.desc-tipo').value;
+    const valorManual = Math.max(
+      0,
+      Number(fila.querySelector('.desc-valor').value) || 0
+    );
+
+    if (tipoManual === 'porcentaje' && valorManual > 100) {
+      resumen.textContent = 'El descuento no puede superar el 100%.';
+      return;
+    }
+
+    let descuentoManual = 0;
+
+    if (tipoManual === 'porcentaje') {
+      descuentoManual = subtotalManual * valorManual / 100;
+    } else if (tipoManual === 'importe') {
+      descuentoManual = Math.min(valorManual, subtotalManual);
+    }
+
+    const totalManual = Math.max(
+      0,
+      subtotalManual - descuentoManual
+    );
+    fila.dataset.precioUnitario = String(precioManual);
+fila.dataset.descuentoTipo = tipoManual;
+fila.dataset.descuentoValor = String(valorManual);
+fila.dataset.descuentoImporte = String(descuentoManual);
+fila.dataset.totalLinea = String(totalManual);
+
+    resumen.innerHTML =
+      `<div>Precio excepcional</div>` +
+      `<div>Precio unitario: $${formatoDinero(precioManual)} · ` +
+      `Subtotal: $${formatoDinero(subtotalManual)} · ` +
+      `Descuento: -$${formatoDinero(descuentoManual)} · ` +
+      `Total: $${formatoDinero(totalManual)}</div>`;
+
+    return;
+  }
+
+  const bloqueManual = fila.querySelector('.cot-precio-excepcional');
+  if (bloqueManual) bloqueManual.hidden = true;
+
+  const esEspecial = opcionesValidas.some(
+    op => op.origen_precio === 'especial_permanente'
+  );
+
+  const preciosUnicos = [...new Set(
+    opcionesValidas.map(op => Number(op.precio))
+  )];
+
+  let opcionElegida = opcionesValidas[0];
+
+  if (!esEspecial && preciosUnicos.length > 1) {
+    const selectorAnterior = fila.querySelector('.precio-lista-elegida');
+    const valorAnterior = selectorAnterior ? selectorAnterior.value : '';
+
+    const opcionesHTML = opcionesValidas.map((op, i) => `
+      <option value="${i}" ${String(i) === valorAnterior ? 'selected' : ''}>
+        ${esc(op.lista)} — $${formatoDinero(Number(op.precio))}
+      </option>
+    `).join('');
+
+    resumen.innerHTML = `
+      <div class="msg err">Hay listas con distintos precios. Elegí cuál utilizar.</div>
+      <label>Precio para esta cotización:
+        <select class="precio-lista-elegida">${opcionesHTML}</select>
+      </label>
+    `;
+
+    const selectorNuevo = resumen.querySelector('.precio-lista-elegida');
+    const indice = Number(selectorNuevo.value);
+
+    if (Number.isInteger(indice) && indice >= 0 && indice < opcionesValidas.length) {
+      opcionElegida = opcionesValidas[indice];
+    }
+
+    selectorNuevo.addEventListener('change', () => {
+      cotActualizarPrecioFila(fila);
+    });
+  } else {
+    resumen.innerHTML = `
+      <div>${esc(esEspecial ? 'Precio especial permanente' : opcionesValidas[0].lista)}</div>
+    `;
+  }
+
+  const precio = Number(opcionElegida.precio);
+
+  fila.dataset.listaPrecioId = opcionElegida.lista_precio_id || '';
+  fila.dataset.origenPrecio = opcionElegida.origen_precio || 'lista';
+
+  const subtotal = precio * cantidad;
+  const tipo = fila.querySelector('.desc-tipo').value;
+  const valor = Math.max(0, Number(fila.querySelector('.desc-valor').value) || 0);
+
+  let descuento = 0;
+
+  if (tipo === 'porcentaje') {
+    descuento = subtotal * Math.min(valor, 100) / 100;
+  } else if (tipo === 'importe') {
+    descuento = Math.min(valor, subtotal);
+  }
+
+  const total = Math.max(0, subtotal - descuento);
+  fila.dataset.precioUnitario = String(precio);
+fila.dataset.descuentoTipo = tipo;
+fila.dataset.descuentoValor = String(valor);
+fila.dataset.descuentoImporte = String(descuento);
+fila.dataset.totalLinea = String(total);
+
+  resumen.insertAdjacentHTML(
+    'beforeend',
+    `<div>Precio unitario: $${formatoDinero(precio)} · ` +
+    `Subtotal: $${formatoDinero(subtotal)} · ` +
+    `Descuento: -$${formatoDinero(descuento)} · ` +
+    `Total: $${formatoDinero(total)}</div>`
+  );
+}
+function cotAgregarItem() {
+  const contenedor = document.getElementById('cot-items');
+  if (!contenedor) return;
+
+  const fila = document.createElement('div');
+  fila.className = 'item-form-grid';
+
+  fila.innerHTML = `
+    <input class="prod"
+      list="cot-lista-productos"
+      placeholder="Producto"
+      autocomplete="off"
+      required>
+
+    <input class="cant"
+      type="number"
+      min="1"
+      step="1"
+      value="1"
+      required>
+
+    <button type="button" class="quitar">✕</button>
+
+    <div class="precio-descuento"
+      style="grid-column:1/-1">
+
+      <button type="button" class="btn sec chico desc-toggle">
+        + Agregar descuento
+      </button>
+
+      <div class="desc-controls"
+        style="display:none;grid-template-columns:1fr 1fr;gap:8px">
+
+        <select class="desc-tipo">
+          <option value="porcentaje">Porcentaje (%)</option>
+          <option value="importe">Importe fijo ($ por línea)</option>
+        </select>
+
+        <input class="desc-valor"
+          type="number"
+          min="0"
+          step="0.01"
+          value="0">
+      </div>
+
+            <div class="precio-resumen">
+        Seleccioná un cliente para consultar sus precios.
+      </div>
+
+      <div class="cot-precio-excepcional" hidden>
+        <label>Precio unitario excepcional para esta cotización</label>
+        <input
+          class="cot-precio-manual"
+          type="number"
+          min="0.01"
+          step="0.01"
+          placeholder="Ingresá el precio unitario">
+      </div>
+    </div>
+  `;
+
+  const actualizar = () => cotActualizarPrecioFila(fila);
+
+  fila.querySelector('.prod').addEventListener('change', actualizar);
+  fila.querySelector('.cant').addEventListener('input', actualizar);
+  fila.querySelector('.desc-valor').addEventListener('input', actualizar);
+  fila.querySelector('.desc-tipo').addEventListener('change', actualizar);
+    fila.querySelector('.cot-precio-manual').addEventListener('input', actualizar);
+
+  fila.querySelector('.desc-toggle').onclick = () => {
+    const controles = fila.querySelector('.desc-controls');
+    const visible = controles.style.display !== 'none';
+
+    controles.style.display = visible ? 'none' : 'grid';
+    fila.querySelector('.desc-toggle').textContent =
+      visible ? '+ Agregar descuento' : '− Quitar descuento';
+
+    if (visible) {
+      fila.querySelector('.desc-tipo').value = 'porcentaje';
+      fila.querySelector('.desc-valor').value = '0';
+    }
+
+    actualizar();
+  };
+
+  fila.querySelector('.quitar').onclick = () => {
+    fila.remove();
+  };
+
+  contenedor.appendChild(fila);
+}
+      
 
 const bloqueCondicionPago = document.getElementById('bloque-condicion-pago');
 const selectorCondicionPago = document.getElementById('condicion-pago');
@@ -13557,6 +14240,600 @@ lista_precio_id: linea.lista_precio_id,
       suscribirPedidos();
       refrescarVentas();
     }
+
+async function detalleCotizacion(id, volver) {
+  const c = document.getElementById('contenido');
+
+  c.innerHTML = '<div class="panel vacio">Cargando cotización…</div>';
+
+  const { data: cot, error } = await sb
+    .from('cotizaciones')
+    .select('*, cotizacion_items(*)')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
+    return;
+  }
+
+  const items = (cot.cotizacion_items || [])
+    .filter(i => !i.padre_item_id)
+    .sort((a, b) => a.id - b.id);
+
+  const { data: precios, error: errorPrecios } = await sb
+    .from('cotizacion_item_precios')
+    .select('cotizacion_item_id,precio_unitario,descuento_tipo,descuento_valor,descuento_importe,total_linea')
+    .in('cotizacion_item_id', items.map(i => i.id));
+
+  if (errorPrecios) {
+    c.innerHTML = `<div class="panel"><div class="msg err">${esc(errorPrecios.message)}</div></div>`;
+    return;
+  }
+
+  const mapaPrecios = new Map(
+    (precios || []).map(x => [String(x.cotizacion_item_id), x])
+  );
+
+  const dinero = valor => Number(valor).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const total = items.reduce((suma, i) => {
+    const precio = mapaPrecios.get(String(i.id));
+    return suma + Number(precio?.total_linea || 0);
+  }, 0);
+
+  const filas = items.map(i => {
+    const precio = mapaPrecios.get(String(i.id));
+    const descuento = Number(precio?.descuento_importe || 0);
+
+    const etiquetaDescuento =
+      precio?.descuento_tipo === 'porcentaje'
+        ? `${precio.descuento_valor}%`
+        : precio?.descuento_tipo === 'importe'
+          ? dinero(descuento)
+          : '—';
+
+    return `
+      <tr>
+        <td>${esc(i.producto)}</td>
+        <td class="num">${esc(i.cantidad)}</td>
+        <td class="num">${precio ? dinero(precio.precio_unitario) : '—'}</td>
+        <td class="num">${esc(etiquetaDescuento)}</td>
+        <td class="num">${precio ? dinero(precio.total_linea) : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+
+    c.innerHTML = `
+    <div class="panel remito">
+     <div class="no-print acciones sup">
+  <button class="btn sec chico" id="cot-volver">← Volver</button>
+  <button class="btn chico" id="cot-imprimir">Imprimir / guardar PDF</button>
+  <button class="btn chico" id="cot-compartir">Compartir</button>
+
+  ${cot.estado === 'borrador'
+    ? `<button class="btn chico" id="cot-confirmar">Confirmar cotización</button>`
+    : ''}
+</div>
+
+      <div class="enc">
+        <div class="num-remito">
+          Cotización
+          <b>${String(cot.numero_cotizacion).padStart(6, '0')}</b>
+        </div>
+      </div>
+
+      <p>
+        <b>Cliente:</b> ${esc(cot.cliente)}<br>
+        <b>Estado:</b> ${esc(cot.estado)}<br>
+        <b>Entrega:</b> ${esc(MODAL[cot.modalidad])}<br>
+        <b>Fecha de entrega:</b> ${fmtFecha(cot.fecha_entrega)}
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="num">Cantidad</th>
+            <th class="num">Precio unitario</th>
+            <th class="num">Descuento</th>
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+
+      <h3 style="text-align:right">
+        Total de la cotización: ${dinero(total)}
+      </h3>
+
+      ${cot.comentarios
+        ? `<p><b>Observaciones:</b> ${esc(cot.comentarios)}</p>`
+        : ''}
+    </div>
+  `;
+
+  document.getElementById('cot-volver').onclick = volver;
+
+  document.getElementById('cot-imprimir').onclick = () =>
+    imprimirCotizacion(cot, items, mapaPrecios);
+
+  document.getElementById('cot-compartir').onclick = () =>
+    compartirCotizacion(cot, items, mapaPrecios);
+    const btnConfirmar = document.getElementById('cot-confirmar');
+
+if (btnConfirmar) {
+  btnConfirmar.onclick = async () => {
+    if (!confirm(
+      `¿Confirmar la cotización N.º ${String(cot.numero_cotizacion).padStart(6, '0')} y convertirla en un pedido normal?`
+    )) return;
+
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = 'Confirmando…';
+
+    const { data, error } = await sb.rpc(
+      'confirmar_cotizacion',
+      { p_cotizacion_id: cot.id }
+    );
+
+    if (error) {
+      alert('No se pudo confirmar la cotización: ' + error.message);
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = 'Confirmar cotización';
+      return;
+    }
+
+    alert('Cotización confirmada. Se generó el pedido N.º ' + data);
+
+    await detalleCotizacion(id, volver);
+  };
+}
+}
+
+async function imprimirCotizacion(cot, items, mapaPrecios) {
+  const dinero = valor => Number(valor).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const logo = new URL('logo.png', document.baseURI).href;
+
+  const filas = items.map(i => {
+    const precio = mapaPrecios.get(String(i.id));
+
+    const descuento = Number(precio?.descuento_importe || 0);
+
+    const etiquetaDescuento =
+      precio?.descuento_tipo === 'porcentaje'
+        ? `${precio.descuento_valor}%`
+        : precio?.descuento_tipo === 'importe'
+          ? dinero(descuento)
+          : '—';
+
+    return `
+      <tr>
+        <td>${esc(i.producto)}</td>
+        <td class="numero">${esc(i.cantidad)}</td>
+        <td class="numero">
+          ${precio ? dinero(precio.precio_unitario) : 'Sin precio'}
+        </td>
+        <td class="numero">${esc(etiquetaDescuento)}</td>
+        <td class="numero">
+          ${precio ? dinero(precio.total_linea) : 'Sin precio'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const total = items.reduce((suma, i) => {
+    const precio = mapaPrecios.get(String(i.id));
+    return suma + Number(precio?.total_linea || 0);
+  }, 0);
+
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes para esta aplicación.');
+    return;
+  }
+
+  ventana.document.open();
+  ventana.document.write(`
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>Cotización ${String(cot.numero_cotizacion).padStart(6, '0')}</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          color: #172033;
+          margin: 28px;
+        }
+        header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 20px;
+          border-bottom: 2px solid #1565B8;
+          padding-bottom: 14px;
+        }
+        header img {
+          max-width: 90px;
+          max-height: 70px;
+          object-fit: contain;
+        }
+        h1 { font-size: 22px; margin: 0; }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 24px;
+        }
+        th, td {
+          border-bottom: 1px solid #ddd;
+          padding: 10px 8px;
+          text-align: left;
+        }
+        th { background: #f2f5f9; }
+        .numero {
+          text-align: right;
+          white-space: nowrap;
+        }
+        .total {
+          text-align: right;
+          margin-top: 24px;
+          font-size: 18px;
+        }
+        @media print {
+          body { margin: 12mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <header>
+        <div>
+          <h1>Cotización ${String(cot.numero_cotizacion).padStart(6, '0')}</h1>
+        </div>
+        <img src="${logo}" alt="Distribuidora SGV">
+      </header>
+
+      <p><b>Cliente:</b> ${esc(cot.cliente)}</p>
+      <p><b>Modalidad:</b> ${esc(MODAL[cot.modalidad] || cot.modalidad)}</p>
+      <p><b>Fecha de entrega:</b> ${esc(fmtFecha(cot.fecha_entrega))}</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="numero">Cantidad</th>
+            <th class="numero">Precio unitario</th>
+            <th class="numero">Descuento</th>
+            <th class="numero">Total</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+
+      <h2 class="total">Total de la cotización: ${dinero(total)}</h2>
+
+      ${cot.comentarios
+        ? `<p><b>Observaciones:</b> ${esc(cot.comentarios)}</p>`
+        : ''}
+    </body>
+    </html>
+  `);
+
+ ventana.document.close();
+ventana.focus();
+
+setTimeout(() => {
+  ventana.focus();
+  ventana.print();
+}, 500);
+}
+
+async function generarPdfCotizacion(cot, items, mapaPrecios) {
+  if (!window.jspdf?.jsPDF) {
+    throw new Error('No se pudo cargar la librería para generar PDF.');
+  }
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const margen = 14;
+  const ancho = 210;
+  const anchoUtil = ancho - margen * 2;
+  const numero = String(cot.numero_cotizacion).padStart(6, '0');
+
+  const dinero = valor =>
+    '$ ' + Number(valor || 0).toLocaleString('es-AR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+  const texto = valor =>
+    String(valor ?? '').replace(/\u00a0/g, ' ');
+
+  // Logo
+  try {
+    const respuesta = await fetch(new URL('logo.png', document.baseURI));
+    if (respuesta.ok) {
+      const blob = await respuesta.blob();
+
+      const logoData = await new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onload = () => resolve(lector.result);
+        lector.onerror = reject;
+        lector.readAsDataURL(blob);
+      });
+
+      pdf.addImage(logoData, 'PNG', 166, 12, 28, 20);
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar el logo en el PDF:', error);
+  }
+
+  // Encabezado
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(17);
+  pdf.setTextColor(21, 101, 184);
+  pdf.text('Cotización ' + numero, margen, 22);
+
+  pdf.setDrawColor(21, 101, 184);
+  pdf.setLineWidth(0.8);
+  pdf.line(margen, 36, ancho - margen, 36);
+
+  // Datos del cliente
+  pdf.setTextColor(23, 32, 51);
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'normal');
+
+  let y = 46;
+
+  pdf.text('Cliente: ' + texto(cot.cliente), margen, y);
+  y += 7;
+
+  pdf.text(
+    'Modalidad: ' + texto(MODAL[cot.modalidad] || cot.modalidad),
+    margen,
+    y
+  );
+  y += 7;
+
+  pdf.text('Fecha de entrega: ' + texto(fmtFecha(cot.fecha_entrega)), margen, y);
+  y += 12;
+
+  // Encabezado de tabla
+  const columnas = [
+    { x: margen + 2, ancho: 68, titulo: 'Producto' },
+    { x: 105, ancho: 18, titulo: 'Cant.' },
+    { x: 125, ancho: 27, titulo: 'Precio' },
+    { x: 154, ancho: 19, titulo: 'Desc.' },
+    { x: 175, ancho: 21, titulo: 'Total' }
+  ];
+
+  function encabezadoTabla() {
+    pdf.setFillColor(242, 245, 249);
+    pdf.rect(margen, y - 5, anchoUtil, 10, 'F');
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    pdf.setTextColor(23, 32, 51);
+
+    columnas.forEach((col, index) => {
+      const alineacion = index === 0 ? 'left' : 'right';
+      pdf.text(col.titulo, col.x + (index === 0 ? 0 : col.ancho), y, {
+        align: alineacion
+      });
+    });
+
+    y += 10;
+  }
+
+  encabezadoTabla();
+
+  // Filas
+  let total = 0;
+
+  for (const item of items) {
+    const precio = mapaPrecios.get(String(item.id));
+    const importe = Number(precio?.total_linea || 0);
+    total += importe;
+
+    const descuento =
+      precio?.descuento_tipo === 'porcentaje'
+        ? Number(precio.descuento_valor || 0) + '%'
+        : precio?.descuento_tipo === 'importe'
+          ? dinero(precio.descuento_importe)
+          : '—';
+
+    const producto = pdf.splitTextToSize(
+      texto(item.producto),
+      columnas[0].ancho
+    );
+
+    const altoFila = Math.max(8, producto.length * 4 + 4);
+
+    if (y + altoFila > 275) {
+      pdf.addPage();
+      y = 20;
+      encabezadoTabla();
+    }
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(23, 32, 51);
+
+    pdf.text(producto, columnas[0].x, y);
+
+    pdf.text(texto(item.cantidad), 123, y, { align: 'right' });
+
+    pdf.text(
+      precio ? dinero(precio.precio_unitario) : 'Sin precio',
+      152,
+      y,
+      { align: 'right' }
+    );
+
+    pdf.text(texto(descuento), 173, y, { align: 'right' });
+
+    pdf.text(
+      precio ? dinero(precio.total_linea) : 'Sin precio',
+      194,
+      y,
+      { align: 'right' }
+    );
+
+    y += altoFila;
+
+    pdf.setDrawColor(220, 224, 230);
+    pdf.line(margen, y - 2, ancho - margen, y - 2);
+  }
+
+  // Total
+  y += 10;
+
+  if (y > 275) {
+    pdf.addPage();
+    y = 25;
+  }
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(13);
+  pdf.setTextColor(21, 101, 184);
+
+  pdf.text(
+    'Total de la cotización: ' + dinero(total),
+    ancho - margen,
+    y,
+    { align: 'right' }
+  );
+
+  // Observaciones
+  if (cot.comentarios) {
+    y += 12;
+
+    const observaciones = pdf.splitTextToSize(
+      'Observaciones: ' + texto(cot.comentarios),
+      anchoUtil
+    );
+
+    if (y + observaciones.length * 5 > 280) {
+      pdf.addPage();
+      y = 25;
+    }
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(23, 32, 51);
+    pdf.text(observaciones, margen, y);
+  }
+
+  return new File(
+    [pdf.output('blob')],
+    'Cotizacion-SGV-' + numero + '.pdf',
+    { type: 'application/pdf' }
+  );
+}
+
+
+
+async function compartirCotizacion(cot, items, mapaPrecios) {
+  const dinero = valor => Number(valor).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const numero = String(cot.numero_cotizacion).padStart(6, '0');
+
+  const lineas = items.map(i => {
+    const precio = mapaPrecios.get(String(i.id));
+
+    if (!precio) {
+      return `${i.producto} x ${i.cantidad} - Sin precio`;
+    }
+
+    return `${i.producto} x ${i.cantidad}
+Precio unitario: ${dinero(precio.precio_unitario)}
+Descuento: ${dinero(precio.descuento_importe)}
+Total: ${dinero(precio.total_linea)}`;
+  });
+
+  const total = items.reduce((suma, i) => {
+    const precio = mapaPrecios.get(String(i.id));
+    return suma + Number(precio?.total_linea || 0);
+  }, 0);
+
+  const mensaje = [
+    'DISTRIBUIDORA SGV',
+    `COTIZACIÓN N.º ${numero}`,
+    '',
+    `Cliente: ${cot.cliente}`,
+    `Modalidad: ${MODAL[cot.modalidad] || cot.modalidad}`,
+    `Fecha de entrega: ${fmtFecha(cot.fecha_entrega)}`,
+    '',
+    ...lineas,
+    '',
+    `TOTAL: ${dinero(total)}`,
+    cot.comentarios ? `Observaciones: ${cot.comentarios}` : ''
+  ].filter(Boolean).join('\n');
+
+  try {
+    // Generar el archivo PDF
+    const archivo = await generarPdfCotizacion(cot, items, mapaPrecios);
+
+    // Comprobar si el dispositivo permite compartir archivos
+    if (
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({ files: [archivo] })
+    ) {
+      try {
+       await navigator.share({
+  files: [archivo],
+  title: `Cotización SGV ${numero}`
+});
+        return;
+      } catch (error) {
+        // Si el usuario canceló, no hacemos nada más
+        if (error.name === 'AbortError') return;
+
+        console.warn('No se pudo compartir el PDF:', error);
+      }
+    }
+
+    // Alternativa: descargar el PDF
+    const enlace = document.createElement('a');
+    const urlPdf = URL.createObjectURL(archivo);
+
+    enlace.href = urlPdf;
+    enlace.download = archivo.name;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+
+    setTimeout(() => URL.revokeObjectURL(urlPdf), 10000);
+
+    // Preparar WhatsApp con el mensaje
+    const urlWhatsApp =
+      `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+
+    const ventanaWhatsApp = window.open(urlWhatsApp, '_blank');
+
+    if (!ventanaWhatsApp) {
+      alert(
+        'El PDF se descargó correctamente. Abrí WhatsApp y adjuntalo como documento.'
+      );
+    }
+
+  } catch (error) {
+    console.error('Error al compartir la cotización:', error);
+    alert('No se pudo generar el PDF. Revisá la conexión e intentá nuevamente.');
+  }
+}
 
     /* Tiempo real: cuando alguien crea o cambia un pedido, se actualiza la lista sola */
     let canalPedidos = null, tRefresco;

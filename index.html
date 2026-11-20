@@ -2755,7 +2755,7 @@ const filas = movimientosOrdenados.map(m => {
 }
 
     
-async function verCuentaCorriente(id) {
+async function verCuentaCorriente(id, desde = '', hasta = '', generarPDF = false) {
   const c = document.getElementById('contenido');
     cuentaCorrienteActiva = id;
   guardarEstadoNavegacion();
@@ -2826,12 +2826,12 @@ async function verCuentaCorriente(id) {
 
   
 const saldoActual = Number(cuenta.saldo || 0);
+
 const tieneSaldoInicial = (movimientos || []).some(
   m => m.referencia === 'SALDO_INICIAL'
 );
 
-// Calcula el saldo después de cada movimiento,
-// partiendo del saldo actual y recorriendo hacia atrás.
+// Orden cronológico inverso para reconstruir los saldos.
 const saldosPorMovimiento = {};
 let saldoAcumulado = saldoActual;
 
@@ -2851,12 +2851,59 @@ for (const m of movimientosCronologicos) {
   }
 }
 
+// FILTRO Y RESUMEN POR PERÍODO
+const fechaDesde = desde
+  ? new Date(`${desde}T00:00:00`)
+  : null;
 
-  const etiquetaSaldo = saldoActual > 0
-    ? `Saldo pendiente: ${dinero(saldoActual)}`
-    : saldoActual < 0
-      ? `Saldo a favor del cliente: ${dinero(Math.abs(saldoActual))}`
-      : 'Cuenta al día';
+const fechaHastaExclusiva = hasta
+  ? new Date(`${hasta}T00:00:00`)
+  : null;
+
+if (fechaHastaExclusiva) {
+  fechaHastaExclusiva.setDate(fechaHastaExclusiva.getDate() + 1);
+}
+
+const dentroDelRango = m => {
+  const fecha = new Date(m.fecha);
+
+  return (!fechaDesde || fecha >= fechaDesde) &&
+    (!fechaHastaExclusiva || fecha < fechaHastaExclusiva);
+};
+
+const movimientosFiltrados = (movimientos || []).filter(dentroDelRango);
+
+const impactoMovimiento = m => {
+  const importe = Number(m.importe || 0);
+
+  return ['cargo', 'ajuste_debito'].includes(m.tipo)
+    ? importe
+    : ['pago', 'ajuste_credito'].includes(m.tipo)
+      ? -importe
+      : 0;
+};
+
+const saldoAnterior = fechaDesde
+  ? saldoActual - (movimientos || [])
+      .filter(m => new Date(m.fecha) >= fechaDesde)
+      .reduce((suma, m) => suma + impactoMovimiento(m), 0)
+  : saldoAcumulado;
+
+const totalDebitos = movimientosFiltrados
+  .filter(m => ['cargo', 'ajuste_debito'].includes(m.tipo))
+  .reduce((suma, m) => suma + Number(m.importe || 0), 0);
+
+const totalCreditos = movimientosFiltrados
+  .filter(m => ['pago', 'ajuste_credito'].includes(m.tipo))
+  .reduce((suma, m) => suma + Number(m.importe || 0), 0);
+
+const saldoFinalPeriodo = saldoAnterior + totalDebitos - totalCreditos;
+
+const etiquetaSaldo = saldoActual > 0
+  ? `Saldo pendiente: ${dinero(saldoActual)}`
+  : saldoActual < 0
+    ? `Saldo a favor del cliente: ${dinero(Math.abs(saldoActual))}`
+    : 'Cuenta al día';
 
   c.innerHTML = `
     <div class="panel">
@@ -2910,9 +2957,75 @@ for (const m of movimientosCronologicos) {
   en el historial de esta cuenta corriente.
 </p>
 
-      <h3>Historial de movimientos</h3>
+     <h3>Historial de movimientos</h3>
 
-      <div style="overflow-x:auto">
+
+<div style="margin:12px 0">
+  <button
+    type="button"
+    class="btn chico"
+    id="cc-toggle-compartir"
+    aria-expanded="false">
+    Compartir resumen
+  </button>
+
+  <div id="cc-panel-compartir"
+    class="panel"
+    style="display:none;margin-top:12px">
+
+    <label for="cc-fecha-desde">Desde</label>
+    <input type="date" id="cc-fecha-desde">
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button type="button" class="btn" id="cc-filtrar">
+        Generar PDF
+      </button>
+
+      <button type="button" class="btn chico" id="cc-limpiar-filtro">
+        Ver todos los movimientos
+      </button>
+    </div>
+  </div>
+</div>
+
+
+${desde || hasta ? `
+<div class="panel" style="margin:16px 0">
+  <h3>Resumen de cuenta</h3>
+
+  <p>
+    Período:
+    <strong>${desde ? esc(new Date(`${desde}T00:00:00`).toLocaleDateString('es-AR')) : 'Inicio de cuenta'}</strong>
+    al
+    <strong>${hasta ? esc(new Date(`${hasta}T00:00:00`).toLocaleDateString('es-AR')) : 'Actualidad'}</strong>
+  </p>
+
+  <div style="display:grid;grid-template-columns:
+    repeat(auto-fit,minmax(180px,1fr));gap:12px">
+
+    <div>
+      <small>Saldo anterior</small>
+      <h3>${dinero(saldoAnterior)}</h3>
+    </div>
+
+    <div>
+      <small>Total de débitos</small>
+      <h3>${dinero(totalDebitos)}</h3>
+    </div>
+
+    <div>
+      <small>Total de créditos</small>
+      <h3>${dinero(totalCreditos)}</h3>
+    </div>
+
+    <div>
+      <small>Saldo final del período</small>
+      <h3>${dinero(saldoFinalPeriodo)}</h3>
+    </div>
+  </div>
+</div>
+` : ''}
+<div style="overflow-x:auto">
         <table>
           <thead>
             <tr>
@@ -2927,8 +3040,8 @@ for (const m of movimientosCronologicos) {
           </thead>
 
           <tbody>
-            ${(movimientos || []).length
-              ? movimientos.map(m => {
+            ${movimientosFiltrados.length
+  ? movimientosFiltrados.map(m => {
                   const esDebe = ['cargo', 'ajuste_debito'].includes(m.tipo);
                   const pedido = m.pedido_id
   ? pedidosPorId[String(m.pedido_id)]
@@ -3002,7 +3115,127 @@ return `
       </div>
     </div>
   `;
+  // ABRIR Y CERRAR PANEL DE COMPARTIR
+const botonCompartir = document.getElementById('cc-toggle-compartir');
+const panelCompartir = document.getElementById('cc-panel-compartir');
 
+botonCompartir.onclick = () => {
+  const abierto = panelCompartir.style.display !== 'none';
+
+  panelCompartir.style.display = abierto ? 'none' : 'block';
+  botonCompartir.setAttribute('aria-expanded', String(!abierto));
+};
+// FILTRO Y GENERACIÓN DEL PDF
+document.getElementById('cc-filtrar').onclick = async () => {
+ const desde = document.getElementById('cc-fecha-desde').value;
+const hasta = movimientos && movimientos.length
+  ? new Date(
+      Math.max(...movimientos.map(m => new Date(m.fecha).getTime()))
+    ).toISOString().slice(0, 10)
+  : '';
+
+if (!movimientos || !movimientos.length) {
+  alert('Esta cuenta todavía no tiene movimientos.');
+  return;
+}
+
+ const boton = document.getElementById('cc-filtrar');
+boton.disabled = true;
+boton.textContent = 'Generando PDF…';
+
+try {
+  // Volver a cargar la cuenta con las fechas seleccionadas.
+  // Así el PDF se genera con los importes del período correcto.
+  const { data: movimientosActualizados, error } = await sb
+    .from('cuenta_corriente_movimientos')
+    .select('*')
+    .eq('cuenta_corriente_id', id)
+    .order('fecha', { ascending: false });
+
+  if (error) throw error;
+
+  const fechaDesdePDF = desde
+    ? new Date(`${desde}T00:00:00`)
+    : null;
+
+  const fechaHastaPDF = hasta
+    ? new Date(`${hasta}T00:00:00`)
+    : null;
+
+  if (fechaHastaPDF) {
+    fechaHastaPDF.setDate(fechaHastaPDF.getDate() + 1);
+  }
+
+  const movimientosPDF = (movimientosActualizados || []).filter(m => {
+    const fecha = new Date(m.fecha);
+    return (!fechaDesdePDF || fecha >= fechaDesdePDF) &&
+      (!fechaHastaPDF || fecha < fechaHastaPDF);
+  });
+
+  const impactoPDF = m => {
+    const importe = Number(m.importe || 0);
+    return ['cargo', 'ajuste_debito'].includes(m.tipo)
+      ? importe
+      : ['pago', 'ajuste_credito'].includes(m.tipo)
+        ? -importe
+        : 0;
+  };
+
+  const saldoAnteriorPDF = fechaDesdePDF
+    ? saldoActual - (movimientosActualizados || [])
+        .filter(m => new Date(m.fecha) >= fechaDesdePDF)
+        .reduce((suma, m) => suma + impactoPDF(m), 0)
+    : saldoAcumulado;
+
+  const totalDebitosPDF = movimientosPDF
+    .filter(m => ['cargo', 'ajuste_debito'].includes(m.tipo))
+    .reduce((suma, m) => suma + Number(m.importe || 0), 0);
+
+  const totalCreditosPDF = movimientosPDF
+    .filter(m => ['pago', 'ajuste_credito'].includes(m.tipo))
+    .reduce((suma, m) => suma + Number(m.importe || 0), 0);
+
+  const saldoFinalPDF =
+    saldoAnteriorPDF + totalDebitosPDF - totalCreditosPDF;
+
+  const archivo = await generarPdfResumenCuentaCorriente(
+    cuenta,
+    desde,
+    hasta,
+    saldoAnteriorPDF,
+    totalDebitosPDF,
+    totalCreditosPDF,
+    saldoFinalPDF,
+    movimientosPDF,
+    pedidosPorId
+  );
+
+  const url = URL.createObjectURL(archivo);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = archivo.name;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+  await verCuentaCorriente(id, desde, hasta);
+  } catch (error) {
+    alert('No se pudo generar el PDF: ' + error.message);
+  } finally {
+    const botonActual = document.getElementById('cc-filtrar');
+    if (botonActual) {
+      botonActual.disabled = false;
+      botonActual.textContent = 'Mostrar resumen';
+    }
+  }
+};
+
+document.getElementById('cc-limpiar-filtro').onclick = () => {
+  verCuentaCorriente(id);
+};
+document.getElementById('cc-fecha-desde').value = desde;
  document.getElementById('cc-volver').onclick = () => {
   cuentaCorrienteActiva = null;
   guardarEstadoNavegacion();
@@ -14923,6 +15156,292 @@ async function generarPdfCotizacion(cot, items, mapaPrecios) {
   }
 }
 
+
+async function generarPdfResumenCuentaCorriente(
+  cuenta,
+  desde,
+  hasta,
+  saldoAnterior,
+  totalDebitos,
+  totalCreditos,
+  saldoFinal,
+  movimientos,
+  pedidosPorId
+) {
+  if (typeof html2pdf !== 'function') {
+    throw new Error('No se pudo cargar la librería para generar PDF.');
+  }
+
+  const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS'
+  });
+
+  const fecha = valor => valor
+    ? new Date(valor).toLocaleDateString('es-AR')
+    : '';
+
+  const nombresTipo = {
+    cargo: 'Entrega de mercadería',
+    pago: 'Pago',
+    ajuste_debito: 'Ajuste débito',
+    ajuste_credito: 'Ajuste crédito'
+  };
+
+const saldosPDF = {};
+let saldoAcumuladoPDF = Number(saldoFinal || 0);
+
+// Los movimientos llegan del más reciente al más antiguo.
+for (const m of movimientos) {
+  saldosPDF[String(m.id)] = saldoAcumuladoPDF;
+
+  const importe = Number(m.importe || 0);
+
+  if (['cargo', 'ajuste_debito'].includes(m.tipo)) {
+    saldoAcumuladoPDF -= importe;
+  } else if (['pago', 'ajuste_credito'].includes(m.tipo)) {
+    saldoAcumuladoPDF += importe;
+  }
+}
+
+const filas = movimientos.map(m => {
+  const esDebe = ['cargo', 'ajuste_debito'].includes(m.tipo);
+
+  const pedido = m.pedido_id
+    ? pedidosPorId[String(m.pedido_id)]
+    : null;
+
+  const observacionOriginal = m.observaciones || m.referencia || '';
+
+  const reciboEncontrado = observacionOriginal.match(/\bRC-\d{6}\b/i);
+  const numeroRecibo = reciboEncontrado
+    ? reciboEncontrado[0].toUpperCase()
+    : null;
+
+  const observacionesLimpias = observacionOriginal
+    .replace(/\bRC-\d{6}\b/ig, '')
+    .trim();
+
+  const referenciaNota = String(m.referencia || '')
+    .match(/\bN[DC]-\d{6,}\b/i);
+
+  const numeroNota = referenciaNota
+    ? referenciaNota[0].toUpperCase()
+    : null;
+
+  const concepto = m.referencia === 'SALDO_INICIAL'
+    ? 'Saldo inicial'
+    : numeroNota
+      ? (numeroNota.startsWith('ND-')
+          ? 'Nota de débito'
+          : 'Nota de crédito')
+      : m.tipo === 'pago'
+        ? `Pago${m.medio_pago ? ' · ' + ({
+            efectivo: 'Efectivo',
+            cheque: 'Cheque',
+            echeq: 'E-cheq',
+            transferencia: 'Transferencia',
+            otro: 'Otro'
+          }[String(m.medio_pago).toLowerCase()] || m.medio_pago) : ''}`
+        : nombresTipo[m.tipo] || m.tipo;
+
+  const comprobante = numeroNota
+    ? numeroNota
+    : pedido
+      ? 'Presupuesto ' + String(pedido.numero_remito).padStart(8, '0')
+      : numeroRecibo || (m.pedido_id
+          ? 'Pedido #' + m.pedido_id
+          : '—');
+
+  return `
+    <tr>
+      <td>${fecha(m.fecha)}</td>
+      <td>${esc(concepto)}</td>
+      <td>${esc(comprobante)}</td>
+      <td class="numero">${esDebe ? dinero(m.importe) : '—'}</td>
+      <td class="numero">${esDebe ? '—' : dinero(m.importe)}</td>
+      <td class="numero">${dinero(saldosPDF[String(m.id)] ?? 0)}</td>
+      <td>${esc(observacionesLimpias || '—')}</td>
+    </tr>
+  `;
+}).join('');
+
+  const nombreArchivo = String(cuenta.cliente || 'Cliente')
+    .replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]/g, '-');
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        * { box-sizing: border-box; }
+      body {
+  font-family: Arial, sans-serif;
+  color: #222;
+  padding: 20px;
+  font-size: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  font-size: 9px;
+  table-layout: auto;
+}
+
+th, td {
+  padding: 6px 4px;
+  border: 1px solid #ddd;
+  vertical-align: top;
+}
+
+.numero {
+  text-align: right;
+  white-space: nowrap;
+}
+        .encabezado {
+          border-bottom: 3px solid #1565B8;
+          padding-bottom: 15px;
+          margin-bottom: 20px;
+        }
+        h1 { color: #1565B8; margin: 0 0 6px; }
+        h2 { margin-top: 24px; }
+        .resumen {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin: 20px 0;
+        }
+        .dato {
+          border: 1px solid #ddd;
+          padding: 12px;
+          border-radius: 5px;
+        }
+        .dato small { color: #666; }
+        .dato strong {
+          display: block;
+          font-size: 16px;
+          margin-top: 6px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 15px;
+        }
+        th {
+          background: #1565B8;
+          color: white;
+          text-align: left;
+        }
+        th, td {
+          padding: 8px 6px;
+          border: 1px solid #ddd;
+        }
+        .numero { text-align: right; white-space: nowrap; }
+        .pie {
+          margin-top: 25px;
+          color: #666;
+          font-size: 10px;
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="encabezado">
+  <strong>Estado de cuenta corriente</strong>
+</div>
+
+      <p><strong>Cliente:</strong> ${esc(cuenta.cliente || '')}</p>
+
+<p>
+  <strong>Período:</strong>
+  ${desde ? fecha(desde) : 'Inicio de cuenta'}
+  al
+  ${fecha(hasta)}
+</p>
+
+      
+
+      <h2>Detalle de movimientos</h2>
+
+    <table>
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Movimiento</th>
+      <th>Comprobante</th>
+      <th>Debe</th>
+      <th>Haber</th>
+      <th>Saldo</th>
+      <th>Observaciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${filas || '<tr><td colspan="7">Sin movimientos en el período.</td></tr>'}
+  </tbody>
+</table>
+
+    
+    </body>
+    </html>
+  `;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-10000px';
+  iframe.style.top = '0';
+  iframe.style.width = '794px';
+  iframe.style.height = '1123px';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  try {
+    iframe.srcdoc = html;
+
+    await new Promise((resolve, reject) => {
+      iframe.onload = resolve;
+      iframe.onerror = reject;
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const contenido = iframe.contentDocument.body;
+    iframe.style.height = Math.max(
+      1123,
+      contenido.scrollHeight + 40
+    ) + 'px';
+
+    const blob = await html2pdf()
+      .set({
+        margin: 0,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait'
+        },
+        pagebreak: { mode: ['css', 'legacy'] }
+      })
+      .from(contenido)
+      .toPdf()
+      .output('blob');
+
+    return new File(
+      [blob],
+      `Resumen-CC-${nombreArchivo}.pdf`,
+      { type: 'application/pdf' }
+    );
+  } finally {
+    iframe.remove();
+  }
+}
 
 async function compartirCotizacion(cot, items, mapaPrecios) {
   const dinero = valor => Number(valor).toLocaleString('es-AR', {

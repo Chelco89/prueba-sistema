@@ -3629,8 +3629,17 @@ total += totalLinea;
 <div class="panel" style="margin-top:12px">
   <h3>Cierre de Cuenta Julio</h3>
 
-  <label for="caja-julio-extracto">Saldo según extracto (opcional)</label>
-  <input id="caja-julio-extracto" type="number" min="0" step="0.01">
+ <label for="caja-julio-extracto">Saldo según extracto (opcional)</label>
+<input id="caja-julio-extracto" type="number" min="0" step="0.01">
+
+<label for="caja-julio-importe-cerrar">Importe a cerrar</label>
+<input
+  id="caja-julio-importe-cerrar"
+  type="number"
+  min="0.01"
+  step="0.01"
+  placeholder="Importe que querés cerrar"
+>
 
   <label for="caja-julio-observaciones">Observaciones</label>
   <textarea id="caja-julio-observaciones" rows="2" maxlength="1000"></textarea>
@@ -3653,8 +3662,17 @@ total += totalLinea;
 <div class="panel" style="margin-top:12px">
   <h3>Cierre de Cuenta Ariel</h3>
 
-  <label for="caja-ariel-extracto">Saldo según extracto (opcional)</label>
-  <input id="caja-ariel-extracto" type="number" min="0" step="0.01">
+<label for="caja-ariel-extracto">Saldo según extracto (opcional)</label>
+<input id="caja-ariel-extracto" type="number" min="0" step="0.01">
+
+<label for="caja-ariel-importe-cerrar">Importe a cerrar</label>
+<input
+  id="caja-ariel-importe-cerrar"
+  type="number"
+  min="0.01"
+  step="0.01"
+  placeholder="Importe que querés cerrar"
+>
 
   <label for="caja-ariel-observaciones">Observaciones</label>
   <textarea id="caja-ariel-observaciones" rows="2" maxlength="1000"></textarea>
@@ -3677,8 +3695,17 @@ total += totalLinea;
 <div class="panel" style="margin-top:12px">
   <h3>Cierre de Cuenta Angi</h3>
 
-  <label for="caja-angi-extracto">Saldo según extracto (opcional)</label>
-  <input id="caja-angi-extracto" type="number" min="0" step="0.01">
+ <label for="caja-angi-extracto">Saldo según extracto (opcional)</label>
+<input id="caja-angi-extracto" type="number" min="0" step="0.01">
+
+<label for="caja-angi-importe-cerrar">Importe a cerrar</label>
+<input
+  id="caja-angi-importe-cerrar"
+  type="number"
+  min="0.01"
+  step="0.01"
+  placeholder="Importe que querés cerrar"
+>
 
   <label for="caja-angi-observaciones">Observaciones</label>
   <textarea id="caja-angi-observaciones" rows="2" maxlength="1000"></textarea>
@@ -3702,7 +3729,16 @@ total += totalLinea;
   <h3>Cierre de Cuenta Megaparte</h3>
 
   <label for="caja-megaparte-extracto">Saldo según extracto (opcional)</label>
-  <input id="caja-megaparte-extracto" type="number" min="0" step="0.01">
+<input id="caja-megaparte-extracto" type="number" min="0" step="0.01">
+
+<label for="caja-megaparte-importe-cerrar">Importe a cerrar</label>
+<input
+  id="caja-megaparte-importe-cerrar"
+  type="number"
+  min="0.01"
+  step="0.01"
+  placeholder="Importe que querés cerrar"
+>
 
   <label for="caja-megaparte-observaciones">Observaciones</label>
   <textarea id="caja-megaparte-observaciones" rows="2" maxlength="1000"></textarea>
@@ -4239,6 +4275,7 @@ async function cargarLibroCaja(moneda) {
 }
     if (m.tipo === 'egreso') movimiento = 'Egreso de Caja';
     if (m.tipo === 'retiro') movimiento = 'Retiro de Caja';
+    if (Number(m.id) === 31) movimiento = 'Pago a MEGA';
     if (m.tipo === 'gasto_entre_sesiones') movimiento = 'Gasto entre sesiones';
 
     if (m.observaciones) movimiento += ` - ${m.observaciones}`;
@@ -5132,54 +5169,14 @@ document.getElementById('caja-particular-megaparte').textContent =
         document.getElementById('caja-resumen-echeqs').textContent = `${Number(r.echeqs_cantidad || 0)} unidades`;
         document.getElementById('caja-resumen-echeqs-total').textContent = dinero(r.echeqs_importe);
 
-        if (r.sesion_abierta) {
-          // CIERRES BANCARIOS INDEPENDIENTES
+        
+       // CIERRES BANCARIOS INDEPENDIENTES
 const cierresBancarios = [
-  {
-    id: 1,
-    boton: 'caja-mega-cerrar',
-    extracto: 'caja-mega-extracto',
-    observaciones: 'caja-mega-observaciones',
-    aviso: 'caja-mega-cierre-aviso',
-    informe: 'caja-mega-informe',
-    nombre: 'Banco Mega'
-  },
-  {
-    id: 2,
-    boton: 'caja-julio-cerrar',
-    extracto: 'caja-julio-extracto',
-    observaciones: 'caja-julio-observaciones',
-    aviso: 'caja-julio-cierre-aviso',
-    informe: 'caja-julio-informe',
-    nombre: 'Cuenta Julio'
-  },
-  {
-    id: 3,
-    boton: 'caja-ariel-cerrar',
-    extracto: 'caja-ariel-extracto',
-    observaciones: 'caja-ariel-observaciones',
-    aviso: 'caja-ariel-cierre-aviso',
-    informe: 'caja-ariel-informe',
-    nombre: 'Cuenta Ariel'
-  },
-  {
-    id: 4,
-    boton: 'caja-angi-cerrar',
-    extracto: 'caja-angi-extracto',
-    observaciones: 'caja-angi-observaciones',
-    aviso: 'caja-angi-cierre-aviso',
-    informe: 'caja-angi-informe',
-    nombre: 'Cuenta Angi'
-  },
-  {
-    id: 5,
-    boton: 'caja-megaparte-cerrar',
-    extracto: 'caja-megaparte-extracto',
-    observaciones: 'caja-megaparte-observaciones',
-    aviso: 'caja-megaparte-cierre-aviso',
-    informe: 'caja-megaparte-informe',
-    nombre: 'Cuenta Megaparte'
-  }
+  { id:1, boton:'caja-mega-cerrar', extracto:'caja-mega-extracto', observaciones:'caja-mega-observaciones', aviso:'caja-mega-cierre-aviso', informe:'caja-mega-informe', nombre:'Banco Mega' },
+  { id:2, boton:'caja-julio-cerrar', extracto:'caja-julio-extracto', importeCerrar:'caja-julio-importe-cerrar', observaciones:'caja-julio-observaciones', aviso:'caja-julio-cierre-aviso', informe:'caja-julio-informe', nombre:'Cuenta Julio' },
+  { id:3, boton:'caja-ariel-cerrar', extracto:'caja-ariel-extracto', importeCerrar:'caja-ariel-importe-cerrar', observaciones:'caja-ariel-observaciones', aviso:'caja-ariel-cierre-aviso', informe:'caja-ariel-informe', nombre:'Cuenta Ariel' },
+  { id:4, boton:'caja-angi-cerrar', extracto:'caja-angi-extracto', importeCerrar:'caja-angi-importe-cerrar', observaciones:'caja-angi-observaciones', aviso:'caja-angi-cierre-aviso', informe:'caja-angi-informe', nombre:'Cuenta Angi' },
+  { id:5, boton:'caja-megaparte-cerrar', extracto:'caja-megaparte-extracto', importeCerrar:'caja-megaparte-importe-cerrar', observaciones:'caja-megaparte-observaciones', aviso:'caja-megaparte-cierre-aviso', informe:'caja-megaparte-informe', nombre:'Cuenta Megaparte' }
 ];
 
 cierresBancarios.forEach(cuenta => {
@@ -5199,6 +5196,22 @@ cierresBancarios.forEach(cuenta => {
 
     const aviso = document.getElementById(cuenta.aviso);
     const informe = document.getElementById(cuenta.informe);
+    const importeCerrarTexto = cuenta.importeCerrar
+  ? document.getElementById(cuenta.importeCerrar).value.trim()
+  : '';
+
+const importeCerrar = importeCerrarTexto === ''
+  ? null
+  : Number(importeCerrarTexto);
+
+if (cuenta.importeCerrar && (
+  importeCerrar === null ||
+  !Number.isFinite(importeCerrar) ||
+  importeCerrar <= 0
+)) {
+  alert('Ingresá un importe válido mayor que cero para cerrar.');
+  return;
+}
 
     if (
       extracto !== null &&
@@ -5216,11 +5229,24 @@ cierresBancarios.forEach(cuenta => {
     boton.disabled = true;
     aviso.textContent = 'Cerrando período bancario…';
 
-    const { data, error } = await sb.rpc('cerrar_periodo_bancario', {
-      p_cuenta_id: cuenta.id,
-      p_saldo_extracto: extracto,
-      p_observaciones: observaciones || null
-    });
+   let data, error;
+
+if (cuenta.id === 1) {
+  // BANCO MEGA: conserva el cierre original
+  ({ data, error } = await sb.rpc('cerrar_periodo_bancario', {
+    p_cuenta_id: cuenta.id,
+    p_saldo_extracto: extracto,
+    p_observaciones: observaciones || null
+  }));
+} else {
+  // CUENTAS PARTICULARES: cierre parcial
+  ({ data, error } = await sb.rpc('cerrar_periodo_bancario_parcial', {
+    p_cuenta_id: cuenta.id,
+    p_importe_cerrar: importeCerrar,
+    p_saldo_extracto: extracto,
+    p_observaciones: observaciones || null
+  }));
+}
 
     if (error) {
       aviso.innerHTML =
@@ -5231,7 +5257,7 @@ cierresBancarios.forEach(cuenta => {
 
     const { data: cierre, error: errorInforme } = await sb
       .from('bancos_cierres')
-      .select('id,fecha_inicio,fecha_fin,saldo_calculado,saldo_extracto,diferencia,observaciones,numero_recibo_mega,informe')
+      .select('id,fecha_inicio,fecha_fin,saldo_calculado,saldo_extracto,diferencia,observaciones,numero_recibo_mega,informe,importe_cerrado')
       .eq('cuenta_id', cuenta.id)
       .eq('estado', 'cerrado')
       .order('id', { ascending: false })
@@ -5259,6 +5285,12 @@ cierresBancarios.forEach(cuenta => {
           <h3>Informe del cierre · ${esc(cuenta.nombre)}</h3>
           <b>Período ${esc(cierre.fecha_inicio || '—')} al ${esc(cierre.fecha_fin || '—')}</b>
 <p>Saldo calculado: ${dinero(cierre.saldo_calculado)}</p>
+${cuenta.id !== 1 ? `
+  <p>Importe cerrado: ${dinero(cierre.importe_cerrado)}</p>
+  <p>Saldo que pasa al próximo período: ${dinero(
+    Number(cierre.saldo_calculado) - Number(cierre.importe_cerrado)
+  )}</p>
+` : ''}
 <small>
   Recibo / Observaciones:
   <b>${esc(cierre.observaciones || 'Sin observaciones')}</b>
@@ -5288,12 +5320,16 @@ ${
     }
 
     document.getElementById(cuenta.extracto).value = '';
+    if (cuenta.importeCerrar) {
+  document.getElementById(cuenta.importeCerrar).value = '';
+}
     document.getElementById(cuenta.observaciones).value = '';
 
     boton.disabled = false;
     await cargarResumenCaja();
   };
 });
+if (r.sesion_abierta) {
           avisoResumen.textContent = `Caja abierta · Sesión ${r.sesion_id}`;
           accionesSesion.innerHTML = `
             <form id="caja-cerrar-sesion" class="panel" style="background:var(--fondo)">
@@ -6965,7 +7001,7 @@ tipoEgreso.addEventListener('change', () => {
                     <td>${new Date(x.fecha).toLocaleString('es-AR')}</td>
                     <td>${esc(x.moneda)}</td>
                     <td class="num">${dineroMoneda(x.importe, x.moneda)}</td>
-                    <td>${esc(x.motivo || '—')}</td>
+                    <td>${Number(x.id) === 2 ? 'Pago a MEGA' : esc(x.motivo || '—')}</td>
                   </tr>
                 `).join('')}
               </tbody>

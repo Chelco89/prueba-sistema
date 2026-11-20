@@ -510,12 +510,22 @@
     }
 .ventas-solapas {
   display: flex;
+  flex-wrap: nowrap;
   gap: 6px;
   margin-bottom: 18px;
   border-bottom: 1px solid #EAECF0;
   padding-bottom: 10px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+.ventas-solapa {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  padding: 10px 4px;
+  font-size: 12px;
+}
 .ventas-solapa {
   flex: 1;
   padding: 10px 6px;
@@ -765,6 +775,7 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
     const cfg = window.SGV_CONFIG;
     const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
@@ -12026,8 +12037,10 @@ recuperarBorradorIngresoStock();
     const fmtFecha = d => d ? new Date(d.length === 10 ? d + 'T00:00:00' : d).toLocaleDateString('es-AR') : '—';
     const fmtFechaHora = d => d ? new Date(d).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
     let filtroEstadoPill = 'todos';
-    async function vistaVentas() {
-      const c = document.getElementById('contenido');
+    async function vistaVentas(opciones = {}) {
+  const edicionCotizacion = opciones.editarCotizacion || null;
+
+  const c = document.getElementById('contenido');
       await cargarProductos();
       c.innerHTML = `
     <div class="dash-header">
@@ -12302,7 +12315,7 @@ document.getElementById('form-cotizacion').addEventListener('submit', async (e) 
     return;
   }
 
-  const filas = [...document.querySelectorAll('#cot-items > div')];
+  const filas = [...document.querySelectorAll('#cot-items .item-form-grid')];
 
   if (!filas.length) {
     aviso.innerHTML = '<div class="msg err">Agregá al menos un producto.</div>';
@@ -12321,19 +12334,28 @@ document.getElementById('form-cotizacion').addEventListener('submit', async (e) 
       return;
     }
 
-    if (!fila.dataset.precioUnitario || !fila.dataset.totalLinea) {
-      aviso.innerHTML = '<div class="msg err">Revisá el precio de cada producto.</div>';
-      return;
-    }
+  const precioUnitario = Number(fila.dataset.precioUnitario);
+const totalLinea = Number(fila.dataset.totalLinea);
+
+if (
+  !Number.isFinite(precioUnitario) ||
+  precioUnitario <= 0 ||
+  !Number.isFinite(totalLinea) ||
+  totalLinea < 0
+) {
+  aviso.innerHTML =
+    '<div class="msg err">Revisá el precio de cada producto. Ingresá un precio válido.</div>';
+  return;
+}
 
     itemsCotizacion.push({
       producto_id: producto.id,
       cantidad,
-      precio_unitario: Number(fila.dataset.precioUnitario),
+      precio_unitario: precioUnitario,
       descuento_tipo: fila.dataset.descuentoTipo || 'ninguno',
       descuento_valor: Number(fila.dataset.descuentoValor || 0),
       descuento_importe: Number(fila.dataset.descuentoImporte || 0),
-      total_linea: Number(fila.dataset.totalLinea),
+     total_linea: totalLinea,
       origen_precio: fila.dataset.origenPrecio,
       lista_precio_id: fila.dataset.listaPrecioId
   ? Number(fila.dataset.listaPrecioId)
@@ -12349,14 +12371,36 @@ document.getElementById('form-cotizacion').addEventListener('submit', async (e) 
     items: itemsCotizacion
   };
 
-  aviso.textContent = 'Guardando cotización...';
+   aviso.textContent = edicionCotizacion
+    ? 'Guardando cambios...'
+    : 'Guardando cotización...';
 
-  const { data, error } = await sb.rpc('guardar_cotizacion', {
-    p_datos: datos
-  });
+  let error;
+
+  if (edicionCotizacion) {
+    ({ error } = await sb.rpc('actualizar_cotizacion', {
+      p_cotizacion_id: edicionCotizacion.cot.id,
+      p_datos: datos
+    }));
+  } else {
+    ({ error } = await sb.rpc('guardar_cotizacion', {
+      p_datos: datos
+    }));
+  }
 
   if (error) {
     aviso.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (edicionCotizacion) {
+    alert('Cotización actualizada correctamente.');
+
+    await detalleCotizacion(
+      edicionCotizacion.cot.id,
+      () => vistaVentas()
+    );
+
     return;
   }
 
@@ -12385,6 +12429,11 @@ if (botonCotNueva) {
   };
 }
 document.getElementById('cot-cancelar').onclick = () => {
+  if (edicionCotizacion) {
+    detalleCotizacion(edicionCotizacion.cot.id, () => vistaVentas());
+    return;
+  }
+
   document.getElementById('cot-formulario').hidden = true;
   document.getElementById('cot-listado').hidden = false;
 };
@@ -13141,25 +13190,30 @@ mapa.set(id, opciones);
     return false;
   }
 
-  const listaIds = [...new Set(
-    (asignaciones || [])
-      .map(x => Number(x.lista_precios_id))
-      .filter(id => Number.isInteger(id) && id > 0)
-  )];
+const listaIds = [...new Set(
+  (asignaciones || [])
+    .map(x => Number(x.lista_precios_id))
+    .filter(id => Number.isInteger(id) && id > 0)
+)];
 
-  if (
-    listaIds.length === 0 &&
-    Number.isInteger(Number(cliente.lista_precios_id)) &&
-    Number(cliente.lista_precios_id) > 0
-  ) {
-    listaIds.push(Number(cliente.lista_precios_id));
-  }
+if (
+  listaIds.length === 0 &&
+  Number.isInteger(Number(cliente.lista_precios_id)) &&
+  Number(cliente.lista_precios_id) > 0
+) {
+  listaIds.push(Number(cliente.lista_precios_id));
+}
 
   if (!listaIds.length) {
-    if (aviso) aviso.innerHTML =
-      '<div class="msg">Este cliente no tiene listas de precios asignadas.</div>';
-    return false;
-  }
+ document.querySelectorAll('#cot-items .item-form-grid').forEach(fila => {
+  cotActualizarPrecioFila(fila);
+});
+
+  if (aviso) aviso.innerHTML =
+    '<div class="msg">Este cliente no tiene listas de precios asignadas. Podés ingresar un precio excepcional.</div>';
+
+  return true;
+}
 
   const [
     { data: listas, error: errorListas },
@@ -13236,37 +13290,47 @@ mapa.set(id, opciones);
   });
 
   mapa.forEach((opciones, id) => {
-    cotPreciosPorProducto.set(id, opciones);
-  });
+  cotPreciosPorProducto.set(id, opciones);
+});
 
-  if (aviso) aviso.textContent = '';
-  return true;
+document.querySelectorAll('#cot-items .item-form-grid').forEach(fila => {
+  cotActualizarPrecioFila(fila);
+});
+
+if (aviso) aviso.textContent = '';
+return true;
 }
 
 
 if (selectorCotCliente) {
   selectorCotCliente.addEventListener('change', async () => {
-    const cargado = await cotCargarPreciosCliente();
-
-    if (cargado) {
-      document.querySelectorAll('#cot-items .item-form-grid')
-        .forEach(cotActualizarPrecioFila);
-    }
+    await cotCargarPreciosCliente();
   });
 }
 function cotActualizarPrecioFila(fila) {
   const resumen = fila.querySelector('.precio-resumen');
   if (!resumen) return;
+    // Limpiar los datos del cálculo anterior.
+  delete fila.dataset.productoId;
+  delete fila.dataset.listaPrecioId;
+  delete fila.dataset.origenPrecio;
+  delete fila.dataset.precioUnitario;
+  delete fila.dataset.descuentoTipo;
+  delete fila.dataset.descuentoValor;
+  delete fila.dataset.descuentoImporte;
+  delete fila.dataset.totalLinea;
 
   const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
   const cantidad = Number(fila.querySelector('.cant').value);
   const clienteId = Number(document.getElementById('cot-cliente').value);
 
-  if (!clienteId) {
-    resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
-    return;
-  }
+if (!clienteId) {
+  const bloqueManual = fila.querySelector('.cot-precio-excepcional');
+  if (bloqueManual) bloqueManual.hidden = true;
 
+  resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
+  return;
+}
   const producto = productosLista.find(
     p => p.nombre.toUpperCase() === nombre
   );
@@ -13377,10 +13441,15 @@ fila.dataset.totalLinea = String(totalManual);
 
   if (!esEspecial && preciosUnicos.length > 1) {
     const selectorAnterior = fila.querySelector('.precio-lista-elegida');
-    const valorAnterior = selectorAnterior ? selectorAnterior.value : '';
-
+const listaAnterior = selectorAnterior
+  ? selectorAnterior.selectedOptions[0]?.dataset.listaId
+  : '';
     const opcionesHTML = opcionesValidas.map((op, i) => `
-      <option value="${i}" ${String(i) === valorAnterior ? 'selected' : ''}>
+     <option
+  value="${i}"
+  data-lista-id="${op.lista_precio_id}"
+  ${String(op.lista_precio_id) === String(listaAnterior) ? 'selected' : ''}
+>
         ${esc(op.lista)} — $${formatoDinero(Number(op.precio))}
       </option>
     `).join('');
@@ -13503,7 +13572,10 @@ function cotAgregarItem() {
 
   const actualizar = () => cotActualizarPrecioFila(fila);
 
-  fila.querySelector('.prod').addEventListener('change', actualizar);
+  fila.querySelector('.prod').addEventListener('change', () => {
+  fila.querySelector('.cot-precio-manual').value = '';
+  actualizar();
+});
   fila.querySelector('.cant').addEventListener('input', actualizar);
   fila.querySelector('.desc-valor').addEventListener('input', actualizar);
   fila.querySelector('.desc-tipo').addEventListener('change', actualizar);
@@ -14237,9 +14309,109 @@ lista_precio_id: linea.lista_precio_id,
         };
       });
 
-      suscribirPedidos();
-      refrescarVentas();
+   
+suscribirPedidos();
+refrescarVentas();
+
+// Si estamos editando una cotización, cargar sus datos en el formulario.
+if (edicionCotizacion) {
+  const { cot, items: itemsGuardados, mapaPrecios } = edicionCotizacion;
+
+  // Abrir la solapa del cotizador.
+  const botonCotizador = document.querySelector(
+    '.ventas-solapa[data-solapa="cotizador"]'
+  );
+
+  if (botonCotizador) botonCotizador.click();
+
+  document.getElementById('cot-formulario').hidden = false;
+  document.getElementById('cot-listado').hidden = true;
+  const botonNuevaCotizacion = document.getElementById('cot-nueva');
+if (botonNuevaCotizacion) botonNuevaCotizacion.hidden = true;
+
+  const numero = String(cot.numero_cotizacion).padStart(6, '0');
+
+  document.getElementById('cot-titulo').textContent =
+    `Editar cotización N.º ${numero}`;
+
+  document.querySelector('#form-cotizacion [type="submit"]').textContent =
+    'Guardar cambios';
+
+  document.getElementById('cot-cliente').value =
+    String(cot.cliente_id);
+
+  document.getElementById('cot-fecha').value =
+    cot.fecha_entrega || '';
+
+  document.getElementById('cot-modalidad').value =
+    cot.modalidad || 'retira';
+
+  document.getElementById('cot-coment').value =
+    cot.comentarios || '';
+
+  document.getElementById('cot-aviso').textContent = '';
+
+  // Cargar el mapa de precios del cliente, sin recalcular los precios guardados.
+  const preciosCargados = await cotCargarPreciosCliente();
+
+ if (!preciosCargados) {
+  document.getElementById('cot-aviso').innerHTML =
+    '<div class="msg">No se encontraron listas de precios vigentes. Los productos sin precio deberán revisarse como precios excepcionales.</div>';
+}
+  const contenedor = document.getElementById('cot-items');
+  contenedor.innerHTML = '';
+
+for (const item of itemsGuardados) {
+  cotAgregarItem();
+
+  const fila = contenedor.lastElementChild;
+  const precioGuardado = mapaPrecios.get(String(item.id));
+
+  if (!precioGuardado) {
+    document.getElementById('cot-aviso').innerHTML =
+      `<div class="msg err">No se encontraron los datos de precio de ${esc(item.producto)}. Revisá ese producto antes de guardar.</div>`;
+    continue;
+  }
+
+  // Restaurar producto y cantidad.
+  fila.querySelector('.prod').value = item.producto;
+  fila.querySelector('.cant').value = item.cantidad;
+
+  // Restaurar descuento.
+  const tipo = precioGuardado.descuento_tipo || 'ninguno';
+  const valor = Number(precioGuardado.descuento_valor || 0);
+
+  if (tipo !== 'ninguno' || valor > 0) {
+    fila.querySelector('.desc-controls').style.display = 'grid';
+    fila.querySelector('.desc-toggle').textContent = '− Quitar descuento';
+    fila.querySelector('.desc-tipo').value =
+      tipo === 'importe' ? 'importe' : 'porcentaje';
+    fila.querySelector('.desc-valor').value = valor;
+  }
+
+const opciones = cotPreciosPorProducto.get(
+  String(item.producto_id)
+) || [];
+
+  // Calcular nuevamente con los precios actuales.
+  cotActualizarPrecioFila(fila);
+
+  // Intentar conservar la lista anterior si sigue disponible.
+  const selectorLista = fila.querySelector('.precio-lista-elegida');
+
+  if (selectorLista && precioGuardado.lista_precio_id) {
+    const indice = opciones.findIndex(op =>
+      Number(op.lista_precio_id) === Number(precioGuardado.lista_precio_id)
+    );
+
+    if (indice >= 0) {
+      selectorLista.value = String(indice);
+      cotActualizarPrecioFila(fila);
     }
+  }
+}
+}
+}
 
 async function detalleCotizacion(id, volver) {
   const c = document.getElementById('contenido');
@@ -14261,10 +14433,19 @@ async function detalleCotizacion(id, volver) {
     .filter(i => !i.padre_item_id)
     .sort((a, b) => a.id - b.id);
 
-  const { data: precios, error: errorPrecios } = await sb
-    .from('cotizacion_item_precios')
-    .select('cotizacion_item_id,precio_unitario,descuento_tipo,descuento_valor,descuento_importe,total_linea')
-    .in('cotizacion_item_id', items.map(i => i.id));
+ const { data: precios, error: errorPrecios } = await sb
+  .from('cotizacion_item_precios')
+  .select(`
+    cotizacion_item_id,
+    lista_precio_id,
+    precio_unitario,
+    descuento_tipo,
+    descuento_valor,
+    descuento_importe,
+    total_linea,
+    origen_precio
+  `)
+  .in('cotizacion_item_id', items.map(i => i.id));
 
   if (errorPrecios) {
     c.innerHTML = `<div class="panel"><div class="msg err">${esc(errorPrecios.message)}</div></div>`;
@@ -14314,9 +14495,13 @@ async function detalleCotizacion(id, volver) {
   <button class="btn chico" id="cot-imprimir">Imprimir / guardar PDF</button>
   <button class="btn chico" id="cot-compartir">Compartir</button>
 
-  ${cot.estado === 'borrador'
-    ? `<button class="btn chico" id="cot-confirmar">Confirmar cotización</button>`
-    : ''}
+${cot.estado === 'borrador'
+  ? `
+    <button class="btn sec chico" id="cot-editar">Editar cotización</button>
+    <button class="btn sec chico" id="cot-eliminar">Eliminar cotización</button>
+    <button class="btn chico" id="cot-confirmar">Confirmar cotización</button>
+  `
+  : ''}
 </div>
 
       <div class="enc">
@@ -14363,6 +14548,48 @@ async function detalleCotizacion(id, volver) {
 
   document.getElementById('cot-compartir').onclick = () =>
     compartirCotizacion(cot, items, mapaPrecios);
+  const btnEditar = document.getElementById('cot-editar');
+
+if (btnEditar) {
+  btnEditar.onclick = async () => {
+    await vistaVentas({
+      editarCotizacion: {
+        cot,
+        items,
+        mapaPrecios
+      }
+    });
+  };
+}
+    const btnEliminar = document.getElementById('cot-eliminar');
+
+if (btnEliminar) {
+  btnEliminar.onclick = async () => {
+    const numero = String(cot.numero_cotizacion).padStart(6, '0');
+
+    if (!confirm(
+      `¿Eliminar definitivamente la cotización N.º ${numero}?\n\nEsta acción no se puede deshacer.`
+    )) return;
+
+    btnEliminar.disabled = true;
+    btnEliminar.textContent = 'Eliminando...';
+
+    const { error } = await sb.rpc('eliminar_cotizacion', {
+      p_cotizacion_id: cot.id
+    });
+
+    if (error) {
+      alert('No se pudo eliminar la cotización: ' + error.message);
+      btnEliminar.disabled = false;
+      btnEliminar.textContent = 'Eliminar cotización';
+      return;
+    }
+
+    alert('Cotización eliminada correctamente.');
+
+    await volver();
+  };
+}
     const btnConfirmar = document.getElementById('cot-confirmar');
 
 if (btnConfirmar) {
@@ -14393,17 +14620,16 @@ if (btnConfirmar) {
 }
 }
 
-async function imprimirCotizacion(cot, items, mapaPrecios) {
-  const dinero = valor => Number(valor).toLocaleString('es-AR', {
+function plantillaHtmlCotizacion(cot, items, mapaPrecios) {
+  const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
     style: 'currency',
     currency: 'ARS'
   });
 
-  const logo = new URL('logo.png', document.baseURI).href;
+  const numero = String(cot.numero_cotizacion).padStart(6, '0');
 
   const filas = items.map(i => {
     const precio = mapaPrecios.get(String(i.id));
-
     const descuento = Number(precio?.descuento_importe || 0);
 
     const etiquetaDescuento =
@@ -14417,13 +14643,9 @@ async function imprimirCotizacion(cot, items, mapaPrecios) {
       <tr>
         <td>${esc(i.producto)}</td>
         <td class="numero">${esc(i.cantidad)}</td>
-        <td class="numero">
-          ${precio ? dinero(precio.precio_unitario) : 'Sin precio'}
-        </td>
+        <td class="numero">${precio ? dinero(precio.precio_unitario) : 'Sin precio'}</td>
         <td class="numero">${esc(etiquetaDescuento)}</td>
-        <td class="numero">
-          ${precio ? dinero(precio.total_linea) : 'Sin precio'}
-        </td>
+        <td class="numero">${precio ? dinero(precio.total_linea) : 'Sin precio'}</td>
       </tr>
     `;
   }).join('');
@@ -14433,6 +14655,72 @@ async function imprimirCotizacion(cot, items, mapaPrecios) {
     return suma + Number(precio?.total_linea || 0);
   }, 0);
 
+  return `
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>Cotización ${numero}</title>
+      <style>
+        body { font-family: Arial, sans-serif; color: #172033; margin: 28px; }
+        header { display:flex; justify-content:space-between; align-items:center; gap:20px; border-bottom:2px solid #1565B8; padding-bottom:14px; }
+        h1 { font-size:22px; margin:0; }
+        header p { margin:6px 0 0; color:#555; }
+        table { width:100%; border-collapse:collapse; margin-top:24px; }
+        th, td { border-bottom:1px solid #ddd; padding:10px 8px; text-align:left; vertical-align:top; }
+        th { background:#f2f5f9; }
+        .numero { text-align:right; white-space:nowrap; }
+        .total {
+  text-align: right;
+  margin-top: 24px;
+  font-size: 18px;
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 8px;
+}
+        @media print { body { margin:12mm; } }
+      </style>
+    </head>
+    <body>
+      <section>
+        <header>
+          <div>
+            <h1>Cotización ${numero}</h1>
+            <p>Copia 1 de 1</p>
+          </div>
+        </header>
+
+        <p><b>Cliente:</b> ${esc(cot.cliente)}</p>
+        <p><b>Estado:</b> ${esc(cot.estado)}</p>
+        <p><b>Modalidad:</b> ${esc(MODAL[cot.modalidad] || cot.modalidad)}</p>
+        <p><b>Fecha de entrega:</b> ${esc(fmtFecha(cot.fecha_entrega))}</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="numero">Cantidad</th>
+              <th class="numero">Precio unitario</th>
+              <th class="numero">Descuento</th>
+              <th class="numero">Total</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+
+        <h2 class="total">Total de la cotización: ${dinero(total)}</h2>
+
+        ${cot.comentarios
+          ? `<p><b>Comentarios:</b> ${esc(cot.comentarios)}</p>`
+          : ''}
+      </section>
+    </body>
+    </html>
+  `;
+}
+
+
+async function imprimirCotizacion(cot, items, mapaPrecios) {
   const ventana = window.open('', '_blank');
 
   if (!ventana) {
@@ -14440,305 +14728,93 @@ async function imprimirCotizacion(cot, items, mapaPrecios) {
     return;
   }
 
+  const html = plantillaHtmlCotizacion(cot, items, mapaPrecios);
+
   ventana.document.open();
-  ventana.document.write(`
-    <!doctype html>
-    <html lang="es">
-    <head>
-      <meta charset="utf-8">
-      <title>Cotización ${String(cot.numero_cotizacion).padStart(6, '0')}</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          color: #172033;
-          margin: 28px;
-        }
-        header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 20px;
-          border-bottom: 2px solid #1565B8;
-          padding-bottom: 14px;
-        }
-        header img {
-          max-width: 90px;
-          max-height: 70px;
-          object-fit: contain;
-        }
-        h1 { font-size: 22px; margin: 0; }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 24px;
-        }
-        th, td {
-          border-bottom: 1px solid #ddd;
-          padding: 10px 8px;
-          text-align: left;
-        }
-        th { background: #f2f5f9; }
-        .numero {
-          text-align: right;
-          white-space: nowrap;
-        }
-        .total {
-          text-align: right;
-          margin-top: 24px;
-          font-size: 18px;
-        }
-        @media print {
-          body { margin: 12mm; }
-        }
-      </style>
-    </head>
-    <body>
-      <header>
-        <div>
-          <h1>Cotización ${String(cot.numero_cotizacion).padStart(6, '0')}</h1>
-        </div>
-        <img src="${logo}" alt="Distribuidora SGV">
-      </header>
+  ventana.document.write(html);
+  ventana.document.close();
 
-      <p><b>Cliente:</b> ${esc(cot.cliente)}</p>
-      <p><b>Modalidad:</b> ${esc(MODAL[cot.modalidad] || cot.modalidad)}</p>
-      <p><b>Fecha de entrega:</b> ${esc(fmtFecha(cot.fecha_entrega))}</p>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th class="numero">Cantidad</th>
-            <th class="numero">Precio unitario</th>
-            <th class="numero">Descuento</th>
-            <th class="numero">Total</th>
-          </tr>
-        </thead>
-        <tbody>${filas}</tbody>
-      </table>
-
-      <h2 class="total">Total de la cotización: ${dinero(total)}</h2>
-
-      ${cot.comentarios
-        ? `<p><b>Observaciones:</b> ${esc(cot.comentarios)}</p>`
-        : ''}
-    </body>
-    </html>
-  `);
-
- ventana.document.close();
-ventana.focus();
-
-setTimeout(() => {
   ventana.focus();
-  ventana.print();
-}, 500);
+
+  setTimeout(() => {
+    ventana.focus();
+    ventana.print();
+  }, 500);
 }
 
+
 async function generarPdfCotizacion(cot, items, mapaPrecios) {
-  if (!window.jspdf?.jsPDF) {
+  if (typeof html2pdf !== 'function') {
     throw new Error('No se pudo cargar la librería para generar PDF.');
   }
 
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  const margen = 14;
-  const ancho = 210;
-  const anchoUtil = ancho - margen * 2;
   const numero = String(cot.numero_cotizacion).padStart(6, '0');
+  const html = plantillaHtmlCotizacion(cot, items, mapaPrecios);
 
-  const dinero = valor =>
-    '$ ' + Number(valor || 0).toLocaleString('es-AR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-10000px';
+  iframe.style.top = '0';
+  iframe.style.width = '794px';
+  iframe.style.height = '1123px';
+  iframe.style.border = '0';
 
-  const texto = valor =>
-    String(valor ?? '').replace(/\u00a0/g, ' ');
+  document.body.appendChild(iframe);
 
-  // Logo
   try {
-    const respuesta = await fetch(new URL('logo.png', document.baseURI));
-    if (respuesta.ok) {
-      const blob = await respuesta.blob();
+    iframe.srcdoc = html;
 
-      const logoData = await new Promise((resolve, reject) => {
-        const lector = new FileReader();
-        lector.onload = () => resolve(lector.result);
-        lector.onerror = reject;
-        lector.readAsDataURL(blob);
-      });
-
-      pdf.addImage(logoData, 'PNG', 166, 12, 28, 20);
-    }
-  } catch (error) {
-    console.warn('No se pudo cargar el logo en el PDF:', error);
-  }
-
-  // Encabezado
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(17);
-  pdf.setTextColor(21, 101, 184);
-  pdf.text('Cotización ' + numero, margen, 22);
-
-  pdf.setDrawColor(21, 101, 184);
-  pdf.setLineWidth(0.8);
-  pdf.line(margen, 36, ancho - margen, 36);
-
-  // Datos del cliente
-  pdf.setTextColor(23, 32, 51);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-
-  let y = 46;
-
-  pdf.text('Cliente: ' + texto(cot.cliente), margen, y);
-  y += 7;
-
-  pdf.text(
-    'Modalidad: ' + texto(MODAL[cot.modalidad] || cot.modalidad),
-    margen,
-    y
-  );
-  y += 7;
-
-  pdf.text('Fecha de entrega: ' + texto(fmtFecha(cot.fecha_entrega)), margen, y);
-  y += 12;
-
-  // Encabezado de tabla
-  const columnas = [
-    { x: margen + 2, ancho: 68, titulo: 'Producto' },
-    { x: 105, ancho: 18, titulo: 'Cant.' },
-    { x: 125, ancho: 27, titulo: 'Precio' },
-    { x: 154, ancho: 19, titulo: 'Desc.' },
-    { x: 175, ancho: 21, titulo: 'Total' }
-  ];
-
-  function encabezadoTabla() {
-    pdf.setFillColor(242, 245, 249);
-    pdf.rect(margen, y - 5, anchoUtil, 10, 'F');
-
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(8);
-    pdf.setTextColor(23, 32, 51);
-
-    columnas.forEach((col, index) => {
-      const alineacion = index === 0 ? 'left' : 'right';
-      pdf.text(col.titulo, col.x + (index === 0 ? 0 : col.ancho), y, {
-        align: alineacion
-      });
+    await new Promise((resolve, reject) => {
+      iframe.onload = resolve;
+      iframe.onerror = reject;
     });
 
-    y += 10;
-  }
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-  encabezadoTabla();
+    const contenido = iframe.contentDocument.body;
+    iframe.style.height = Math.max(
+      1123,
+      contenido.scrollHeight + 40
+    ) + 'px';
 
-  // Filas
-  let total = 0;
+    const blob = await html2pdf()
+      .set({
+        margin: 0,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait'
+        },
+        pagebreak: {
+          mode: ['css', 'legacy']
+        }
+      })
+      .from(contenido)
+.toPdf()
+.get('pdf')
+.then(pdf => {
+  const anchoPagina = pdf.internal.pageSize.getWidth();
+  const altoPagina = pdf.internal.pageSize.getHeight();
 
-  for (const item of items) {
-    const precio = mapaPrecios.get(String(item.id));
-    const importe = Number(precio?.total_linea || 0);
-    total += importe;
+  return pdf;
+})
+.output('blob');
 
-    const descuento =
-      precio?.descuento_tipo === 'porcentaje'
-        ? Number(precio.descuento_valor || 0) + '%'
-        : precio?.descuento_tipo === 'importe'
-          ? dinero(precio.descuento_importe)
-          : '—';
-
-    const producto = pdf.splitTextToSize(
-      texto(item.producto),
-      columnas[0].ancho
+    return new File(
+      [blob],
+      `Cotizacion-SGV-${numero}.pdf`,
+      { type: 'application/pdf' }
     );
-
-    const altoFila = Math.max(8, producto.length * 4 + 4);
-
-    if (y + altoFila > 275) {
-      pdf.addPage();
-      y = 20;
-      encabezadoTabla();
-    }
-
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(23, 32, 51);
-
-    pdf.text(producto, columnas[0].x, y);
-
-    pdf.text(texto(item.cantidad), 123, y, { align: 'right' });
-
-    pdf.text(
-      precio ? dinero(precio.precio_unitario) : 'Sin precio',
-      152,
-      y,
-      { align: 'right' }
-    );
-
-    pdf.text(texto(descuento), 173, y, { align: 'right' });
-
-    pdf.text(
-      precio ? dinero(precio.total_linea) : 'Sin precio',
-      194,
-      y,
-      { align: 'right' }
-    );
-
-    y += altoFila;
-
-    pdf.setDrawColor(220, 224, 230);
-    pdf.line(margen, y - 2, ancho - margen, y - 2);
+  } finally {
+    iframe.remove();
   }
-
-  // Total
-  y += 10;
-
-  if (y > 275) {
-    pdf.addPage();
-    y = 25;
-  }
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(13);
-  pdf.setTextColor(21, 101, 184);
-
-  pdf.text(
-    'Total de la cotización: ' + dinero(total),
-    ancho - margen,
-    y,
-    { align: 'right' }
-  );
-
-  // Observaciones
-  if (cot.comentarios) {
-    y += 12;
-
-    const observaciones = pdf.splitTextToSize(
-      'Observaciones: ' + texto(cot.comentarios),
-      anchoUtil
-    );
-
-    if (y + observaciones.length * 5 > 280) {
-      pdf.addPage();
-      y = 25;
-    }
-
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(9);
-    pdf.setTextColor(23, 32, 51);
-    pdf.text(observaciones, margen, y);
-  }
-
-  return new File(
-    [pdf.output('blob')],
-    'Cotizacion-SGV-' + numero + '.pdf',
-    { type: 'application/pdf' }
-  );
 }
-
 
 
 async function compartirCotizacion(cot, items, mapaPrecios) {

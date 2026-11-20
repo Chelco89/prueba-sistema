@@ -8509,6 +8509,13 @@ let busquedaClienteSerie = '';
 <label for="b-cliente" style="margin-top:12px">Buscar cliente</label>
 <input id="b-cliente" placeholder="Escribí el nombre del cliente"
   autocomplete="off">
+  <label for="filtro-pec-serie" style="margin-top:12px">
+  Filtrar por PEC transferido
+</label>
+<select id="filtro-pec-serie">
+  <option value="todos">Todos los números de serie</option>
+  <option value="sin-pec">No tiene PEC transferido</option>
+</select>
     <div id="res-series" class="vacio" style="margin-top:12px">Cargando…</div>
 <datalist id="lista-pec-transferido"></datalist></div>`;
       let t;
@@ -8527,6 +8534,9 @@ document.getElementById('b-cliente').oninput = e => {
     cargarSeries();
   }, 300);
 };
+document.getElementById('filtro-pec-serie').onchange = () => {
+  cargarSeries();
+};
 
 cargarSeries();
     }
@@ -8539,6 +8549,11 @@ cargarSeries();
   q = q
     .not('pedido_id', 'is', null)
     .ilike('pedidos.cliente', `%${busquedaClienteSerie.trim()}%`);
+}
+const filtroPec = document.getElementById('filtro-pec-serie')?.value;
+
+if (filtroPec === 'sin-pec') {
+  q = q.or('pec_transferido.is.null,pec_transferido.eq.');
 }
       const { data, error } = await q;
       if (error) return res.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;

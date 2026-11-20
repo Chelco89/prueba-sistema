@@ -1196,20 +1196,18 @@ armarSistema();
     function armarSistema() {
             const tabs = [];
 
-      if (['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
-        tabs.push(
-  ['ventas', 'Ventas'],
-  ['productos', 'Productos'],
-  ['listas_precios', 'Listas de Precios'],
-  ['clientes', 'Clientes'],
-  ['caja', 'Caja'],
-  ['cuentas_corrientes', 'Cta Cte Clientes'],
-  ['proveedores', 'Cta Cte Proveedores']
-);
-      }
+     if (['ventas', 'admin', 'supervisor'].includes(perfil.rol)) {
+  tabs.push(
+    ['ventas', 'Ventas'],
+    ['gestion', 'Gestión'],
+    ['caja', 'Caja'],
+    ['cuentas_corrientes', 'Cta Cte Clientes'],
+    ['proveedores', 'Cta Cte Proveedores']
+  );
+}
 
       if (['deposito', 'admin', 'supervisor'].includes(perfil.rol)) {
-        tabs.push(['deposito', 'Depósito']);
+        tabs.push(['deposito', 'Producción']);
       }
 
       tabs.push(['series', 'N.º de serie']);
@@ -1237,6 +1235,7 @@ armarSistema();
 });
 
      ({
+      gestion: vistaGestion,
   ventas: vistaVentas,
   deposito: vistaDeposito,
   series: vistaSeries,
@@ -1266,9 +1265,10 @@ if (vista === 'deposito' && pedidoDepositoActivo) {
 
     /* ---------- LISTAS DE PRECIOS ---------- */
     async function vistaListasPrecios() {
-      const c = document.getElementById('contenido');
+  const c = document.getElementById('gestion-contenido');
+  if (!c) return;
 
-      c.innerHTML = `
+  c.innerHTML = `
     <div class="panel">
       <div class="barra">
         <h2>Listas de Precios</h2>
@@ -1715,10 +1715,11 @@ if (vista === 'deposito' && pedidoDepositoActivo) {
     }
 
     /* ---------- CLIENTES ---------- */
-    async function vistaClientes() {
-      const c = document.getElementById('contenido');
+   async function vistaClientes() {
+  const c = document.getElementById('gestion-contenido');
+  if (!c) return;
 
-      c.innerHTML = `
+  c.innerHTML = `
     <div class="panel">
       <div class="barra">
         <h2>Clientes</h2>
@@ -7142,7 +7143,7 @@ if (
     function vistaDeposito() {
       const c = document.getElementById('contenido');
       c.innerHTML = `<div class="panel">
-    <div class="barra"><h2>Depósito</h2></div>
+    <div class="barra"><h2>Producción</h2></div>
     <div class="pills">${DEP_TABS.map(([k, n]) => `<button class="pill-btn ${depTab === k ? 'activa' : ''}" data-t="${k}">${n}</button>`).join('')}</div>
     <div class="filtros">
       <div><label for="d-numero">N.º de remito</label><input id="d-numero" type="number" min="1" value="${esc(filtros.numero)}"></div>
@@ -8349,8 +8350,10 @@ style="width:100%;padding:8px;margin-top:5px;text-transform:uppercase;font-weigh
     }
 
     async function vistaProductos() {
-      const c = document.getElementById('contenido');
-      c.innerHTML = `<div class="panel">
+  const c = document.getElementById('gestion-contenido');
+  if (!c) return;
+
+  c.innerHTML = `<div class="panel">
     <div class="barra"><h2>Productos</h2></div>
     <p class="vacio" style="padding-top:0">Esta lista es la que se usa al crear pedidos, así el producto siempre sale escrito igual en el presupuesto.</p>
     <form id="fprod" class="fila" style="border:0;padding-top:0;align-items:flex-end">
@@ -12038,6 +12041,62 @@ recuperarBorradorIngresoStock();
     const fmtFecha = d => d ? new Date(d.length === 10 ? d + 'T00:00:00' : d).toLocaleDateString('es-AR') : '—';
     const fmtFechaHora = d => d ? new Date(d).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
     let filtroEstadoPill = 'todos';
+   function vistaGestion() {
+  const c = document.getElementById('contenido');
+
+  c.innerHTML = `
+    <div class="panel">
+      <div class="barra">
+        <h2>Gestión</h2>
+      </div>
+
+      <div class="pills" style="margin-top:15px">
+        <button class="pill-btn" data-gestion="productos">
+          Productos
+        </button>
+
+        <button class="pill-btn" data-gestion="clientes">
+          Clientes
+        </button>
+
+        <button class="pill-btn" data-gestion="listas_precios">
+          Listas de Precios
+        </button>
+
+        <button class="pill-btn" data-gestion="proveedores" disabled>
+          Proveedores (próximamente)
+        </button>
+      </div>
+
+      <div id="gestion-contenido" style="margin-top:15px">
+        <p class="vacio">Seleccioná una sección.</p>
+      </div>
+    </div>
+  `;
+    c.querySelectorAll('[data-gestion]').forEach(b => {
+    b.onclick = async () => {
+      const seccion = b.dataset.gestion;
+
+      if (seccion === 'proveedores') return;
+
+      c.querySelectorAll('[data-gestion]').forEach(btn => {
+        btn.classList.toggle('activa', btn === b);
+      });
+
+      const destino = document.getElementById('gestion-contenido');
+
+   if (seccion === 'productos') {
+  await vistaProductos();
+}
+if (seccion === 'clientes') {
+  await vistaClientes();
+}
+if (seccion === 'listas_precios') {
+  await vistaListasPrecios();
+}
+    };
+  });
+}
     async function vistaVentas(opciones = {}) {
   const edicionCotizacion = opciones.editarCotizacion || null;
 

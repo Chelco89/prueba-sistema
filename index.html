@@ -700,19 +700,19 @@
       margin: 0 0 14px
     }
 
-    @media (max-width:950px) {
-      .col-form {
-        display: none
-      }
+   @media (max-width:950px) {
+  .col-form {
+    display: block;
+  }
 
-      .col-form.abierto {
-        display: block
-      }
+  .col-form:not(.abierto) #panel-nuevo-pedido {
+    display: none;
+  }
 
-      .nuevo-movil {
-        display: block
-      }
-    }
+  .nuevo-movil {
+    display: block;
+  }
+}
 
     .chip-serie {
       display: inline-block;
@@ -12505,8 +12505,16 @@ if (selectorNotaCliente) {
       const colForm = document.getElementById('col-form');
 
       if (toggleForm && colForm) {
-        toggleForm.onclick = () => colForm.classList.toggle('abierto');
-      }
+  toggleForm.onclick = () => {
+    colForm.classList.add('abierto');
+
+    const botonPedido = document.querySelector(
+      '.ventas-solapa[data-solapa="pedido"]'
+    );
+
+    if (botonPedido) botonPedido.click();
+  };
+}
      const botonesSolapa = document.querySelectorAll('.ventas-solapa');
 
 const panelesVentas = {

@@ -12601,10 +12601,11 @@ const cargarCotizaciones = async () => {
 
   contenedor.innerHTML = '<p>Cargando cotizaciones...</p>';
 
-  const { data, error } = await sb
-    .from('cotizaciones')
-    .select('id, numero_cotizacion, cliente, estado, creado_en, pedido_id')
-    .order('numero_cotizacion', { ascending: false });
+ const { data, error } = await sb
+  .from('cotizaciones')
+  .select('id, numero_cotizacion, cliente, estado, creado_en, pedido_id')
+  .is('pedido_id', null)
+  .order('numero_cotizacion', { ascending: false });
 
   if (error) {
     contenedor.innerHTML =

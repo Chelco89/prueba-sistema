@@ -9947,6 +9947,8 @@ function agregarFilaIngresoStock() {
       const esKitMG22 = ['34', '41', '44'].includes(
   productoSelect.value
 );
+
+const esProducto37 = productoSelect.value === '37';
   const prefijosSeries = {
   '68': 'MG31-',
   '55': 'MG22-',
@@ -9976,7 +9978,7 @@ const esKitDosSeries = Boolean(prefijoKit);
     const ayuda = fila.querySelector('.stock-ingreso-ayuda');
 
 panelSeries.style.display =
-  (requiereSerie || esKitMG22) ? '' : 'none';
+  (requiereSerie || esKitMG22 || esProducto37) ? '' : 'none';
 
 generador.style.display =
   esProductoConPrefijo ? '' : 'none';
@@ -10003,7 +10005,7 @@ ayuda.textContent =
 
    unidadesContenedor.innerHTML = '';
 
-if (!requiereSerie && !esKitMG22) return;
+if (!requiereSerie && !esKitMG22 && !esProducto37) return;
 
 const cantidad = Number(cantidadInput.value);
 
@@ -10031,6 +10033,42 @@ ${esKitMG22 ? `
         <input type="text"
           class="stock-unidad-numero-serie"
           placeholder="Ej.: SRME0540"
+          style="flex:1;border-radius:0 6px 6px 0">
+        <button type="button"
+          class="btn chico sec stock-escanear-serie">
+          <i class="fa fa-camera"></i> Escanear
+        </button>
+      </div>
+    </div>
+    
+   </div>
+
+` : esProducto37 ? `
+  <label>Código exterior (obligatorio)</label>
+  <div style="display:flex;gap:6px;align-items:center">
+    <input type="text"
+      class="stock-unidad-codigo-exterior"
+      required
+      placeholder="Código exterior"
+      style="flex:1;min-width:0">
+
+    <button type="button"
+      class="btn chico sec stock-escanear-serie">
+      <i class="fa fa-camera"></i> Escanear
+    </button>
+  </div>
+
+  <div style="margin-top:10px">
+    <label>Serie interna (MG22-)</label>
+    <div style="display:flex;align-items:center;gap:0">
+      <span style="padding:9px;border:1px solid #ccc;border-radius:6px 0 0 6px;background:#eee">
+        MG22-
+      </span>
+      <div style="display:flex;gap:6px;align-items:center;flex:1">
+        <input type="text"
+          class="stock-unidad-numero-serie"
+          data-prefijo="MG22-"
+          placeholder="Número interno"
           style="flex:1;border-radius:0 6px 6px 0">
         <button type="button"
           class="btn chico sec stock-escanear-serie">
@@ -10171,10 +10209,11 @@ if (selectorPrefijoKit) {
   };
 }
 
-    if (
+  if (
   !esProductoConPrefijo &&
   !esKitDosSeries &&
-  !esKitMG22
+  !esKitMG22 &&
+  !esProducto37
 ) {
         const seriesContenedor =
           unidad.querySelector('.stock-unidad-series');
@@ -12201,7 +12240,7 @@ if (esKitMG22) {
 
   const idsKit = [116, 117, 118, 119, 120, 139, 140];
    const esKit = idsKit.includes(idProducto);
-
+const esProducto37 = Number(idProducto) === 37;
   item.unidades = [
     ...fila.querySelectorAll('.stock-ingreso-unidad')
   ]
@@ -12250,13 +12289,34 @@ if (esKitMG22) {
       errorSeries = true;
     }
 
-   } else if (
+   } else if (esProducto37) {
+    if (
+      item.unidades.length !== item.cantidad ||
+      item.unidades.some(unidad =>
+        !unidad.codigo_exterior ||
+        unidad.series.length !== 1
+      )
+    ) {
+      errorSeries = true;
+    }
+
+   } else if (esProducto37) {
+    if (
+      item.unidades.length !== item.cantidad ||
+      item.unidades.some(unidad =>
+        !unidad.codigo_exterior ||
+        unidad.series.length !== 1
+      )
+    ) {
+      errorSeries = true;
+    }
+
+  } else if (
     [55, 56, 57, 68].includes(idProducto) &&
     item.unidades.length !== item.cantidad
   ) {
     errorSeries = true;
   }
-
 }
 
 return item;
@@ -12265,7 +12325,7 @@ return item;
 
 if (errorSeries) {
   aviso.innerHTML =
-    '<div class="msg err">Revisá las identificaciones: los kits nuevos admiten una serie MG22 por regulador identificado; los demás productos mantienen sus validaciones habituales.</div>';
+    '<div class="msg err">Revisá las identificaciones: cada unidad debe tener su código exterior y la cantidad de series internas que corresponda al producto.</div>';
   return;
 }
 

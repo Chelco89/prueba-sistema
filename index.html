@@ -2787,6 +2787,47 @@ async function verCuentaCorriente(id, desde = '', hasta = '', generarPDF = false
     </div>`;
     return;
   }
+    // Cargar los medios de pago de los recibos asociados
+  // a los movimientos de Cuenta Corriente.
+  const idsCobros = [...new Set(
+    (movimientos || [])
+      .filter(m => m.tipo === 'pago' && m.caja_cobro_id != null)
+      .map(m => m.caja_cobro_id)
+  )];
+
+  let valoresPorCobro = {};
+
+  if (idsCobros.length) {
+    const { data: valoresCobro, error: errorValoresCobro } = await sb
+      .from('caja_cobro_valores')
+      .select(`
+        id,
+        cobro_id,
+        medio_pago,
+        importe,
+        fecha_transferencia,
+        referencia_transferencia
+      `)
+      .in('cobro_id', idsCobros);
+
+    if (errorValoresCobro) {
+      c.innerHTML = `<div class="panel">
+        Error al cargar el detalle de los recibos:
+        ${esc(errorValoresCobro.message)}
+      </div>`;
+      return;
+    }
+
+    (valoresCobro || []).forEach(valor => {
+      const clave = String(valor.cobro_id);
+
+      if (!valoresPorCobro[clave]) {
+        valoresPorCobro[clave] = [];
+      }
+
+      valoresPorCobro[clave].push(valor);
+    });
+  }
 
   const dinero = valor => Number(valor || 0).toLocaleString('es-AR', {
     style: 'currency',
@@ -3092,7 +3133,32 @@ const movimientoTexto = m.referencia === 'SALDO_INICIAL'
 
 return `
   <tr>
-    <td>${esc(new Date(m.fecha).toLocaleString('es-AR'))}</td>
+    <td>
+  <div>
+    <strong>Registrado:</strong><br>
+    ${esc(new Date(m.fecha).toLocaleString('es-AR'))}
+  </div>
+
+  ${m.tipo === 'pago' && m.caja_cobro_id != null
+    ? (valoresPorCobro[String(m.caja_cobro_id)] || [])
+        .filter(v => v.medio_pago === 'transferencia')
+        .map(v => `
+          <div style="margin-top:6px">
+            <strong>Fecha de transferencia:</strong><br>
+            ${v.fecha_transferencia
+              ? esc(new Date(`${v.fecha_transferencia}T00:00:00`).toLocaleDateString('es-AR'))
+              : 'Sin fecha'}
+            <br>
+            <small>
+              ${dinero(v.importe)}
+              ${v.referencia_transferencia
+                ? ' · ' + esc(v.referencia_transferencia)
+                : ''}
+            </small>
+          </div>
+        `).join('')
+    : ''}
+</td>
     <td>${esc(movimientoTexto)}</td>
     <td>${comprobante}</td>
     <td class="num" style="color:#000;font-weight:600">
@@ -6954,7 +7020,40 @@ try {
       `<div class="msg err">${esc(mensaje)}</div>`;
     return;
   }
+  // Cargar los medios de pago de los recibos.
+  const idsCobrosHistorial = (cobros || []).map(x => x.id);
 
+  let valoresPorCobroHistorial = {};
+
+  if (idsCobrosHistorial.length) {
+    const { data: valores, error: errorValores } = await sb
+      .from('caja_cobro_valores')
+      .select(`
+        id,
+        cobro_id,
+        medio_pago,
+        importe,
+        fecha_transferencia,
+        referencia_transferencia
+      `)
+      .in('cobro_id', idsCobrosHistorial);
+
+    if (errorValores) {
+      historial.innerHTML =
+        `<div class="msg err">${esc(errorValores.message)}</div>`;
+      return;
+    }
+
+    (valores || []).forEach(v => {
+      const clave = String(v.cobro_id);
+
+      if (!valoresPorCobroHistorial[clave]) {
+        valoresPorCobroHistorial[clave] = [];
+      }
+
+      valoresPorCobroHistorial[clave].push(v);
+    });
+  }
   const nombres = new Map(
     (clientes || []).map(cl => [Number(cl.id), cl.nombre])
   );
@@ -6979,7 +7078,30 @@ try {
             ${cobros.map(x => `
               <tr>
                 <td>RC-${String(x.id).padStart(6, '0')}</td>
-                <td>${new Date(x.creado_en).toLocaleString('es-AR')}</td>
+                <td>
+  <div>
+    <strong>Registrado:</strong><br>
+    ${new Date(x.creado_en).toLocaleString('es-AR')}
+  </div>
+
+  ${(valoresPorCobroHistorial[String(x.id)] || [])
+    .filter(v => v.medio_pago === 'transferencia')
+    .map(v => `
+      <div style="margin-top:6px">
+       <strong>Fecha de transferencia:</strong><br>
+        ${v.fecha_transferencia
+          ? new Date(`${v.fecha_transferencia}T00:00:00`).toLocaleDateString('es-AR')
+          : 'Sin fecha'}
+        <br>
+        <small>
+          ${dinero(v.importe)}
+          ${v.referencia_transferencia
+            ? ' · ' + esc(v.referencia_transferencia)
+            : ''}
+        </small>
+      </div>
+    `).join('')}
+</td>
                 <td>${esc(nombres.get(Number(x.cliente_id)) || 'Cliente')}</td>
                 <td class="num">${dinero(x.importe_total)}</td>
                 <td>
@@ -13476,34 +13598,30 @@ if (
             .map(p => [String(p.producto_id), Number(p.precio)])
         );
 
-        productosLista.forEach(producto => {
-          const id = String(producto.id);
+     productosLista.forEach(producto => {
+  const id = String(producto.id);
+  const opciones = mapa.get(id) || [];
 
-          if (mapaEspeciales.has(id)) {
-  const listaEspecialId = Number(cliente.lista_precios_id);
+  if (mapaEspeciales.has(id)) {
+    const listaPrincipalId = Number(cliente.lista_precios_id);
 
-  if (!Number.isInteger(listaEspecialId) || listaEspecialId <= 0) {
-    mostrarAvisoClientes(
-      `<div class="msg err">El cliente ${esc(cliente.nombre)} tiene un precio especial, pero no tiene una lista principal válida asignada.</div>`
-    );
-    mapa.set(id, []);
-    return;
+    const listaEspecialId =
+      listaIds.includes(listaPrincipalId) && nombresListas.has(listaPrincipalId)
+        ? listaPrincipalId
+        : listaIds.find(listaId => nombresListas.has(listaId));
+
+    if (listaEspecialId) {
+      opciones.push({
+        lista_precio_id: listaEspecialId,
+        lista: 'Precio especial permanente',
+        precio: mapaEspeciales.get(id),
+        origen_precio: 'especial_permanente'
+      });
+    }
   }
 
-  mapa.set(id, [{
-    lista_precio_id: listaEspecialId,
-    lista: 'Precio especial permanente',
-    precio: mapaEspeciales.get(id),
-    origen_precio: 'especial_permanente'
-  }]);
-  return;
-}
-
-          const opciones = mapa.get(id) || [];
-
-          // Conservar el precio y el identificador de su lista de origen.
-mapa.set(id, opciones);
-        });
+  mapa.set(id, opciones);
+});
 
         mapa.forEach((opciones, productoId) => {
           preciosPorProducto.set(productoId, opciones);
@@ -13625,25 +13743,27 @@ if (
       .map(p => [String(p.producto_id), Number(p.precio)])
   );
 
-  productosLista.forEach(producto => {
-    const id = String(producto.id);
+ 
+productosLista.forEach(producto => {
+  const id = String(producto.id);
+  const opciones = mapa.get(id) || [];
 
-    if (mapaEspeciales.has(id)) {
-      const listaEspecialId = Number(cliente.lista_precios_id);
+  if (mapaEspeciales.has(id)) {
+    const listaEspecialId = Number(cliente.lista_precios_id);
 
-      if (!Number.isInteger(listaEspecialId) || listaEspecialId <= 0) {
-        mapa.set(id, []);
-        return;
-      }
-
-      mapa.set(id, [{
+    if (Number.isInteger(listaEspecialId) && listaEspecialId > 0) {
+      opciones.push({
         lista_precio_id: listaEspecialId,
         lista: 'Precio especial permanente',
         precio: mapaEspeciales.get(id),
         origen_precio: 'especial_permanente'
-      }]);
+      });
     }
-  });
+  }
+
+  mapa.set(id, opciones);
+});
+
 
   mapa.forEach((opciones, id) => {
   cotPreciosPorProducto.set(id, opciones);
@@ -13663,10 +13783,16 @@ if (selectorCotCliente) {
     await cotCargarPreciosCliente();
   });
 }
+
 function cotActualizarPrecioFila(fila) {
   const resumen = fila.querySelector('.precio-resumen');
   if (!resumen) return;
-    // Limpiar los datos del cálculo anterior.
+
+  const selectorAnterior = fila.querySelector('.cot-tipo-precio');
+  const seleccionAnterior = selectorAnterior
+    ? selectorAnterior.value
+    : '';
+
   delete fila.dataset.productoId;
   delete fila.dataset.listaPrecioId;
   delete fila.dataset.origenPrecio;
@@ -13679,27 +13805,30 @@ function cotActualizarPrecioFila(fila) {
   const nombre = fila.querySelector('.prod').value.trim().toUpperCase();
   const cantidad = Number(fila.querySelector('.cant').value);
   const clienteId = Number(document.getElementById('cot-cliente').value);
-
-if (!clienteId) {
   const bloqueManual = fila.querySelector('.cot-precio-excepcional');
-  if (bloqueManual) bloqueManual.hidden = true;
 
-  resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
-  return;
-}
+  if (!clienteId) {
+    if (bloqueManual) bloqueManual.hidden = true;
+    resumen.textContent = 'Seleccioná un cliente para consultar sus precios.';
+    return;
+  }
+
   const producto = productosLista.find(
     p => p.nombre.toUpperCase() === nombre
   );
-    if (producto) {
+
+  if (producto) {
     fila.dataset.productoId = String(producto.id);
   }
 
   if (!producto) {
+    if (bloqueManual) bloqueManual.hidden = true;
     resumen.textContent = 'Elegí un producto de la lista.';
     return;
   }
 
   if (!Number.isFinite(cantidad) || cantidad <= 0) {
+    if (bloqueManual) bloqueManual.hidden = true;
     resumen.textContent = 'Ingresá una cantidad válida.';
     return;
   }
@@ -13710,161 +13839,127 @@ if (!clienteId) {
     op => Number.isFinite(Number(op.precio)) && Number(op.precio) > 0
   );
 
-    if (!opcionesValidas.length) {
-    const bloqueManual = fila.querySelector('.cot-precio-excepcional');
-    if (bloqueManual) bloqueManual.hidden = false;
+  const cliente = clientesActivos.find(
+    c => Number(c.id) === clienteId
+  );
 
-    const precioManual = Number(
-      fila.querySelector('.cot-precio-manual').value
-    );
+  const listaReferenciaId = Number(cliente?.lista_precios_id);
 
-    const cliente = clientesActivos.find(
-      c => Number(c.id) === clienteId
-    );
+  const opcionesSelector = opcionesValidas.map((op, i) => ({
+    id: `opcion-${i}`,
+    nombre: op.lista,
+    precio: Number(op.precio),
+    lista_precio_id: op.lista_precio_id,
+    origen_precio: op.origen_precio || 'lista'
+  }));
 
-    const listaReferenciaId = Number(cliente?.lista_precios_id);
-
-    fila.dataset.listaPrecioId =
+  opcionesSelector.push({
+    id: 'excepcional',
+    nombre: 'Precio excepcional para esta cotización',
+    precio: null,
+    lista_precio_id:
       Number.isInteger(listaReferenciaId) && listaReferenciaId > 0
-        ? String(listaReferenciaId)
-        : '';
+        ? listaReferenciaId
+        : (opcionesValidas[0]?.lista_precio_id || null),
+    origen_precio: 'excepcional_pedido'
+  });
 
-    fila.dataset.origenPrecio = 'excepcional_pedido';
-        if (!fila.dataset.listaPrecioId) {
-      resumen.textContent =
-        'Este cliente no tiene una lista principal asignada. No se puede guardar un precio excepcional.';
-      return;
-    }
+  const seleccionValida = opcionesSelector.some(
+    op => op.id === seleccionAnterior
+  );
 
-    if (!Number.isFinite(precioManual) || precioManual <= 0) {
-      resumen.textContent =
-        'Ingresá un precio unitario mayor que cero.';
-      return;
-    }
+  const seleccionInicial = seleccionValida
+    ? seleccionAnterior
+    : (opcionesValidas.length ? opcionesSelector[0].id : 'excepcional');
 
-    const subtotalManual = precioManual * cantidad;
-    const tipoManual = fila.querySelector('.desc-tipo').value;
-    const valorManual = Math.max(
-      0,
-      Number(fila.querySelector('.desc-valor').value) || 0
-    );
+  resumen.innerHTML = `
+    <label>Tipo de precio para esta cotización:
+      <select class="cot-tipo-precio">
+        ${opcionesSelector.map(op => `
+          <option value="${op.id}"
+            ${op.id === seleccionInicial ? 'selected' : ''}>
+            ${esc(op.nombre)}${op.precio !== null
+              ? ` — $${formatoDinero(op.precio)}`
+              : ''}
+          </option>
+        `).join('')}
+      </select>
+    </label>
+    <div class="cot-calculo-precio"></div>
+  `;
 
-    if (tipoManual === 'porcentaje' && valorManual > 100) {
-      resumen.textContent = 'El descuento no puede superar el 100%.';
-      return;
-    }
+  const selector = resumen.querySelector('.cot-tipo-precio');
+  const calculo = resumen.querySelector('.cot-calculo-precio');
 
-    let descuentoManual = 0;
+  selector.addEventListener('change', () => {
+    cotActualizarPrecioFila(fila);
+  });
 
-    if (tipoManual === 'porcentaje') {
-      descuentoManual = subtotalManual * valorManual / 100;
-    } else if (tipoManual === 'importe') {
-      descuentoManual = Math.min(valorManual, subtotalManual);
-    }
+  const opcionElegida = opcionesSelector.find(
+    op => op.id === selector.value
+  );
 
-    const totalManual = Math.max(
-      0,
-      subtotalManual - descuentoManual
-    );
-    fila.dataset.precioUnitario = String(precioManual);
-fila.dataset.descuentoTipo = tipoManual;
-fila.dataset.descuentoValor = String(valorManual);
-fila.dataset.descuentoImporte = String(descuentoManual);
-fila.dataset.totalLinea = String(totalManual);
+  const esExcepcional = opcionElegida.origen_precio === 'excepcional_pedido';
 
-    resumen.innerHTML =
-      `<div>Precio excepcional</div>` +
-      `<div>Precio unitario: $${formatoDinero(precioManual)} · ` +
-      `Subtotal: $${formatoDinero(subtotalManual)} · ` +
-      `Descuento: -$${formatoDinero(descuentoManual)} · ` +
-      `Total: $${formatoDinero(totalManual)}</div>`;
+  if (bloqueManual) {
+    bloqueManual.hidden = !esExcepcional;
+  }
 
+  const precio = esExcepcional
+    ? Number(fila.querySelector('.cot-precio-manual').value)
+    : opcionElegida.precio;
+
+  fila.dataset.listaPrecioId = opcionElegida.lista_precio_id || '';
+  fila.dataset.origenPrecio = opcionElegida.origen_precio;
+
+  if (esExcepcional && !fila.dataset.listaPrecioId) {
+    calculo.textContent =
+      'Este cliente no tiene una lista principal asignada. No se puede guardar un precio excepcional.';
     return;
   }
 
-  const bloqueManual = fila.querySelector('.cot-precio-excepcional');
-  if (bloqueManual) bloqueManual.hidden = true;
-
-  const esEspecial = opcionesValidas.some(
-    op => op.origen_precio === 'especial_permanente'
-  );
-
-  const preciosUnicos = [...new Set(
-    opcionesValidas.map(op => Number(op.precio))
-  )];
-
-  let opcionElegida = opcionesValidas[0];
-
-  if (!esEspecial && preciosUnicos.length > 1) {
-    const selectorAnterior = fila.querySelector('.precio-lista-elegida');
-const listaAnterior = selectorAnterior
-  ? selectorAnterior.selectedOptions[0]?.dataset.listaId
-  : '';
-    const opcionesHTML = opcionesValidas.map((op, i) => `
-     <option
-  value="${i}"
-  data-lista-id="${op.lista_precio_id}"
-  ${String(op.lista_precio_id) === String(listaAnterior) ? 'selected' : ''}
->
-        ${esc(op.lista)} — $${formatoDinero(Number(op.precio))}
-      </option>
-    `).join('');
-
-    resumen.innerHTML = `
-      <div class="msg err">Hay listas con distintos precios. Elegí cuál utilizar.</div>
-      <label>Precio para esta cotización:
-        <select class="precio-lista-elegida">${opcionesHTML}</select>
-      </label>
-    `;
-
-    const selectorNuevo = resumen.querySelector('.precio-lista-elegida');
-    const indice = Number(selectorNuevo.value);
-
-    if (Number.isInteger(indice) && indice >= 0 && indice < opcionesValidas.length) {
-      opcionElegida = opcionesValidas[indice];
-    }
-
-    selectorNuevo.addEventListener('change', () => {
-      cotActualizarPrecioFila(fila);
-    });
-  } else {
-    resumen.innerHTML = `
-      <div>${esc(esEspecial ? 'Precio especial permanente' : opcionesValidas[0].lista)}</div>
-    `;
+  if (!Number.isFinite(precio) || precio <= 0) {
+    calculo.textContent = esExcepcional
+      ? 'Ingresá un precio unitario mayor que cero.'
+      : 'No hay un precio válido para esta opción.';
+    return;
   }
-
-  const precio = Number(opcionElegida.precio);
-
-  fila.dataset.listaPrecioId = opcionElegida.lista_precio_id || '';
-  fila.dataset.origenPrecio = opcionElegida.origen_precio || 'lista';
 
   const subtotal = precio * cantidad;
   const tipo = fila.querySelector('.desc-tipo').value;
-  const valor = Math.max(0, Number(fila.querySelector('.desc-valor').value) || 0);
+  const valor = Math.max(
+    0,
+    Number(fila.querySelector('.desc-valor').value) || 0
+  );
+
+  if (tipo === 'porcentaje' && valor > 100) {
+    calculo.textContent = 'El descuento no puede superar el 100%.';
+    return;
+  }
 
   let descuento = 0;
 
   if (tipo === 'porcentaje') {
-    descuento = subtotal * Math.min(valor, 100) / 100;
+    descuento = subtotal * valor / 100;
   } else if (tipo === 'importe') {
     descuento = Math.min(valor, subtotal);
   }
 
   const total = Math.max(0, subtotal - descuento);
-  fila.dataset.precioUnitario = String(precio);
-fila.dataset.descuentoTipo = tipo;
-fila.dataset.descuentoValor = String(valor);
-fila.dataset.descuentoImporte = String(descuento);
-fila.dataset.totalLinea = String(total);
 
-  resumen.insertAdjacentHTML(
-    'beforeend',
+  fila.dataset.precioUnitario = String(precio);
+  fila.dataset.descuentoTipo = tipo;
+  fila.dataset.descuentoValor = String(valor);
+  fila.dataset.descuentoImporte = String(descuento);
+  fila.dataset.totalLinea = String(total);
+
+  calculo.innerHTML =
     `<div>Precio unitario: $${formatoDinero(precio)} · ` +
     `Subtotal: $${formatoDinero(subtotal)} · ` +
     `Descuento: -$${formatoDinero(descuento)} · ` +
-    `Total: $${formatoDinero(total)}</div>`
-  );
+    `Total: $${formatoDinero(total)}</div>`;
 }
+
 function cotAgregarItem() {
   const contenedor = document.getElementById('cot-items');
   if (!contenedor) return;
@@ -16478,6 +16573,8 @@ ${p.nota_deposito
       if (error) return c.innerHTML = `<div class="panel"><div class="msg err">${esc(error.message)}</div></div>`;
       const puedeAnular = ['ventas', 'admin'].includes(perfil.rol) && ['pendiente', 'listo'].includes(p.estado);
       const puedeEditarNota = ['deposito', 'admin', 'supervisor'].includes(perfil.rol) && p.estado === 'listo';
+      const puedeEntregar = ['ventas', 'admin', 'supervisor'].includes(perfil.rol)
+  && p.estado === 'listo';
       const itemsOrdenados = [...p.pedido_items].sort((a, b) => a.id - b.id);
 
 const filas = itemsOrdenados
@@ -16517,6 +16614,7 @@ const filas = itemsOrdenados
           ? '<button class="btn chico" id="completar-precios">Completar precios</button>'
           : ''}
       ${puedeEditarNota ? '<button class="btn chico" id="editar-nota-deposito">Editar observaciones</button>' : ''}
+     ${puedeEntregar ? '<button class="btn chico" id="marcar-entregado" style="background:var(--ok)">Marcar como ENTREGADO</button>' : ''}
       ${puedeAnular ? '<button class="btn chico peligro" id="anular">Anular pedido</button>' : ''}</div>
           ${p.precios_pendientes
           ? '<div class="no-print msg err" style="margin:12px 0"><strong>Precios pendientes.</strong> Completá los precios antes de marcar este pedido como Entregado.</div>'
